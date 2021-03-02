@@ -127,4 +127,4 @@ To solve that, use the official **Spriter** addon as reference.
 **Instructions**
 - For **text** parameters, use `string` values.
 - For **number** parameters, use `int` or `float` values.
-- For **combo** paramters, use the placement of the drop-down selection, starting from `0`.
+- For **combo** parameters, use the placement of the drop-down selection, starting from `0`.
