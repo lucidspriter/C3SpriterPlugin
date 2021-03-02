@@ -26,6 +26,9 @@ class PlayerInstance extends ISpriterInstance
 ### API
 The supported methods and properties to use in Construct 3's scripting feature with Spriter Pro.
 
+#### Globals
+- Context - retrieve the current instance of the Spriter object.
+
 #### Actions
 - setPlaybackSpeedRatio(newSpeed)
 - setVisible(visible)

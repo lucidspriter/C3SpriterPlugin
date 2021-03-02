@@ -5558,6 +5558,13 @@
 		}
 
 		//////////////////////////////////////////
+		// Globals
+		get Context()
+		{
+			return map.get(this);
+		}
+
+		//////////////////////////////////////////
 		// Actions
 		setPlaybackSpeedRatio(newSpeed)
 		{
