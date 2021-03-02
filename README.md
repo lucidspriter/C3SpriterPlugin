@@ -116,3 +116,15 @@ Currently unsupported methods and properties.
 #### Actions
 - async LoadURL(url, crcrossOrigin)
 - async loadFromURL(url, crossOrigin, sconText)
+
+
+### Guide
+The API documentation only shows the **methods** with its **parameters**, sometimes this is not enough to fully understand each use of the references.
+To solve that, use the official **Spriter** addon as reference.
+
+![image](https://user-images.githubusercontent.com/31282960/109700807-399c7880-7bcd-11eb-8769-4165f9887bd7.png)
+
+**Instructions**
+- For **text** parameters, use `string` values.
+- For **number** parameters, use `int` or `float` values.
+- For **combo** paramters, use the placement of the drop-down selection, starting from `0`.
