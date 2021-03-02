@@ -5343,7 +5343,7 @@
 		// Construct 3 Interface
 		GetScriptInterfaceClass()
 		{
-			return self.ISpriter;
+			return self.ISpriterInstance;
 		}
 	};
 	function SpriterObjectRef()
@@ -5548,7 +5548,7 @@
 	// caller using the script interface.
 	const map = new WeakMap();
 	
-	self.ISpriter = class ISpriter extends self.IWorldInstance {
+	self.ISpriterInstance = class ISpriterInstance extends self.IWorldInstance {
 		constructor()
 		{
 			super();
