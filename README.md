@@ -4,6 +4,25 @@ BrashMonkey's Construct 3 addon for c3runtime and c2runtime.
 ## ISpriter documentation
 This is the documentation to use Construct 3's new JavaScript [Scripting feature](https://www.construct.net/en/make-games/manuals/construct-3/scripting/overview) with Spriter Pro.
 
+### Easy usage
+You can easily access the Spriter object's interface using the `runtime`, from both the event sheet and script.
+```JS
+runtime.objects.Spriter.getFirstInstance().setAnimation("animationName", 0, 0);
+```
+For more information, please see the [scripting documentation of the Sprite object](https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/plugin-interfaces/sprite).
+
+### Advanced usage
+You can also subclass instances in a script, please see the [subclassing instances documentation](https://www.construct.net/en/make-games/manuals/construct-3/scripting/guides/subclassing-instances) for more information.
+```JS
+class PlayerInstance extends ISpriterInstance
+{
+	constructor()
+	{
+		super();
+	}
+}
+```
+
 ### API
 The supported methods and properties to use in Construct 3's scripting feature with Spriter Pro.
 
