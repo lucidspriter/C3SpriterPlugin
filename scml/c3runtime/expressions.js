@@ -2,11 +2,6 @@
 
 {
 	const C3 = self.C3;
-
-	function ToDegrees(angleInRadians)
-	{
-		return angleInRadians / 0.0174533;
-	}
 	
 	C3.Plugins.Spriter.Exps =
 	{
@@ -17,331 +12,155 @@
 		
 		time()
 		{
-			return this.currentSpriterTime;
+			return this.E__time();
 		},
 		
-
 		val(varname, objectName)
 		{
-			var anim = this.currentAnimation;
-			if (anim)
-			{
-				if (objectName)
-				{
-					var line = this.timelineFromName(objectName);
-					if (line)
-					{
-						return this.varStatus(varname, line.meta);
-						
-					}
-				}
-				else
-				{
-					return this.varStatus(varname, anim.meta);					
-				}
-			}
-			return 0;
+			return this.E__val(varname, objectName);
 		},
 		pointX(name)
 		{
-			var timeline = this.timelineFromName(name);
-			if (timeline && timeline.currentObjectState)
-			{
-				if (timeline.currentObjectState.x !== undefined)
-				{
-					return timeline.currentObjectState.x;
-					
-				}
-			}
-			return 0;
+			return this.E__pointX(name);
 		},
 
 		pointY(name)
 		{
-			var timeline = this.timelineFromName(name);
-			if (timeline && timeline.currentObjectState)
-			{
-				if (timeline.currentObjectState.y !== undefined)
-				{
-					return timeline.currentObjectState.y;
-					
-				}
-			}
-			return 0;
+			return this.E__pointY(name);
 		},
 
 		pointAngle(name)
 		{
-			var timeline = this.timelineFromName(name);
-			if (timeline && timeline.currentObjectState)
-			{
-				if (timeline.currentObjectState.angle !== undefined)
-				{
-					return ToDegrees(timeline.currentObjectState.angle);
-					
-				}
-			}
-			return 0;
+			return this.E__pointAngle(name);
 		},
 		
 		objectX(name)
 		{
-			var timeline = this.timelineFromName(name);
-			if (timeline && timeline.currentObjectState)
-			{
-				if (timeline.currentObjectState.x !== undefined)
-				{
-					return timeline.currentObjectState.x;
-					
-				}
-			}
-			return 0;
+			return this.E__objectX(name);
 		},
 
 		objectY(name)
 		{
-			var timeline = this.timelineFromName(name);
-			if (timeline && timeline.currentObjectState)
-			{
-				if (timeline.currentObjectState.y !== undefined)
-				{
-					return timeline.currentObjectState.y;
-					
-				}
-			}
-			return 0;
+			return this.E__objectY(name);
 		},
 
 		objectAngle(name)
 		{
-			var timeline = this.timelineFromName(name);
-			if (timeline && timeline.currentObjectState)
-			{
-				if (timeline.currentObjectState.angle !== undefined)
-				{
-					return ToDegrees(timeline.currentObjectState.angle);
-					
-				}
-			}
-			return 0;
+			return this.E__objectAngle(name);
 		},
 
 		timeRatio()
 		{
-			if (this.currentAnimation)
-			{
-				return this.currentSpriterTime / this.currentAnimation.length;
-			}
-			else
-			{
-				return 0;
-			}
+			return this.E__timeRatio();
 		},
 
 		ScaleRatio()
 		{
-			return this.scaleRatio;
+			return this.E__ScaleRatio();
 		},
 
 		key()
 		{
-			return this.currentFrame();
+			return this.E__key();
 		},
 
 		PlayTo()
 		{
-			return this.playTo;
+			return this.E__PlayTo();
 		},
 
 		animationName()
 		{
-			if (this.changeAnimTo)
-			{
-				return this.changeAnimTo.name;
-			}
-			//else if(this.currentAnimation)
-			else if (this.currentAnimation)
-			{
-				return this.currentAnimation.name;
-			}
-			else
-			{
-				return "";
-			}
+			return this.E__animationName();
 		},
 
 		animationLength()
 		{
-			if (this.currentAnimation)
-			{
-				return this.currentAnimation.length;
-			}
-			else
-			{
-				return 0;
-			}
+			return this.E__animationLength();
 		},
 
 		speedRatio()
 		{
-			return this.speedRatio;
+			return this.E__speedRatio();
 		},
 
 		secondAnimationName()
 		{
-			if (this.secondAnimation)
-			{
-				return this.secondAnimation.name;
-			}
-			else
-			{
-				return "";
-			}
+			return this.E__secondAnimationName();
 		},
 
 		entityName()
 		{
-			if (this.entity)
-			{
-				return this.entity.name;
-			}
-			else
-			{
-				return "";
-			}
+			return this.E__entityName();
 		},
 
 		PlayToTimeLeft()
 		{
-			if (this.playTo < 0)
-			{
-				return 0;
-			}
-
-			if (this.currentAnimation.looping == "true")
-			{
-				var forwardDistance = 0;
-				var backwardDistance = 0;
-				if (this.speedRatio >= 0)
-				{
-					if (this.playTo > this.currentSpriterTime)
-					{
-						return this.playTo - this.currentSpriterTime;
-					}
-					else
-					{
-						return this.playTo + (this.currentAnimation.length - this.currentSpriterTime);
-					}
-				}
-				else
-				{
-					if (this.playTo > this.currentSpriterTime)
-					{
-						return (this.currentAnimation.length - this.playTo) + this.currentSpriterTime;
-					}
-					else
-					{
-						return this.currentSpriterTime - this.playTo;
-					}
-				}
-			}
-			else
-			{
-				return Math.abs(this.playTo - this.currentSpriterTime);
-			}
-
+			return this.E__PlayToTimeLeft();
 		},
 		triggeredSound()
 		{
-			return this.soundToTrigger;
+			return this.E__triggeredSound();
 		},
 
 		triggeredSoundTag()
 		{
-			if (this.soundLineToTrigger)
-			{
-				return this.soundLineToTrigger.name;
-				
-			}
-			//else
-			return "";
+			return this.E__triggeredSoundTag();
 		},
 
 		soundVolume(soundTag)
 		{
-			var soundline = this.soundlineFromName(soundTag);
-			if (soundline)
-			{
-				if (soundline.currentObjectState)
-				{
-					return soundline.currentObjectState.volume;
-					
-				}
-			}
-			return 0;
+			return this.E__soundVolume(soundTag);
 		},
 
 		soundPanning(soundTag)
 		{
-			var soundline = this.soundlineFromName(soundTag);
-			if (soundline)
-			{
-				if (soundline.currentObjectState)
-				{
-					return soundline.currentObjectState.panning;
-					
-				}
-			}
-			return 0;
+			return this.E__soundPanning(soundTag);
 		},
 
 		blendRatio()
 		{
-			return this.animBlend;
+			return this.E__blendRatio();
 		},
 
 		Opacity()
 		{
-			return this.GetWorldInfo().GetOpacity() * 100.0;
+			return this.E__Opacity();
 		},
 
 		BBoxLeft()
 		{
-			this.update_bbox();
-			return this.bbox.left;
+			return this.E__BBoxLeft();
 		},
 
 		BBoxTop()
 		{
-			this.update_bbox();
-			return this.bbox.top;
+			return this.E__BBoxTop();
 		},
 
 		BBoxRight()
 		{
-			this.update_bbox();
-			return this.bbox.right;
+			return this.E__BBoxRight();
 		},
 
 		BBoxBottom()
 		{
-			this.update_bbox();
-			return this.bbox.bottom;
+			return this.E__BBoxBottom();
 		},
 
 		foundObject()
 		{
-			return this.lastFoundObject;
+			return this.E__foundObject();
 		},
 
 		ZElevation()
 		{
-			return this.GetWorldInfo().GetZElevation();
+			return this.E__ZElevation();
 		},
 
 		TotalZElevation()
 		{
-			return this.GetWorldInfo().GetTotalZElevation();
+			return this.E__TotalZElevation();
 		}
 	};
 	

@@ -1,4 +1,3 @@
-//Converted with C2C3AddonConverter v1.0.0.11
 "use strict";
 
 {
@@ -6,7 +5,7 @@
     const lang = self.lang;    
 
 	const PLUGIN_ID = "Spriter";
-	const PLUGIN_VERSION = "2-6-2021b";
+	const PLUGIN_VERSION = "3-3-2021b";
 	const PLUGIN_CATEGORY = "general";
 
 	let app = null;

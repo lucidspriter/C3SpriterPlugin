@@ -2,68 +2,27 @@
 
 {
 	const C3 = self.C3;
-
-	function DoCmp(a, cmp, b)
-	{
-		switch(cmp)
-		{
-			case 0:
-				return a == b;
-				
-			case 1:
-				return a != b;
-				
-			case 2:
-				return a < b;
-				
-			case 3:
-				return a <= b;
-				
-			case 4:
-				return a > b;
-				
-			case 5:
-				return a >= b;
-		}
-	}
 	
 	C3.Plugins.Spriter.Cnds =
 	{		
 		readyForSetup()
 		{
-			this._inst._objectType._SetIIDsStale();
-			return true;
+			return this.C__readyForSetup();
 		},
 
 		outsidePaddedViewport()
 		{
-			return this.isOutsideViewportBox();
+			return this.C__outsidePaddedViewport();
 		},
 
 		actionPointExists (pointName)
 		{
-			var timeline = this.timelineFromName(pointName);
-			if (timeline && timeline.currentObjectState)
-			{
-				if (timeline.currentObjectState.x !== undefined)
-				{
-					return true;
-				}
-			}
-			return false;
+			return this.C__actionPointExists(pointName);
 		},
 		
 		objectExists (pointName)
 		{
-			var timeline = this.timelineFromName(pointName);
-			if (timeline && timeline.currentObjectState)
-			{
-				if (timeline.currentObjectState.x !== undefined)
-				{
-					return true;
-				}
-			}
-			return false;
+			return this.C__objectExists(pointName);
 		},
 		
 		OnAnimFinished (animname)
@@ -86,23 +45,7 @@
 
 		tagActive (tagName, objectName)
 		{
-			var anim = this.currentAnimation;
-			if (anim)
-			{
-				if (objectName&&objectName!="")
-				{
-					var line = this.timelineFromName(objectName);
-					if (line)
-					{
-						return this.tagStatus(tagName, line.meta);
-					}
-				}
-				else
-				{
-					return this.tagStatus(tagName, anim.meta);
-				}
-			}
-			return false;
+			return this.C__tagActive(tagName, objectName);
 		},
 
 		OnSoundVolumeChangeTriggered()
@@ -125,7 +68,7 @@
 		// AddCondition(2,0, "Compare Current Key Frame", "Key Frames", "Current Key Frame is {0} {1}", "Compare the current key frame number.", "CompareCurrentKey");
 		CompareCurrentKey (cmp, frame)
 		{
-			return DoCmp(this.currentFrame(), cmp, frame);
+			return this.C__CompareCurrentKey(cmp, frame);
 		},     
 		OnURLLoaded() {
             return true;
@@ -142,113 +85,52 @@
 		// AddCondition(3,0, "Compare Current Time", "Animations", "Current Time is {0} {1} {2}", "Compare the current time.", "CompareCurrentTime");
 		CompareCurrentTime (cmp, time, format)
 		{
-			if (format === 0) //milliseconds
-			{
-				return DoCmp(this.currentSpriterTime, cmp, time);
-			}
-			else
-			{
-				var anim = this.currentAnimation;
-				if (anim)
-				{
-					return DoCmp(this.currentSpriterTime / this.currentAnimation.length, cmp, time);
-				}
-				else
-				{
-					return false;
-				}
-			}
+			return this.C__CompareCurrentTime (cmp, time, format);
 		},
 
 		// AddStringParam("Animation", "Is this the current animation.");
 		// AddCondition(4, 0, "Compare Current Animation", "Animations", "Is current animation {0}", "Compare the name of the current animation.", "CompareAnimation");
 		CompareAnimation (name)
 		{
-			var blendingTo = this.secondAnimation;
-			if (blendingTo && blendingTo.name === name && this.blendEndTime > 0)
-			{
-				return true;
-			}
-			var anim = this.currentAnimation;
-			if (anim && anim.name === name)
-			{
-				return true;
-			}
-			else
-			{
-				return false;
-			}
+			return this.C__CompareAnimation(name);
 		},
 
 		CompareSecondAnimation (name)
 		{
-			if (this.secondAnimation)
-			{
-				return name === this.secondAnimation.name;
-			}
-			else
-			{
-				return false;
-			}
+			return this.C__CompareSecondAnimation(name);
 		},
 
 		// AddStringParam("Entity", "Is this the current entity.");
 		// AddCondition(16, 0, "Compare Current Entity", "Entities", "Is current entity {0}", "Compare the name of the current entity.", "CompareEntity");
 		CompareEntity (name)
 		{
-			var ent = this.entity;
-			if (ent && ent.name === name)
-			{
-				return true;
-			}
-			else
-			{
-				return false;
-			}
+			return this.C__CompareEntity(name);
 		},
 
 		// AddCondition(5, 0, "Is Paused", "Animations", "If animation is paused", "Is animation paused?", "AnimationPaused");
 		AnimationPaused()
 		{
-			return !this.animPlaying;
+			return this.C__AnimationPaused();
 		},
 		// AddCondition(6, 0, "Is Looping", "Animations", "If animation is looping", "Is animation set to loop?", "AnimationLooping");
 		AnimationLooping()
 		{
-			var anim = this.currentAnimation;
-			if (anim && anim.looping === "true")
-			{
-				return true;
-			}
-			else
-			{
-				return false;
-			}
+			return this.C__AnimationLooping();
 		},
 
 		isMirrored()
 		{
-			return this.xFlip;
+			return this.C__isMirrored();
 		},
 
 		isFlipped()
 		{
-			return this.yFlip;
+			return this.C__isFlipped();
 		},
 		
 		CompareZElevation(which, comparison, z_elevation)
 		{
-			// which:
-			// 0 = Z Elevation   
-			// 1 = Total Z Elevation
-			if(which == 0)
-			{
-				DoCmp(this.GetWorldInfo().GetZElevation(), comparison, z_elevation);
-			}
-			else
-			{
-				DoCmp(this.GetWorldInfo().GetTotalZElevation(), comparison, z_elevation);
-			}
+			return this.C__CompareZElevation(which, comparison, z_elevation);
 		}
 		
 		

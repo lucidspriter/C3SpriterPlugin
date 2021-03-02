@@ -4,6 +4,35 @@
 	const C3 = self.C3;
 	
 	const tempQuad = new C3.Quad();
+
+	function ToDegrees(angleInRadians)
+	{
+		return angleInRadians / 0.0174533;
+	}
+
+	function DoCmp(a, cmp, b)
+	{
+		switch(cmp)
+		{
+			case 0:
+				return a == b;
+				
+			case 1:
+				return a != b;
+				
+			case 2:
+				return a < b;
+				
+			case 3:
+				return a <= b;
+				
+			case 4:
+				return a > b;
+				
+			case 5:
+				return a >= b;
+		}
+	}
 	
 	C3.Plugins.Spriter.Instance = class SpriterInstance extends C3.SDKWorldInstanceBase
 	{
@@ -4328,6 +4357,994 @@
 			}
 			return Math.abs(b - a);
 		}
+
+		//////////////////////////////////////////
+		// Action Methods
+		A__setPlaybackSpeedRatio(newSpeed)
+		{
+			this.speedRatio = newSpeed;
+		}
+
+		A__setVisible(visible)
+		{
+			if (visible === 1)
+			{
+				this.GetWorldInfo().SetVisible(true);
+			}
+			else
+			{
+				this.GetWorldInfo().SetVisible(false);
+			}
+		}
+		A__setOpacity(newOpacity)
+		{
+			this.GetWorldInfo().SetOpacity(this.clamp(0.0, 1.0, newOpacity / 100.0));
+			//this.opacity = this.clamp(0.0, 1.0, newOpacity / 100.0);
+		}
+		A__setAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer)
+		{
+			this.pauseWhenOutsideBuffer = newPauseSetting;
+			this.leftBuffer = leftBuffer;
+			this.rightBuffer = rightBuffer;
+			this.topBuffer = topBuffer;
+			this.bottomBuffer = bottomBuffer;
+		}
+		A__setObjectScaleRatio(newScale, xFlip, yFlip)
+		{
+			this.scaleRatio = newScale;
+			this.xFlip = xFlip;
+			this.yFlip = yFlip;
+			this.force = true;
+		}
+
+		A__setObjectXFlip(xFlip)
+		{
+			this.xFlip = xFlip;
+			this.force = true;
+		}
+
+		A__setIgnoreGlobalTimeScale(ignore)
+		{
+			this.ignoreGlobalTimeScale = (ignore == 1);
+		}
+
+		A__findSpriterObject(c2Object)
+		{
+			if (this.currentAnimation)
+			{
+				var timelines = this.currentAnimation.timelines;
+				for (var t = 0; t < timelines.length; t++)
+				{
+					var timeline = timelines[t];
+					if (timeline && timeline.c2Object)
+					{
+						if (timeline.c2Object.inst == c2Object.GetFirstPicked())
+						{
+							this.lastFoundObject = timeline.name;
+							return;
+						}
+					}
+				}
+			}
+		}
+
+		A__stopResumeSettingLayer(resume)
+		{
+			this.setLayersForSprites = resume == 1;
+		}
+		
+		A__stopResumeSettingVisibilityForObjects(resume)
+		{
+			this.setVisibilityForObjects = resume == 1;
+		}
+		
+		A__stopResumeSettingCollisionsForObjects(resume)
+		{
+			this.setCollisionsForObjects = resume == 1;
+		}
+
+		A__setObjectYFlip(yFlip)
+		{
+			this.yFlip = yFlip;
+			this.force = true;
+		}
+		
+		A__setC2ObjectToSpriterObject(c2Object, propertiesToSet, spriterObjectName)
+		{
+			var c2instance = c2Object.GetSolStack()._current._instances;
+			if (c2instance.length === 0 && c2Object.GetSolStack()._current._selectAll === true)
+				c2instance = c2Object._instances;
+			this.objectsToSet.push(this.C2ObjectToSpriterObjectInstruction(c2instance, spriterObjectName, propertiesToSet, false));
+		}
+
+		A__pinC2ObjectToSpriterObject(c2Object, propertiesToSet, spriterObjectName)
+		{
+			var c2instance = c2Object.GetSolStack()._current._instances;
+			if (c2instance.length === 0 && c2Object.GetSolStack()._current._selectAll === true)
+				c2instance = c2Object._instances;
+			this.objectsToSet.push(this.C2ObjectToSpriterObjectInstruction(c2instance, spriterObjectName, propertiesToSet, true));
+		}
+
+		A__unpinC2ObjectFromSpriterObject(c2Object, spriterObjectName)
+		{
+			var allObjs = spriterObjectName === "";
+			for (var i = 0; i < this.objectsToSet.length; i++)
+			{
+				if (this.objectsToSet[i].c2Object[0].type === c2Object && (allObjs ? true : this.objectsToSet[i].objectName === spriterObjectName))
+				{
+					this.objectsToSet.splice(i, 1);
+					i--;
+				}
+			}
+		}
+
+		A__unpinAllFromSpriterObject(spriterObjectName)
+		{
+			if (spriterObjectName === "")
+			{
+				this.objectsToSet = [];
+			}
+			else
+			{
+				for (var i = 0; i < this.objectsToSet.length; i++)
+				{
+					if (this.objectsToSet[i].objectName === spriterObjectName)
+					{
+						this.objectsToSet.splice(i, 1);
+						i--;
+					}
+				}
+			}
+		}
+
+		A__setAnimation(animName, startFrom, blendDuration)
+		{
+			this.setAnim(animName, startFrom, blendDuration);
+		}
+
+		A__setSecondAnim(animName)
+		{
+			this.secondAnimation = this.getAnimFromEntity(animName);
+			if (this.secondAnimation === this.currentAnimation)
+			{
+				this.secondAnimation = null;
+			}
+		}
+		A__stopSecondAnim(animName)
+		{
+			this.secondAnimation = null;
+			this.animBlend = 0;
+		}
+		A__setAnimBlendRatio(newBlend)
+		{
+			this.animBlend = newBlend;
+		}
+		A__setEnt(entName, animName)
+		{
+			var newAnimName = animName;
+			if (this.entity && this.currentAnimation && this.entity.name == entName && this.currentAnimation.name == animName)
+			{
+				return;
+			}
+			var newEntSet = false;
+
+			if (this.currentAnimation && newAnimName === "")
+			{
+				newAnimName = this.currentAnimation.name;
+			}
+			var sameAnimName = false;
+			if (newAnimName === this.currentAnimation.name)
+			{
+				sameAnimName = true;
+			}
+			if (entName !== "" && ((!this.entity) || entName != this.entity.name))
+			{
+				this.setEntTo(entName);
+				newEntSet = true;
+			}
+
+			if (newAnimName !== "" && (newEntSet || !sameAnimName))
+			{
+				this.setAnimTo(newAnimName, true, true);
+			}
+
+		}
+
+		A__playAnimTo(units, playTo)
+		{
+			if (units === 0) // keyframes
+			{
+				var mainKeys = this.currentAnimation.mainlineKeys;
+				if (mainKeys)
+				{
+					var key = mainKeys[playTo];
+					if (key)
+					{
+						this.playTo = key.time;
+					}
+					else
+					{
+						this.playTo = -1;
+						return;
+					}
+				}
+			}
+			else if (units == 1) // milliseconds
+			{
+				this.playTo = playTo;
+			}
+			else if (units == 2) // ratio
+			{
+				this.playTo = playTo * this.currentAnimation.length;
+			}
+			if (this.playTo == this.currentSpriterTime)
+			{
+				this.playTo = -1;
+				return;
+			}
+			var reverseFactor = 1;
+			if (this.currentAnimation.looping == "true")
+			{
+				var forwardDistance = 0;
+				var backwardDistance = 0;
+				if (this.playTo > this.currentSpriterTime)
+				{
+					forwardDistance = this.playTo - this.currentSpriterTime;
+					backwardDistance = (this.currentAnimation.length - this.playTo) + this.currentSpriterTime;
+				}
+				else
+				{
+					forwardDistance = this.playTo + (this.currentAnimation.length - this.currentSpriterTime);
+					backwardDistance = this.currentSpriterTime - this.playTo;
+				}
+				if (backwardDistance < forwardDistance)
+				{
+					reverseFactor = -1;
+				}
+			}
+			else
+			{
+				if (this.playTo < this.currentSpriterTime)
+				{
+					reverseFactor = -1;
+				}
+			}
+			this.speedRatio = Math.abs(this.speedRatio) * reverseFactor;
+			this.animPlaying = true;
+			this.Tick2();
+		}
+
+		A__associateTypeWithName(type, name)
+		{
+			var c2ObjectArray = this.c2ObjectArray;
+			var objectArray = this.objectArray;
+			
+			for (var o = 0, len = objectArray.length; o < len; o++)
+			{
+				var obj = objectArray[o];
+				if (name == obj.name)
+				{
+					obj.fullTypeName = type.GetName();
+					var c2Object = c2ObjectArray[o];
+					c2Object.type = type;
+					var iid = this.GetInstance().GetIID(); // get my IID
+					
+					var paired_inst = type.GetInstances()[iid];
+					c2Object.inst = paired_inst;
+			
+					var animations = this.entity.animations;
+					for (var a = 0, lenA = animations.length; a < lenA; a++)
+					{
+						var animation = animations[a];
+						var timelines = animation.timelines;
+						for (var t = 0, lenT = timelines.length; t < lenT; t++)
+						{
+							var timeline = timelines[t];
+							if (name == timeline.name)
+							{
+								timeline.c2Object = c2Object;
+							}
+						}
+					}
+					break;
+				}
+			}
+		}
+		A__setAnimationLoop(loopOn)
+		{
+			var currentAnimation = this.currentAnimation;
+			if (this.changeAnimTo)
+			{
+				currentAnimation = this.changeAnimTo;
+			}
+			if (currentAnimation)
+			{
+				if (loopOn === 0)
+				{
+					currentAnimation.looping = "false";
+				}
+				else if (loopOn == 1)
+				{
+					currentAnimation.looping = "true";
+				}
+			}
+			else
+			{
+				if (loopOn === 0)
+				{
+					this.startingLoopType = "false";
+				}
+				else if (loopOn == 1)
+				{
+					this.startingLoopType = "true";
+				}
+			}
+		}
+		A__setAnimationTime(units, time)
+		{
+			this.resetEventChecksToTime(time);
+			this.setAnimTime(units, time);
+		}
+		A__pauseAnimation()
+		{
+			this.animPlaying = false;
+		}
+
+		A__resumeAnimation()
+		{
+			if (this.animPlaying === false)
+			{
+				this.lastKnownTime = this.getNowTime();
+			}
+			this.animPlaying = true;
+			var anim = this.currentAnimation;
+			if (anim)
+			{
+				if (this.speedRatio > 0)
+				{
+					if (this.currentSpriterTime == anim.length)
+					{
+						this.currentSpriterTime = 0;
+					}
+				}
+				else if (this.currentSpriterTime === 0)
+				{
+					this.currentSpriterTime = this.currentAnimation.length;
+				}
+			}
+		}
+
+		A__removeAllCharMaps()
+		{
+			var c2Objs = this.c2ObjectArray;
+			for (var c = 0; c < c2Objs.length; c++)
+			{
+				var c2Obj = c2Objs[c];
+				c2Obj.appliedMap = [];
+			}
+			this.Tick2(true);
+		}
+
+		A__appendCharMap(mapName)
+		{
+			var c2Objs = this.c2ObjectArray;
+			var mapApplied = false;
+			for (var c = 0; c < c2Objs.length; c++)
+			{
+				var c2Obj = c2Objs[c];
+				if (c2Obj)
+				{
+					if (c2Obj.obj)
+					{
+						var charMap = c2Obj.obj.charMaps[mapName];
+						if (charMap)
+						{
+							for (var m = 0; m < charMap.length; m++)
+							{
+								var map = charMap[m];
+								if (map)
+								{
+									c2Obj.appliedMap[map.oldFrame] = map.newFrame;
+									mapApplied = true;
+								}
+							}
+						}
+					}
+				}
+			}
+			if(mapApplied)
+			{
+				this.appliedCharMaps.push(mapName);
+				this.Tick2(true);
+			}
+		}
+		
+		A__removeCharMap(mapName)
+		{
+			var mapRemoved = false;
+			for (var m = 0; m < this.appliedCharMaps.length; m++)
+			{
+				var map = this.appliedCharMaps[m];
+				if(map == mapName)
+				{
+					this.appliedCharMaps.splice(m, 1);
+					mapRemoved = true;
+					break;
+				}
+			}
+			if(!mapRemoved)
+			{
+				return;
+			}
+			var c2Objs = this.c2ObjectArray;
+			for (var c = 0; c < c2Objs.length; c++)
+			{
+				var c2Obj = c2Objs[c];
+				c2Obj.appliedMap = [];
+			}
+			this.Tick2(true);
+			for (var i = 0; i < this.appliedCharMaps.length; i++)
+			{
+				var map = this.appliedCharMaps[m];
+				var c2Objs = this.c2ObjectArray;
+				for (var c = 0; c < c2Objs.length; c++)
+				{
+					var c2Obj = c2Objs[c];
+					if (c2Obj)
+					{
+						if (c2Obj.obj)
+						{
+							var charMap = c2Obj.obj.charMaps[map];
+							if (charMap)
+							{
+								for (var m = 0; m < charMap.length; m++)
+								{
+									var map = charMap[m];
+									if (map)
+									{
+										c2Obj.appliedMap[map.oldFrame] = map.newFrame;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			this.Tick2(true);
+		}
+
+		A__overrideObjectComponent(objectName, component, newValue)
+		{
+			var override = this.objectOverrides[objectName];
+			if (typeof override === 'undefined')
+			{
+				this.objectOverrides[objectName] = {};
+				override = this.objectOverrides[objectName];
+			}
+			override[component] = newValue;
+		}
+
+		A__overrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength)
+		{
+			var override = this.boneIkOverrides[parentBoneName];
+			if (typeof override === 'undefined')
+			{
+				this.boneIkOverrides[parentBoneName] = {};
+				override = this.boneIkOverrides[parentBoneName];
+			}
+			override.targetX = targetX;
+			override.targetY = targetY;
+			override.childBone = childBoneName;
+			override.additionalLength = additionalLength;
+		}
+
+		//////////////////////////////////////////
+		// Condition Methods
+		C__readyForSetup()
+		{
+			this._inst._objectType._SetIIDsStale();
+			return true;
+		}
+
+		C__outsidePaddedViewport()
+		{
+			return this.isOutsideViewportBox();
+		}
+
+		C__actionPointExists (pointName)
+		{
+			var timeline = this.timelineFromName(pointName);
+			if (timeline && timeline.currentObjectState)
+			{
+				if (timeline.currentObjectState.x !== undefined)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		
+		C__objectExists (pointName)
+		{
+			var timeline = this.timelineFromName(pointName);
+			if (timeline && timeline.currentObjectState)
+			{
+				if (timeline.currentObjectState.x !== undefined)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		C__tagActive (tagName, objectName)
+		{
+			var anim = this.currentAnimation;
+			if (anim)
+			{
+				if (objectName&&objectName!="")
+				{
+					var line = this.timelineFromName(objectName);
+					if (line)
+					{
+						return this.tagStatus(tagName, line.meta);
+					}
+				}
+				else
+				{
+					return this.tagStatus(tagName, anim.meta);
+				}
+			}
+			return false;
+		}
+		
+		C__CompareCurrentKey (cmp, frame)
+		{
+			return DoCmp(this.currentFrame(), cmp, frame);
+		}  
+		
+		C__CompareCurrentTime (cmp, time, format)
+		{
+			if (format === 0) //milliseconds
+			{
+				return DoCmp(this.currentSpriterTime, cmp, time);
+			}
+			else
+			{
+				var anim = this.currentAnimation;
+				if (anim)
+				{
+					return DoCmp(this.currentSpriterTime / this.currentAnimation.length, cmp, time);
+				}
+				else
+				{
+					return false;
+				}
+			}
+		}
+
+		C__CompareAnimation (name)
+		{
+			var blendingTo = this.secondAnimation;
+			if (blendingTo && blendingTo.name === name && this.blendEndTime > 0)
+			{
+				return true;
+			}
+			var anim = this.currentAnimation;
+			if (anim && anim.name === name)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
+		}
+
+		C__CompareSecondAnimation (name)
+		{
+			if (this.secondAnimation)
+			{
+				return name === this.secondAnimation.name;
+			}
+			else
+			{
+				return false;
+			}
+		}
+
+		C__CompareEntity (name)
+		{
+			var ent = this.entity;
+			if (ent && ent.name === name)
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
+		}
+
+		
+		C__AnimationPaused()
+		{
+			return !this.animPlaying;
+		}
+		C__AnimationLooping()
+		{
+			var anim = this.currentAnimation;
+			if (anim && anim.looping === "true")
+			{
+				return true;
+			}
+			else
+			{
+				return false;
+			}
+		}
+
+		C__isMirrored()
+		{
+			return this.xFlip;
+		}
+
+		C__isFlipped()
+		{
+			return this.yFlip;
+		}
+		
+		C__CompareZElevation(which, comparison, z_elevation)
+		{
+			// which:
+			// 0 = Z Elevation   
+			// 1 = Total Z Elevation
+			if(which == 0)
+			{
+				DoCmp(this.GetWorldInfo().GetZElevation(), comparison, z_elevation);
+			}
+			else
+			{
+				DoCmp(this.GetWorldInfo().GetTotalZElevation(), comparison, z_elevation);
+			}
+		}
+
+		//////////////////////////////////////////
+		// Expression Methods
+		E__time()
+		{
+			return this.currentSpriterTime;
+		}
+		
+
+		E__val(varname, objectName)
+		{
+			var anim = this.currentAnimation;
+			if (anim)
+			{
+				if (objectName)
+				{
+					var line = this.timelineFromName(objectName);
+					if (line)
+					{
+						return this.varStatus(varname, line.meta);
+						
+					}
+				}
+				else
+				{
+					return this.varStatus(varname, anim.meta);					
+				}
+			}
+			return 0;
+		}
+		E__pointX(name)
+		{
+			var timeline = this.timelineFromName(name);
+			if (timeline && timeline.currentObjectState)
+			{
+				if (timeline.currentObjectState.x !== undefined)
+				{
+					return timeline.currentObjectState.x;
+					
+				}
+			}
+			return 0;
+		}
+
+		E__pointY(name)
+		{
+			var timeline = this.timelineFromName(name);
+			if (timeline && timeline.currentObjectState)
+			{
+				if (timeline.currentObjectState.y !== undefined)
+				{
+					return timeline.currentObjectState.y;
+					
+				}
+			}
+			return 0;
+		}
+
+		E__pointAngle(name)
+		{
+			var timeline = this.timelineFromName(name);
+			if (timeline && timeline.currentObjectState)
+			{
+				if (timeline.currentObjectState.angle !== undefined)
+				{
+					return ToDegrees(timeline.currentObjectState.angle);
+					
+				}
+			}
+			return 0;
+		}
+		
+		E__objectX(name)
+		{
+			var timeline = this.timelineFromName(name);
+			if (timeline && timeline.currentObjectState)
+			{
+				if (timeline.currentObjectState.x !== undefined)
+				{
+					return timeline.currentObjectState.x;
+					
+				}
+			}
+			return 0;
+		}
+
+		E__objectY(name)
+		{
+			var timeline = this.timelineFromName(name);
+			if (timeline && timeline.currentObjectState)
+			{
+				if (timeline.currentObjectState.y !== undefined)
+				{
+					return timeline.currentObjectState.y;
+					
+				}
+			}
+			return 0;
+		}
+
+		E__objectAngle(name)
+		{
+			var timeline = this.timelineFromName(name);
+			if (timeline && timeline.currentObjectState)
+			{
+				if (timeline.currentObjectState.angle !== undefined)
+				{
+					return ToDegrees(timeline.currentObjectState.angle);
+					
+				}
+			}
+			return 0;
+		}
+
+		E__timeRatio()
+		{
+			if (this.currentAnimation)
+			{
+				return this.currentSpriterTime / this.currentAnimation.length;
+			}
+			else
+			{
+				return 0;
+			}
+		}
+
+		E__ScaleRatio()
+		{
+			return this.scaleRatio;
+		}
+
+		E__key()
+		{
+			return this.currentFrame();
+		}
+
+		E__PlayTo()
+		{
+			return this.playTo;
+		}
+
+		E__animationName()
+		{
+			if (this.changeAnimTo)
+			{
+				return this.changeAnimTo.name;
+			}
+			//else if(this.currentAnimation)
+			else if (this.currentAnimation)
+			{
+				return this.currentAnimation.name;
+			}
+			else
+			{
+				return "";
+			}
+		}
+
+		E__animationLength()
+		{
+			if (this.currentAnimation)
+			{
+				return this.currentAnimation.length;
+			}
+			else
+			{
+				return 0;
+			}
+		}
+
+		E__speedRatio()
+		{
+			return this.speedRatio;
+		}
+
+		E__secondAnimationName()
+		{
+			if (this.secondAnimation)
+			{
+				return this.secondAnimation.name;
+			}
+			else
+			{
+				return "";
+			}
+		}
+
+		E__entityName()
+		{
+			if (this.entity)
+			{
+				return this.entity.name;
+			}
+			else
+			{
+				return "";
+			}
+		}
+
+		E__PlayToTimeLeft()
+		{
+			if (this.playTo < 0)
+			{
+				return 0;
+			}
+
+			if (this.currentAnimation.looping == "true")
+			{
+				var forwardDistance = 0;
+				var backwardDistance = 0;
+				if (this.speedRatio >= 0)
+				{
+					if (this.playTo > this.currentSpriterTime)
+					{
+						return this.playTo - this.currentSpriterTime;
+					}
+					else
+					{
+						return this.playTo + (this.currentAnimation.length - this.currentSpriterTime);
+					}
+				}
+				else
+				{
+					if (this.playTo > this.currentSpriterTime)
+					{
+						return (this.currentAnimation.length - this.playTo) + this.currentSpriterTime;
+					}
+					else
+					{
+						return this.currentSpriterTime - this.playTo;
+					}
+				}
+			}
+			else
+			{
+				return Math.abs(this.playTo - this.currentSpriterTime);
+			}
+
+		}
+		E__triggeredSound()
+		{
+			return this.soundToTrigger;
+		}
+
+		E__triggeredSoundTag()
+		{
+			if (this.soundLineToTrigger)
+			{
+				return this.soundLineToTrigger.name;
+				
+			}
+			//else
+			return "";
+		}
+
+		E__soundVolume(soundTag)
+		{
+			var soundline = this.soundlineFromName(soundTag);
+			if (soundline)
+			{
+				if (soundline.currentObjectState)
+				{
+					return soundline.currentObjectState.volume;
+					
+				}
+			}
+			return 0;
+		}
+
+		E__soundPanning(soundTag)
+		{
+			var soundline = this.soundlineFromName(soundTag);
+			if (soundline)
+			{
+				if (soundline.currentObjectState)
+				{
+					return soundline.currentObjectState.panning;
+					
+				}
+			}
+			return 0;
+		}
+
+		E__blendRatio()
+		{
+			return this.animBlend;
+		}
+
+		E__Opacity()
+		{
+			return this.GetWorldInfo().GetOpacity() * 100.0;
+		}
+
+		E__BBoxLeft()
+		{
+			this.update_bbox();
+			return this.bbox.left;
+		}
+
+		E__BBoxTop()
+		{
+			this.update_bbox();
+			return this.bbox.top;
+		}
+
+		E__BBoxRight()
+		{
+			this.update_bbox();
+			return this.bbox.right;
+		}
+
+		E__BBoxBottom()
+		{
+			this.update_bbox();
+			return this.bbox.bottom;
+		}
+
+		E__foundObject()
+		{
+			return this.lastFoundObject;
+		}
+
+		E__ZElevation()
+		{
+			return this.GetWorldInfo().GetZElevation();
+		}
+
+		E__TotalZElevation()
+		{
+			return this.GetWorldInfo().GetTotalZElevation();
+		}
+
+		// Construct 3 Interface
+		GetScriptInterfaceClass()
+		{
+			return self.ISpriter;
+		}
 	};
 	function SpriterObjectRef()
 	{
@@ -4525,5 +5542,404 @@
 		//apply charmap
 		//timeline.appliedmap[charmap.old]=charmap.new;
 		//
+	};
+
+	// Script interface. Use a WeakMap to safely hide the internal implementation details from the
+	// caller using the script interface.
+	const map = new WeakMap();
+	
+	self.ISpriter = class ISpriter extends self.IWorldInstance {
+		constructor()
+		{
+			super();
+			
+			// Map by SDK instance
+			map.set(this, self.IInstance._GetInitInst().GetSdkInstance());
+		}
+
+		//////////////////////////////////////////
+		// Actions
+		setPlaybackSpeedRatio(newSpeed)
+		{
+			map.get(this).A__setPlaybackSpeedRatio(newSpeed);
+		}
+		
+		setVisible(visible)
+		{
+			map.get(this).A__setVisible(visible);
+		}
+		setOpacity(newOpacity)
+		{
+			map.get(this).A__setOpacity(newOpacity)
+		}
+		setAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer)
+		{
+			map.get(this).A__setAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer);
+		}
+		setObjectScaleRatio(newScale, xFlip, yFlip)
+		{
+			map.get(this).A__setObjectScaleRatio(newScale, xFlip, yFlip);
+		}
+		
+		setObjectXFlip(xFlip)
+		{
+			map.get(this).A__setObjectXFlip(xFlip);
+		}
+		
+		setIgnoreGlobalTimeScale(ignore)
+		{
+			map.get(this).A__setIgnoreGlobalTimeScale(ignore);
+		}
+		
+		findSpriterObject(c2Object)
+		{
+			map.get(this).A__findSpriterObject(c2Object);
+		}
+		
+		stopResumeSettingLayer(resume)
+		{
+			map.get(this).A__stopResumeSettingLayer(resume);
+		}
+		
+		stopResumeSettingVisibilityForObjects(resume)
+		{
+			map.get(this).A__stopResumeSettingVisibilityForObjects(resume);
+		}
+		
+		stopResumeSettingCollisionsForObjects(resume)
+		{
+			map.get(this).A__stopResumeSettingCollisionsForObjects(resume);
+		}
+		
+		setObjectYFlip(yFlip)
+		{
+			map.get(this).A__setObjectYFlip(yFlip);
+		}
+		
+		setC2ObjectToSpriterObject(c2Object, propertiesToSet, spriterObjectName)
+		{
+			map.get(this).A__setC2ObjectToSpriterObject(c2Object, propertiesToSet, spriterObjectName);
+		}
+		
+		pinC2ObjectToSpriterObject(c2Object, propertiesToSet, spriterObjectName)
+		{
+			map.get(this).A__pinC2ObjectToSpriterObject(c2Object, propertiesToSet, spriterObjectName);
+		}
+		
+		unpinC2ObjectFromSpriterObject(c2Object, spriterObjectName)
+		{
+			map.get(this).A__unpinC2ObjectFromSpriterObject(c2Object, spriterObjectName);
+		}
+		
+		unpinAllFromSpriterObject(spriterObjectName)
+		{
+			map.get(this).A__unpinAllFromSpriterObject(spriterObjectName);
+		}
+		
+		setAnimation(animName, startFrom, blendDuration)
+		{
+			map.get(this).A__setAnimation(animName, startFrom, blendDuration);
+		}
+		
+		setSecondAnim(animName)
+		{
+			map.get(this).A__setSecondAnim(animName);
+		}
+		stopSecondAnim(animName)
+		{
+			map.get(this).A__stopSecondAnim(animName);
+		}
+		setAnimBlendRatio(newBlend)
+		{
+			map.get(this).A__setAnimBlendRatio(newBlend);
+		}
+		setEnt(entName, animName)
+		{
+			map.get(this).A__setEnt(entName, animName);
+		}
+		
+		playAnimTo(units, playTo)
+		{
+			map.get(this).A__playAnimTo(units, playTo);
+		}
+		
+		associateTypeWithName(type, name)
+		{
+			map.get(this).A__associateTypeWithName(type, name);
+		}
+		setAnimationLoop(loopOn)
+		{
+			map.get(this).A__setAnimationLoop(loopOn);
+		}
+		setAnimationTime(units, time)
+		{
+			map.get(this).A__setAnimationTime(units, time);
+		}
+		pauseAnimation()
+		{
+			map.get(this).A__pauseAnimation();
+		}
+		
+		resumeAnimation()
+		{
+			map.get(this).A__resumeAnimation();
+		}
+		
+		removeAllCharMaps()
+		{
+			map.get(this).A__removeAllCharMaps();
+		}
+		
+		appendCharMap(mapName)
+		{
+			map.get(this).A__appendCharMap(mapName);
+		}
+		
+		removeCharMap(mapName)
+		{
+			map.get(this).A__removeCharMap(mapName);
+		}
+		
+		overrideObjectComponent(objectName, component, newValue)
+		{
+			map.get(this).A__overrideObjectComponent(objectName, component, newValue);
+		}
+		
+		overrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength)
+		{
+			map.get(this).A__overrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength);
+		}
+
+		//////////////////////////////////////////
+		// Conditions
+		readyForSetup()
+		{
+			return map.get(this).C__readyForSetup();
+		}
+		
+		outsidePaddedViewport()
+		{
+			return map.get(this).C__outsidePaddedViewport();
+		}
+		
+		actionPointExists (pointName)
+		{
+			return map.get(this).C__actionPointExists(pointName);
+		}
+		
+		objectExists (pointName)
+		{
+			return map.get(this).C__objectExists(pointName);
+		}
+		
+		tagActive (tagName, objectName)
+		{
+			return map.get(this).C__tagActive(tagName, objectName);
+		}
+		
+		CompareCurrentKey (cmp, frame)
+		{
+			return map.get(this).C__CompareCurrentKey(cmp, frame);
+		}     
+		
+		CompareCurrentTime (cmp, time, format)
+		{
+			return map.get(this).C__CompareCurrentTime (cmp, time, format);
+		}
+		
+		CompareAnimation (name)
+		{
+			return map.get(this).C__CompareAnimation(name);
+		}
+		
+		CompareSecondAnimation (name)
+		{
+			return map.get(this).C__CompareSecondAnimation(name);
+		}
+		
+		CompareEntity (name)
+		{
+			return map.get(this).C__CompareEntity(name);
+		}
+		
+		AnimationPaused()
+		{
+			return map.get(this).C__AnimationPaused();
+		}
+		
+		AnimationLooping()
+		{
+			return map.get(this).C__AnimationLooping();
+		}
+		
+		isMirrored()
+		{
+			return map.get(this).C__isMirrored();
+		}
+		
+		isFlipped()
+		{
+			return map.get(this).C__isFlipped();
+		}
+		
+		CompareZElevation(which, comparison, z_elevation)
+		{
+			return map.get(this).C__CompareZElevation(which, comparison, z_elevation);
+		}
+
+		//////////////////////////////////////////
+		// Expressions
+		time()
+		{
+			return map.get(this).E__time();
+		}
+		
+		val(varname, objectName)
+		{
+			return map.get(this).E__val(varname, objectName);
+		}
+		pointX(name)
+		{
+			return map.get(this).E__pointX(name);
+		}
+		
+		pointY(name)
+		{
+			return map.get(this).E__pointY(name);
+		}
+		
+		pointAngle(name)
+		{
+			return map.get(this).E__pointAngle(name);
+		}
+		
+		objectX(name)
+		{
+			return map.get(this).E__objectX(name);
+		}
+		
+		objectY(name)
+		{
+			return map.get(this).E__objectY(name);
+		}
+		
+		objectAngle(name)
+		{
+			return map.get(this).E__objectAngle(name);
+		}
+		
+		timeRatio()
+		{
+			return map.get(this).E__timeRatio();
+		}
+		
+		ScaleRatio()
+		{
+			return map.get(this).E__ScaleRatio();
+		}
+		
+		key()
+		{
+			return map.get(this).E__key();
+		}
+		
+		PlayTo()
+		{
+			return map.get(this).E__PlayTo();
+		}
+		
+		animationName()
+		{
+			return map.get(this).E__animationName();
+		}
+		
+		animationLength()
+		{
+			return map.get(this).E__animationLength();
+		}
+		
+		speedRatio()
+		{
+			return map.get(this).E__speedRatio();
+		}
+		
+		secondAnimationName()
+		{
+			return map.get(this).E__secondAnimationName();
+		}
+		
+		entityName()
+		{
+			return map.get(this).E__entityName();
+		}
+		
+		PlayToTimeLeft()
+		{
+			return map.get(this).E__PlayToTimeLeft();
+		}
+		triggeredSound()
+		{
+			return map.get(this).E__triggeredSound();
+		}
+		
+		triggeredSoundTag()
+		{
+			return map.get(this).E__triggeredSoundTag();
+		}
+		
+		soundVolume(soundTag)
+		{
+			return map.get(this).E__soundVolume(soundTag);
+		}
+		
+		soundPanning(soundTag)
+		{
+			return map.get(this).E__soundPanning(soundTag);
+		}
+		
+		blendRatio()
+		{
+			return map.get(this).E__blendRatio();
+		}
+		
+		Opacity()
+		{
+			return map.get(this).E__Opacity();
+		}
+		
+		BBoxLeft()
+		{
+			return map.get(this).E__BBoxLeft();
+		}
+		
+		BBoxTop()
+		{
+			return map.get(this).E__BBoxTop();
+		}
+		
+		BBoxRight()
+		{
+			return map.get(this).E__BBoxRight();
+		}
+		
+		BBoxBottom()
+		{
+			return map.get(this).E__BBoxBottom();
+		}
+		
+		foundObject()
+		{
+			return map.get(this).E__foundObject();
+		}
+		
+		ZElevation()
+		{
+			return map.get(this).E__ZElevation();
+		}
+		
+		TotalZElevation()
+		{
+			return map.get(this).E__TotalZElevation();
+		}
 	};
 }
