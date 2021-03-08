@@ -48,7 +48,7 @@ The supported methods and properties to use in Construct 3's scripting feature w
 - unpinAllFromSpriterObject(spriterObjectName)
 - setAnimation(animName, startFrom, blendDuration)
 - setSecondAnim(animName)
-- stopSecondAnim(animName)
+- stopSecondAnim()
 - setAnimBlendRatio(newBlend)
 - setEnt(entName, animName)
 - playAnimTo(units, playTo)
