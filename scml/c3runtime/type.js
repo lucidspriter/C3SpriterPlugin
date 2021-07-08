@@ -17,8 +17,13 @@
 		
 		
 		OnCreate()
-		{
-			this.GetObjectClass().GetAnimations()[0].GetFrames()[0].GetImageInfo().LoadAsset(this._runtime);
+		{			
+			var frames = this.GetObjectClass().GetAnimations()[0].GetFrames();
+			for (var i = 0; i < frames.length; i++)
+			{	
+				frames[i].GetImageInfo().LoadAsset(this._runtime);				 
+			}
+			
 			this.doGetFromPreload = false;
 			this.scmlFiles = {};
 			this.scmlReserved = {};
@@ -28,26 +33,32 @@
 
 			this.sheetTex = {};
 		}
-
-		// LoadTextures(renderer)
-		// {
-			// var imageInfo = this.GetObjectClass().GetAnimations()[0].GetFrames()[0].GetImageInfo();
-			 // return imageInfo.LoadStaticTexture(renderer, 
-				// { linearSampling: this._runtime.IsLinearSampling() });
-		// }
 		
 		LoadTextures(renderer)
 		{
-			var imageInfo = this.GetObjectClass().GetAnimations()[0].GetFrames()[0].GetImageInfo();
-			return imageInfo.LoadStaticTexture(renderer, {
-				sampling: this._runtime.GetSampling()
-			});
+			const promises =  [];
+			var frames = this.GetObjectClass().GetAnimations()[0].GetFrames();
+			for (var i = 0; i < frames.length; i++)
+			{	
+				var imageInfo = frames[i].GetImageInfo();
+				imageInfo.GetTexture();
+				promises.push(imageInfo.LoadStaticTexture(renderer,{sampling: this._runtime.GetSampling()}));				 
+			}
+			
+			var proms = Promise.all(promises);	
+			console.log(proms);
+			return proms;
+		
 		}
 
 		ReleaseTextures()
 		{
-			var imageInfo = this.GetObjectClass().GetAnimations()[0].GetFrames()[0].GetImageInfo();
-			imageInfo.ReleaseTexture();
+			var frames = this.GetObjectClass().GetAnimations()[0].GetFrames();
+			for (var i = 0; i < frames.length; i++)
+			{	
+				var imageInfo = frames[i].GetImageInfo();
+				imageInfo.ReleaseTexture();
+			}
 		}	
 		
 		_UpdateAllCurrentTexture() 

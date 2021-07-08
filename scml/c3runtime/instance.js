@@ -83,14 +83,6 @@
 				return;
 			}
 			
-			var cur_frame = this.GetObjectClass().GetAnimations()[0].GetFrames()[0];
-			const imageInfo = cur_frame.GetImageInfo();
-			const texture = imageInfo.GetTexture();
-			//const texture = this.GetObjectClass().GetAnimations()[0].GetFrames()[0].GetImageInfo().GetTexture();
-			if (!texture)
-				return;			// dynamic texture load which hasn't completed yet; can't draw anything
-			
-					
 			const wi = this.GetWorldInfo();
 			if(this.NoPremultiply)
 			{
@@ -101,9 +93,6 @@
 				renderer.SetBlendMode(wi.GetBlendMode());
 			}
 			const quad = wi.GetBoundingQuad();
-			const rcTex = imageInfo.GetTexRect();
-
-			renderer.SetTexture(texture);
 
 			var mirror_factor = (this.xFlip == 1 ? -1 : 1);
 			var flip_factor = (this.yFlip == 1 ? -1 : 1);
@@ -116,15 +105,13 @@
 			uv.right = 1;
 			uv.bottom = 1;
 			var animation = this.currentAnimation;
+			
 			if (animation)
 			{
+				var spriteFrames = this.GetObjectClass().GetAnimations()[0].GetFrames();
 				var key = animation.mainlineKeys[animation.cur_frame];
 				if (key)
 				{
-					var sheetTex = this.GetSdkType().sheetTex;
-					sheetTex=rcTex;
-					var cur_imageWidth = cur_frame._imageInfo._width;
-					var cur_imageHeight = cur_frame._imageInfo._height;
 					for (var i = 0; i < key.objects.length; i++)
 					{
 						object = key.objects[i];
@@ -143,6 +130,25 @@
 									{
 										continue;
 									}
+									
+									var cur_frame = spriteFrames[atlasInfo.atlas];
+									
+									var cur_imageWidth = cur_frame._imageInfo._width;
+									var cur_imageHeight = cur_frame._imageInfo._height;
+									const imageInfo = cur_frame.GetImageInfo();
+									const texture = imageInfo.GetTexture();
+									
+									
+									if (!texture)
+									{									
+										return;		
+									}
+									
+									const sheetTex = imageInfo.GetTexRect();
+
+									renderer.SetTexture(texture);
+									var cur_imageWidth = cur_frame._imageInfo._width;
+									var cur_imageHeight = cur_frame._imageInfo._height;
 
 									var angle = objState.angle;
 
@@ -3052,7 +3058,9 @@
 			for (var d = 0; d < folderTags.length; d++)
 			{
 				var folderTag = folderTags[d];
-				this.folders.push(new SpriterFolder());
+				var newFolder = new SpriterFolder();
+				newFolder.atlas = folderTag["atlas"];
+				this.folders.push(newFolder);
 				var fileTags = folderTag["file"];
 
 				for (var f = 0; f < fileTags.length; f++)
@@ -3191,7 +3199,8 @@
 											var imageSize = {};
 											imageSize.w = 1;
 											imageSize.h = 1;
-											var currentFile = this.folders[frame["folder"]].files[frame["file"]];
+											var currentFolder = this.folders[frame["folder"]];
+											var currentFile = currentFolder.files[frame["file"]];
 											imageSize.w = currentFile.w;
 											imageSize.h = currentFile.h;
 											if (this.drawSelf)
@@ -3204,6 +3213,7 @@
 												imageSize.atlasXOff = currentFile.atlasXOff;
 												imageSize.atlasYOff = currentFile.atlasYOff;
 												imageSize.atlasRotated = currentFile.atlasRotated;
+												imageSize.atlas = currentFolder.atlas;
 											}
 											lastObj.imageSizes.push(imageSize);
 										}
@@ -3520,7 +3530,7 @@
             const curImageInfo = this.GetObjectClass().GetAnimations()[0].GetFrames()[0].GetImageInfo();
             this._currentTexture = curImageInfo.GetTexture();
             this._currentRcTex = curImageInfo.GetTexRect();
-            this.GetWorldInfo().SetMeshChanged(true)
+            this.GetWorldInfo().SetMeshChanged(true);
         };
 		loadSCML(json_)
 		{
@@ -5357,6 +5367,7 @@
 	function SpriterFolder()
 	{
 		this.files = [];
+		this.atlas = 0;
 	};
 
 	function VarDef()
@@ -5408,6 +5419,7 @@
 		this.atlasW = 0;
 		this.atlasH = 0;
 		this.atlasRotated = false;
+		this.atlas = 0;
 	};
 	
 	function ObjInfo()

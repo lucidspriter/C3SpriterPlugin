@@ -1,11 +1,11 @@
+//Converted with C2C3AddonConverter v1.0.0.11
 "use strict";
-
 {
-    const SDK = self.SDK;
-    const lang = self.lang;    
+	const SDK = self.SDK;
+	const lang = self.lang;
 
 	const PLUGIN_ID = "Spriter";
-	const PLUGIN_VERSION = "01-05-2021";
+	const PLUGIN_VERSION = "7-7-2021";
 	const PLUGIN_CATEGORY = "general";
 
 	let app = null;
@@ -13,31 +13,31 @@
 	function GetObjectTypeNamesFromScon(json, scmlObjectTypeName)
 	{
 		if (!json["scon_version"])
-			return false;	
-		
+			return false;
+
 		var entities = json["entity"];
-		if(!entities)
+		if (!entities)
 		{
 			return false;
 		}
-		
+
 		var folders = json["folder"];
-		if(!folders)
+		if (!folders)
 		{
 			return;
 		}
-		
+
 		var objectTypeNames = [];
 		for (const entity of entities)
 		{
 			var objRefs = GetFirstObjectRefsFromJsonEntity(entity)
-			
-			var obj_infos = entity["obj_info"];
-			if(!obj_infos)
+
+				var obj_infos = entity["obj_info"];
+			if (!obj_infos)
 			{
 				return false;
 			}
-			
+
 			for (const obj_info of obj_infos)
 			{
 				var name = obj_info["name"];
@@ -45,104 +45,157 @@
 				objectTypeNames.push(scmlObjectTypeName + "_" + name);
 			}
 		}
-		
+
 		return objectTypeNames;
 	}
-	
+
 	async function ImportSconFile(droppedFileName, zipFile, opts)
 	{
 		const baseFileName = droppedFileName.split(".")[0];
 		const entry = zipFile.GetEntry(baseFileName + ".scon");
 		if (!entry)
 			return false;
-	
+
 		const sconBlob = await zipFile.ReadBlob(entry);
-		
+
 		const layoutView = opts.layoutView;
 		const project = layoutView.GetProject();
+
+		// const obj = {hello: 'world'};
+		// const blob = new Blob([JSON.stringify(obj, null, 2)], {type : 'application/json'});
+
+		// project.AddOrReplaceProjectFile(blob, "testFile.json", "general");
+
+
 		const sconFileName = baseFileName + ".scon";
 		const oldSconFile = await project.GetProjectFileByName(sconFileName);
 		var oldJson = null;
 		var oldObjectNames = null;
-		if(oldSconFile)
+		if (oldSconFile)
 		{
 			oldJson = oldSconFile.GetBlob();
-			if(oldJson)
+			if (oldJson)
 			{
 				oldJson = await oldJson.text();
 				oldJson = JSON.parse(oldJson);
 				oldObjectNames = GetObjectTypeNamesFromScon(oldJson, baseFileName);
 			}
 		}
-		project.AddOrReplaceProjectFile(sconBlob, sconFileName, "general");
-		
-		const json = await zipFile.ReadJson(entry);
+		// project.AddOrReplaceProjectFile(sconBlob, sconFileName, "general");
+
+		var json = await zipFile.ReadJson(entry);
 		if (!json["scon_version"])
-			return false;		
-					
+			return false;
+
 		var reimport = false;
 		var scmlObjectType = project.GetObjectTypeByName(baseFileName);
-		if(scmlObjectType)
+		if (scmlObjectType)
 		{
 			reimport = true;
 			var wis = scmlObjectType.GetAllInstances();
-			if(wis.length > 0)
+			if (wis.length > 0)
 			{
 				var wi = wis[0];
 				opts.layoutX = wi.GetX();
 				opts.layoutY = wi.GetY();
-			}	
+			}
 		}
 		else
-		{		
+		{
 			scmlObjectType = await project.CreateObjectType("Spriter", baseFileName);
 		}
-		
+
 		var atlased = json["atlas"];
-		if(atlased)
+
+		var atlases = {};
+		if (atlased)
 		{
-			await LoadAtlasImage(scmlObjectType, zipFile, baseFileName);
+			var first = true;
+			var existingFrames = GetFirstAnim(scmlObjectType).GetFrames();
+			for (var i = existingFrames.length - 1; i >= 1; i--)
+			{
+				existingFrames[i].Delete();
+			}
+
+			for (const atlas of atlased)
+			{
+				const atlasFileName = atlas["name"].split(".")[0];
+				await LoadAtlasImage(scmlObjectType, zipFile, atlasFileName, (!first) ? project : null);
+				if (!first)
+				{
+					const jsonEntry = zipFile.GetEntry(atlas["name"]);
+
+					if (!entry)
+						continue;
+
+					const atlasJson = await zipFile.ReadJson(jsonEntry);
+					const frames = atlasJson["frames"];
+					if (!frames)
+					{
+						continue;
+					}
+					else
+					{
+						Object.keys(frames).forEach(function(key) 
+						{
+							atlases[key] = frames[key];
+						});
+					}
+				}
+				first = false;
+			}
+		}
+
+		ProcessAtlases(json["folder"], atlases);
+		
+		if(atlased.length > 1)
+		{
+			project.AddOrReplaceProjectFile(SaveJson(json), sconFileName, "general");
+		}
+		else
+		{
+			project.AddOrReplaceProjectFile(sconBlob, sconFileName, "general");
 		}
 		
-		if(reimport)
+		if (reimport)
 		{
 			var wis = scmlObjectType.GetAllInstances();
 			for (const wi of wis)
 			{
 				wi.SetPropertyValue("draw-self", atlased ? "true" : "false");
-			}			
+			}
 		}
 		else
 		{
-			const wi = scmlObjectType.CreateWorldInstance(layoutView.GetActiveLayer());	
-			
+			const wi = scmlObjectType.CreateWorldInstance(layoutView.GetActiveLayer());
+
 			wi.SetXY(opts.layoutX, opts.layoutY);
 			wi.SetPropertyValue("scml-file", sconFileName);
-			
-			if(atlased)
+
+			if (atlased)
 			{
 				wi.SetPropertyValue("draw-self", "true");
 			}
 		}
-		
+
 		var entities = json["entity"];
-		if(!entities)
+		if (!entities)
 		{
 			return false;
 		}
-		
+
 		var folders = json["folder"];
-		if(!folders)
+		if (!folders)
 		{
 			return;
 		}
-		
+
 		const eventSheet = layoutView.GetLayout().GetEventSheet();
 		if (!eventSheet)
 		{
 			return;
 		}
-		
+
 		const promises = [];
 		var c2ObjectTypes = [];
 		var objectTypeNamePairs = [];
@@ -150,13 +203,13 @@
 		for (const entity of entities)
 		{
 			var objRefs = GetFirstObjectRefsFromJsonEntity(entity)
-			
-			var obj_infos = entity["obj_info"];
-			if(!obj_infos)
+
+				var obj_infos = entity["obj_info"];
+			if (!obj_infos)
 			{
 				return false;
 			}
-			
+
 			for (const obj_info of obj_infos)
 			{
 				var objType = obj_info["type"];
@@ -168,18 +221,19 @@
 				{
 					promises.push(ImportBoxData(zipFile, opts, obj_info, scmlObjectType, c2ObjectTypes, objectTypeNamePairs));
 				}
-				
-				if(!atlased || objType == "box")
+
+				if (!atlased || objType == "box")
 				{
-					if(oldObjectNames)
+					if (oldObjectNames)
 					{
 						var index = 0;
-						while(index != -1)
+						while (index != -1)
 						{
-							var name = scmlObjectTypeName + "_" +obj_info["name"];
+							var name = scmlObjectTypeName + "_" + obj_info["name"];
 							name = name.replace(/-/g, "");
+							name = name.replace(/ /g, "");
 							index = oldObjectNames.indexOf(name);
-							if(index > -1)
+							if (index > -1)
 							{
 								oldObjectNames.splice(index, 1);
 							}
@@ -188,32 +242,31 @@
 				}
 			}
 		}
-		
+
 		const sounds = await LoadSounds(folders, zipFile, project);
-		if(sounds.length > 0)
+		if (sounds.length > 0)
 		{
 			await AddSoundEvents(eventSheet, scmlObjectType, project, baseFileName);
 			project.ShowImportAudioDialog(sounds);
 		}
-		
-		
+
 		// Wait for each sprite import to finish.
-		await Promise.all(promises);		
-		
-		if(objectTypeNamePairs.length > 0)
+		await Promise.all(promises);
+
+		if (objectTypeNamePairs.length > 0)
 		{
 			const eventBlock = await eventSheet.GetRoot().AddEventBlock();
 			eventBlock.AddCondition(scmlObjectType, null, "readyforsetup666");
-			for(const objectTypeNamePair of objectTypeNamePairs)
+			for (const objectTypeNamePair of objectTypeNamePairs)
 			{
 				AddAssociativeAction(eventBlock, objectTypeNamePair, scmlObjectType);
 			}
 		}
-		
+
 		var family = project.GetFamilyByName(baseFileName + "Family");
-		if(family)
+		if (family)
 		{
-			if(c2ObjectTypes.length > 0)
+			if (c2ObjectTypes.length > 0)
 			{
 				family.SetMembers(c2ObjectTypes);
 			}
@@ -222,86 +275,159 @@
 				family.Delete();
 			}
 		}
-		else if(c2ObjectTypes.length > 0)
+		else if (c2ObjectTypes.length > 0)
 		{
 			project.CreateFamily(baseFileName + "Family", c2ObjectTypes);
 		}
-		
+
 		c2ObjectTypes.push(scmlObjectType);
-		
-		if(reimport)
+
+		if (reimport)
 		{
 			var oldContainer = scmlObjectType.GetContainer();
-			if(oldContainer)
+			if (oldContainer)
 			{
 				var members = oldContainer.GetMembers();
 				for (const member of members)
 				{
 					oldContainer.RemoveObjectType(member);
-					if(!oldContainer.IsActive())
+					if (!oldContainer.IsActive())
 					{
 						break;
 					}
 				}
 			}
-			for(const oldObjectName of oldObjectNames)
+			for (const oldObjectName of oldObjectNames)
 			{
 				var oldObj = project.GetObjectTypeByName(oldObjectName);
-				if(oldObj)
+				if (oldObj)
 				{
 					oldObj.Delete();
 				}
 			}
-			
-			if(!atlased)
+
+			if (!atlased)
 			{
 				var newAnim = await scmlObjectType.AddAnimation("Animation 1");
 				scmlObjectType.GetAnimations()[0].Delete();
 			}
 		}
-		
-		if(c2ObjectTypes.length > 1)
+
+		if (c2ObjectTypes.length > 1)
 		{
 			const container = scmlObjectType.CreateContainer(c2ObjectTypes);
 			container.SetSelectMode("wrap");
 		}
-		
+
 		// Return true to indicate that the data was recognised and imported.
 		return true;
-	}	
+	}
 	
-	function GetFirstFrame(scmlObjectType)
+	function SaveJson(obj) 
 	{
-		const animations = scmlObjectType.GetAnimations();
-		const firstAnim = animations[0];
+		var str = JSON.stringify(obj);
+		var data = Encode( str );
+
+		var blob = new Blob( [ data ], {
+			type: 'application/octet-stream'
+		});
+		
+		return blob;
+	}
+
+
+	function Encode( s ) 
+	{
+		var out = [];
+		for ( var i = 0; i < s.length; i++ ) {
+			out[i] = s.charCodeAt(i);
+		}
+		return new Uint8Array( out );
+	}
+	
+	function ProcessAtlases(folders, atlases)
+	{
+		for (const folder of folders)
+		{
+			const files = folder["file"];
+			for (const file of files)
+			{
+				ProcessAtlas(file, atlases);
+			}
+		}
+	}
+
+	function ProcessAtlas(file, atlases)
+	{
+		var atlas = atlases[file["name"]];
+		if (!atlas)
+		{
+			return;
+		}
+		
+		file["ah"] = atlas["frame"]["h"];
+		file["aw"] = atlas["frame"]["w"];
+		file["ax"] = atlas["frame"]["x"];
+		file["ay"] = atlas["frame"]["y"];
+		file["arot"] = atlas["rotated"];
+		file["height"] = atlas["sourceSize"]["h"];
+		file["width"] = atlas["sourceSize"]["w"];
+		file["axoff"] = atlas["spriteSourceSize"]["x"];
+		file["ayoff"] = atlas["spriteSourceSize"]["y"];
+	}
+
+	function GetFirstFrame(scmlObjectType, animationIndex)
+	{
+		animationIndex = (typeof animationIndex !== 'undefined') ? animationIndex : scmlObjectType.GetAnimations().length - 1;
+		const firstAnim = GetAnimation(scmlObjectType, animationIndex);
 		const frames = firstAnim.GetFrames();
 		return frames[0];
 	}
-	
-	async function LoadAtlasImage(scmlObjectType, zipFile, baseFileName)
+
+	function GetFirstAnim(scmlObjectType)
+	{
+		const animations = scmlObjectType.GetAnimations();
+		const firstAnim = animations[0];
+		return firstAnim;
+	}
+
+	function GetAnimation(scmlObjectType, index)
+	{
+		return scmlObjectType.GetAnimations()[index];
+	}
+
+	async function LoadAtlasImage(scmlObjectType, zipFile, baseFileName, appendToProject)
 	{
 		const imageEntry = zipFile.GetEntry(baseFileName + ".png");
 		const imageBlob = await zipFile.ReadBlob(imageEntry);
-		await GetFirstFrame(scmlObjectType).ReplaceBlobAndDecode(imageBlob);
+		if (appendToProject)
+		{
+			const firstAnim = GetFirstAnim(scmlObjectType);
+			await firstAnim.AddFrame(imageBlob);
+		}
+		else
+		{
+			await GetFirstFrame(scmlObjectType, 0).ReplaceBlobAndDecode(imageBlob);
+		}
 	}
-	
+
 	async function LoadSounds(folders, zipFile, project)
 	{
 		const sounds = []
-		for(const folder of folders)
+		for (const folder of folders)
 		{
 			var files = folder["file"];
-			for(const file of files)
+			for (const file of files)
 			{
-				if(file["type"] == "sound")
+				if (file["type"] == "sound")
 				{
 					const filePath = file["name"];
 					const entry = zipFile.GetEntry(filePath);
 					if (!entry)
 						continue;
-				
+
 					const soundBlob = await zipFile.ReadBlob(entry);
-					
+
 					var nameSplits = filePath.split("/");
 					const fileName = nameSplits[nameSplits.length - 1];
 					project.AddOrReplaceProjectFile(soundBlob, fileName, "sound");
@@ -311,104 +437,104 @@
 		}
 		return sounds;
 	}
-	
+
 	async function AddSoundEvents(eventSheet, scmlObjectType, project, baseFileName)
-	 {
-			const audioEventBlock = await eventSheet.GetRoot().AddEventBlock();
-			audioEventBlock.AddCondition(scmlObjectType, null, "onsoundtriggered7");
-			var audioObject = project.GetSingleGlobalObjectType("Audio");
-			if(!audioObject)
-			{
-				audioObject = await project.CreateObjectType("Audio", "Audio");
-			}
-			audioEventBlock.AddAction(audioObject, null, "play-by-name", 
+	{
+		const audioEventBlock = await eventSheet.GetRoot().AddEventBlock();
+		audioEventBlock.AddCondition(scmlObjectType, null, "onsoundtriggered7");
+		var audioObject = project.GetSingleGlobalObjectType("Audio");
+		if (!audioObject)
+		{
+			audioObject = await project.CreateObjectType("Audio", "Audio");
+		}
+		audioEventBlock.AddAction(audioObject, null, "play-by-name",
 			[
-				"sounds", 
+				"sounds",
 				baseFileName + ".TriggeredSound",
 				"not-looping",
 				0,
 				"\"" + baseFileName + "Sound\""
 			]);
 	}
-	
+
 	function GetFirstObjectRefsFromJsonEntity(entity)
 	{
 		var currentElement = entity["animation"];
-		if(!currentElement)
+		if (!currentElement)
 		{
 			return;
 		}
 		currentElement = currentElement[0];
-		if(!currentElement)
+		if (!currentElement)
 		{
 			return;
 		}
 		currentElement = currentElement["mainline"];
-		if(!currentElement)
+		if (!currentElement)
 		{
 			return;
 		}
 		currentElement = currentElement["key"];
-		if(!currentElement)
+		if (!currentElement)
 		{
 			return;
 		}
 		currentElement = currentElement[0];
-		if(!currentElement)
+		if (!currentElement)
 		{
 			return;
 		}
-		
+
 		return currentElement["object_ref"];
 	}
-	
+
 	function SpriterObject(initialX, initialY, objectRealName)
 	{
-		var newObject = 
+		var newObject =
 		{
-			x : initialX,
-			y : initialY,
-			angle : 0,
-			realName : objectRealName,
-			startingFolderIndex : -1,
-			startingFileIndex : -1,
-			scaleX : 1,
-			scaleY : 1,
-			pivotX : 0,
-			pivotY : 0,
-			alpha : 1,
-			startingFrame : 0,
-			width : 0,
-			height : 0
+			x: initialX,
+			y: initialY,
+			angle: 0,
+			realName: objectRealName,
+			startingFolderIndex: -1,
+			startingFileIndex: -1,
+			scaleX: 1,
+			scaleY: 1,
+			pivotX: 0,
+			pivotY: 0,
+			alpha: 1,
+			startingFrame: 0,
+			width: 0,
+			height: 0
 		}
 		return newObject;
 	}
-	
+
 	function ObjectTypeNamePair(_objectType, _name)
 	{
-		const NewPair = 
-		{	
-			objectType : _objectType,
-			name : _name
+		const NewPair =
+		{
+			objectType: _objectType,
+			name: _name
 		};
 		return NewPair;
-	}	
-	
+	}
+
 	async function AddAssociativeAction(eventBlock, objectTypeNamePair, scmlObjectType, objectType)
 	{
 		await eventBlock.AddAction(scmlObjectType, null, "associatetypewithname666", [objectTypeNamePair.objectType, "\"" + objectTypeNamePair.name + "\""]);
 	}
-	
+
 	async function ImportSpriteData(zipFile, opts, obj_info, folders, objRefs, scmlObjectType, c2ObjectTypes, objectTypeNamePairs)
 	{
 		const layoutView = opts.layoutView;
-		const project = layoutView.GetProject();	
-		
+		const project = layoutView.GetProject();
+
 		const name = obj_info["name"];
-		
+
 		var reimport = false;
 		var objectType = project.GetObjectTypeByName(scmlObjectType.GetName() + "_" + name);
-		if(!objectType)
+		if (!objectType)
 		{
 			objectType = await project.CreateObjectType("Sprite", scmlObjectType.GetName() + "_" + name);
 		}
@@ -416,7 +542,7 @@
 		{
 			reimport = true;
 		}
-		
+
 		objectTypeNamePairs.push(ObjectTypeNamePair(objectType, name));
 
 		const animations = objectType.GetAnimations();
@@ -424,50 +550,50 @@
 		firstAnim.SetSpeed(0);
 		firstAnim.SetLooping(false);
 		const frames = firstAnim.GetFrames();
-		
+
 		var frame_info = obj_info["frames"];
-		if(!frame_info)
+		if (!frame_info)
 		{
 			return;
-		}		
-		
+		}
+
 		var spriterObject = SpriterObject(opts.layoutX, opts.layoutY, obj_info["realname"]);
-		
+
 		SetSpriterObjectToMainlineRef(objRefs, spriterObject);
 		var existingFrames = reimport ? firstAnim.GetFrames() : null;
-		for(var i = 0; i < frame_info.length; i++) 
+		for (var i = 0; i < frame_info.length; i++)
 		{
 			var frame = frame_info[i];
-						
+
 			if (!frame)
 			{
-				break;		
+				break;
 			}
-		
+
 			var folderIndex = frame["folder"];
 			var fileIndex = frame["file"];
-			
+
 			var file = GetFileFromJsonFolders(folders, folderIndex, fileIndex);
-			if(!file)
+			if (!file)
 			{
 				break;
 			}
-			
+
 			const imageEntry = zipFile.GetEntry(file["name"]);
-			if(!imageEntry)
+			if (!imageEntry)
 			{
 				break;
 			}
-			
+
 			const imageBlob = await zipFile.ReadBlob(imageEntry);
-			
+
 			var fileWidth = file["width"];
 			var fileHeight = file["height"];
-			
-			if(i > 0)
+
+			if (i > 0)
 			{
-				var currentFrame = null; 
-				if(reimport && existingFrames.length > i)
+				var currentFrame = null;
+				if (reimport && existingFrames.length > i)
 				{
 					currentFrame = existingFrames[i];
 					await currentFrame.ReplaceBlobAndDecode(imageBlob);
@@ -476,8 +602,8 @@
 				{
 					currentFrame = await firstAnim.AddFrame(imageBlob, fileWidth, fileHeight);
 				}
-				
-				if(currentFrame)
+
+				if (currentFrame)
 				{
 					currentFrame.SetOriginX(0);
 					currentFrame.SetOriginY(0);
@@ -490,32 +616,32 @@
 				currentFrame.SetOriginY(0);
 				await currentFrame.ReplaceBlobAndDecode(imageBlob);
 			}
-			
-			if(folderIndex == spriterObject.startingFolderIndex && fileIndex == spriterObject.startingFileIndex)
+
+			if (folderIndex == spriterObject.startingFolderIndex && fileIndex == spriterObject.startingFileIndex)
 			{
 				spriterObject.startingFrame = i;
 			}
-			
-			if(spriterObject.startingFrame == i)
+
+			if (spriterObject.startingFrame == i)
 			{
 				spriterObject.width = fileWidth * spriterObject.scaleX;
 				spriterObject.height = fileHeight * spriterObject.scaleY;
 			}
 		}
-		
-		if(reimport)
+
+		if (reimport)
 		{
 			var existingFrames = firstAnim.GetFrames();
-			for(var i = existingFrames.length - 1; i >= frame_info.length; i--)
-			{	
+			for (var i = existingFrames.length - 1; i >= frame_info.length; i--)
+			{
 				existingFrames[i].Delete();
 			}
-			
+
 			var wis = objectType.GetAllInstances();
 			for (const wi of wis)
 			{
 				ApplySpriterObjectToInst(wi, spriterObject);
-			}		
+			}
 		}
 		else
 		{
@@ -524,12 +650,12 @@
 		}
 		c2ObjectTypes.push(objectType);
 	}
-	
+
 	function SetSpriterObjectToMainlineRef(objRefs, spriterObject)
 	{
 		for (const objRef of objRefs)
 		{
-			if(objRef["name"] == spriterObject.realName)
+			if (objRef["name"] == spriterObject.realName)
 			{
 				spriterObject.x += objRef["abs_x"];
 				spriterObject.y += objRef["abs_y"];
@@ -540,49 +666,49 @@
 				spriterObject.pivotY = objRef["abs_pivot_y"];
 				spriterObject.alpha = objRef["abs_a"];
 				spriterObject.startingFolderIndex = objRef["folder"];
-				spriterObject.startingFileIndex = objRef["file"];	
+				spriterObject.startingFileIndex = objRef["file"];
 				break;
 			}
 		}
 	}
-	
+
 	function GetFileFromJsonFolders(jsonFolders, folderIndex, fileIndex)
 	{
 		var folder = jsonFolders[folderIndex];
-		if(!folder)
+		if (!folder)
 		{
 			return;
 		}
-		
+
 		folder = folder["file"];
-		if(!folder)
+		if (!folder)
 		{
 			return;
 		}
-		
+
 		return folder[fileIndex];
 	}
-	
-	function ApplySpriterObjectToInstPosition(inst, spriterObject)
-    {
-        var x = -1 * spriterObject.pivotX * spriterObject.width;
-        var y = -1 * (1 - spriterObject.pivotY) * spriterObject.height;
-		
-        var s = 0;
-        var c = 1;
 
-        if (spriterObject.angle != 0)
-        {
-            s = Math.sin(spriterObject.angle);
-            c = Math.cos(spriterObject.angle);
-        }
-		
-        var xnew = (x * c) - (y * s);
-        var ynew = (x * s) + (y * c);
+	function ApplySpriterObjectToInstPosition(inst, spriterObject)
+	{
+		var x = -1 * spriterObject.pivotX * spriterObject.width;
+		var y = -1 * (1 - spriterObject.pivotY) * spriterObject.height;
+
+		var s = 0;
+		var c = 1;
+
+		if (spriterObject.angle != 0)
+		{
+			s = Math.sin(spriterObject.angle);
+			c = Math.cos(spriterObject.angle);
+		}
+
+		var xnew = (x * c) - (y * s);
+		var ynew = (x * s) + (y * c);
 
 		inst.SetXY(xnew + spriterObject.x, ynew + spriterObject.y);
-    };
-	
+	};
+
 	function ApplySpriterObjectToInst(inst, spriterObject)
 	{
 		ApplySpriterObjectToInstPosition(inst, spriterObject);
@@ -591,50 +717,50 @@
 		inst.SetOpacity(spriterObject.alpha);
 		inst.SetPropertyValue("initial-frame", spriterObject.startingFrame);
 	}
-	
-	function SetFrameToImageBlob(frame) 
+
+	function SetFrameToImageBlob(frame)
 	{
-		return function(imageBlob) 
+		return function (imageBlob)
 		{
 			frame.ReplaceBlobAndDecode(imageBlob);
-		}		
+		}
 	}
-	
+
 	async function ImportBoxData(zipFile, opts, obj_info, scmlObjectType, c2ObjectTypes, objectTypeNamePairs)
 	{
 		// Read the basic details about the drop location and the relevant project.
 		const layoutView = opts.layoutView;
 		const project = layoutView.GetProject();
-		
+
 		const name = obj_info["name"];
-		
+
 		var objectType = project.GetObjectTypeByName(scmlObjectType.GetName() + "_" + name);
-		if(!objectType)
+		if (!objectType)
 		{
 			objectType = await project.CreateObjectType("Sprite", scmlObjectType.GetName() + "_" + name);
-		}		
-		
+		}
+
 		objectTypeNamePairs.push(ObjectTypeNamePair(objectType, name));
-		
+
 		const animations = objectType.GetAnimations();
 		const firstAnim = animations[0];
 		const frames = firstAnim.GetFrames();
 		const firstFrame = frames[0];
 		firstFrame.SetOriginX(0);
 		firstFrame.SetOriginY(0);
-		
+
 		var mycanvas = document.createElement("canvas");
-		mycanvas.width=16;
-		mycanvas.height=16;
-		mycanvas.toBlob(SetFrameToImageBlob(firstFrame));		
-		
+		mycanvas.width = 16;
+		mycanvas.height = 16;
+		mycanvas.toBlob(SetFrameToImageBlob(firstFrame));
+
 		const wi = objectType.CreateWorldInstance(layoutView.GetActiveLayer());
 		wi.SetXY(opts.layoutX, opts.layoutY);
 		wi.SetSize(16, 16);
-		
+
 		c2ObjectTypes.push(objectType);
 	}
-	
+
 	const PLUGIN_CLASS = SDK.Plugins.Spriter = class Spriter extends SDK.IPluginBase
 	{
 		constructor()
@@ -657,7 +783,7 @@
 			this._info.SetIsTiled(false);
 			this._info.SetIsSingleGlobal(false);
 			this._info.SetIsDeprecated(false);
-			this._info.SetSupportsEffects(true);		// allow effects
+			this._info.SetSupportsEffects(true); // allow effects
 			this._info.SetMustPreDraw(true);
 			this._info.SetCanBeBundled(false);
 			this._info.AddCommonPositionACEs();
@@ -667,28 +793,37 @@
 			this._info.AddCommonSceneGraphACEs();
 			SDK.Lang.PushContext(".properties");
 			this._info.SetProperties([
-				new SDK.PluginProperty("text", "scml-file", ""),
-				new SDK.PluginProperty("text", "starting-entity", ""),
-				new SDK.PluginProperty("text", "starting-animation", ""),
-				new SDK.PluginProperty("float", "starting-opacity", 100),
-				new SDK.PluginProperty("combo", "draw-self", {initialValue: "false",
-				items:["false","true"]}),
-				new SDK.PluginProperty("text", "nickname-in-c2", ""),
-				new SDK.PluginProperty("combo", "blend-mode", {initialValue : "no premultiplied alpha blend",
-				items:["no premultiplied alpha blend","use effects blend mode"]})
-			]);
-			SDK.Lang.PopContext();		// .properties
+					new SDK.PluginProperty("text", "scml-file", ""),
+					new SDK.PluginProperty("text", "starting-entity", ""),
+					new SDK.PluginProperty("text", "starting-animation", ""),
+					new SDK.PluginProperty("float", "starting-opacity", 100),
+					new SDK.PluginProperty("combo", "draw-self",
+					{
+						initialValue: "false",
+						items: ["false", "true"]
+					}
+					),
+					new SDK.PluginProperty("text", "nickname-in-c2", ""),
+					new SDK.PluginProperty("combo", "blend-mode",
+					{
+						initialValue: "no premultiplied alpha blend",
+						items: ["no premultiplied alpha blend", "use effects blend mode"]
+					}
+					)
+				]);
+			SDK.Lang.PopContext(); // .properties
 			SDK.Lang.PopContext();
-			
+
 			this.firstFrame = {};
-			SDK.UI.Util.AddDragDropFileImportHandler(ImportSconFile, {
-				isZipFormat: true,			// second callback parameter will be IZipFile
-				toLayoutView: true			// third callback parameter will have layout view related info
-			});
-			
+			SDK.UI.Util.AddDragDropFileImportHandler(ImportSconFile,
+			{
+				isZipFormat: true, // second callback parameter will be IZipFile
+				toLayoutView: true // third callback parameter will have layout view related info
+			}
+			);
+
 		}
 	};
 	PLUGIN_CLASS.Register(PLUGIN_ID, PLUGIN_CLASS);
-	
-	
+
 }
