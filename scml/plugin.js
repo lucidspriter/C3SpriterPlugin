@@ -5,7 +5,7 @@
 	const lang = self.lang;
 
 	const PLUGIN_ID = "Spriter";
-	const PLUGIN_VERSION = "7-7-2021";
+	const PLUGIN_VERSION = "8-12-2021";
 	const PLUGIN_CATEGORY = "general";
 
 	let app = null;

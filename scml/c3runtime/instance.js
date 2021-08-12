@@ -133,6 +133,11 @@
 									
 									var cur_frame = spriteFrames[atlasInfo.atlas];
 									
+									if(typeof cur_frame == 'undefined' || typeof cur_frame._imageInfo == 'undefined')
+									{
+										continue;
+									}
+									
 									var cur_imageWidth = cur_frame._imageInfo._width;
 									var cur_imageHeight = cur_frame._imageInfo._height;
 									const imageInfo = cur_frame.GetImageInfo();
