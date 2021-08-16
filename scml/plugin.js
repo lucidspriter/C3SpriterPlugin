@@ -5,7 +5,7 @@
 	const lang = self.lang;
 
 	const PLUGIN_ID = "Spriter";
-	const PLUGIN_VERSION = "8-12-2021";
+	const PLUGIN_VERSION = "8-16-2021";
 	const PLUGIN_CATEGORY = "general";
 
 	let app = null;
@@ -148,7 +148,7 @@
 
 		ProcessAtlases(json["folder"], atlases);
 		
-		if(atlased.length > 1)
+		if(atlased && atlased.length > 1)
 		{
 			project.AddOrReplaceProjectFile(SaveJson(json), sconFileName, "general");
 		}
