@@ -282,7 +282,14 @@
 
 									var q = bquad;
 
-									renderer.SetOpacity(objState.a);
+									if(this.NoPremultiply)
+									{
+										renderer.SetOpacity(objState.a);
+									}
+									else
+									{
+										renderer.SetColorRgba(objState.a,objState.a,objState.a,objState.a);
+									}
 
 									var finalUv2 = {};
 									//var finalUv =  new C3.Quad();

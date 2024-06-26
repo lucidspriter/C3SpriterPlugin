@@ -15,10 +15,14 @@
 			super.Release();
 		}
 		
+		GetFrames()
+		{
+			return this.GetObjectClass().GetAnimations()[0].GetFrames();
+		}
 		
 		OnCreate()
 		{			
-			var frames = this.GetObjectClass().GetAnimations()[0].GetFrames();
+			var frames = this.GetFrames();
 			for (var i = 0; i < frames.length; i++)
 			{	
 				frames[i].GetImageInfo().LoadAsset(this._runtime);				 
@@ -37,7 +41,7 @@
 		LoadTextures(renderer)
 		{
 			const promises =  [];
-			var frames = this.GetObjectClass().GetAnimations()[0].GetFrames();
+			var frames = this.GetFrames();
 			for (var i = 0; i < frames.length; i++)
 			{	
 				var imageInfo = frames[i].GetImageInfo();
@@ -53,7 +57,7 @@
 
 		ReleaseTextures()
 		{
-			var frames = this.GetObjectClass().GetAnimations()[0].GetFrames();
+			var frames = this.GetFrames();
 			for (var i = 0; i < frames.length; i++)
 			{	
 				var imageInfo = frames[i].GetImageInfo();

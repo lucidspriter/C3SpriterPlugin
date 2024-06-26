@@ -5,7 +5,7 @@
 	const lang = self.lang;
 
 	const PLUGIN_ID = "Spriter";
-	const PLUGIN_VERSION = "8-16-2021";
+	const PLUGIN_VERSION = "6-26-2024";
 	const PLUGIN_CATEGORY = "general";
 
 	let app = null;
@@ -244,15 +244,16 @@
 		}
 
 		const sounds = await LoadSounds(folders, zipFile, project);
+		
 		if (sounds.length > 0)
 		{
 			await AddSoundEvents(eventSheet, scmlObjectType, project, baseFileName);
 			project.ShowImportAudioDialog(sounds);
 		}
-
+		
 		// Wait for each sprite import to finish.
 		await Promise.all(promises);
-
+		
 		if (objectTypeNamePairs.length > 0)
 		{
 			const eventBlock = await eventSheet.GetRoot().AddEventBlock();
@@ -262,7 +263,7 @@
 				AddAssociativeAction(eventBlock, objectTypeNamePair, scmlObjectType);
 			}
 		}
-
+		
 		var family = project.GetFamilyByName(baseFileName + "Family");
 		if (family)
 		{
@@ -319,6 +320,7 @@
 			container.SetSelectMode("wrap");
 		}
 
+		console.log("z");
 		// Return true to indicate that the data was recognised and imported.
 		return true;
 	}
@@ -447,11 +449,14 @@
 		{
 			audioObject = await project.CreateObjectType("Audio", "Audio");
 		}
+
+		baseFileName = baseFileName.replace(/\s+/g, '');
 		audioEventBlock.AddAction(audioObject, null, "play-by-name",
 			[
 				"sounds",
 				baseFileName + ".TriggeredSound",
 				"not-looping",
+				0,
 				0,
 				"\"" + baseFileName + "Sound\""
 			]);
@@ -806,7 +811,7 @@
 					new SDK.PluginProperty("text", "nickname-in-c2", ""),
 					new SDK.PluginProperty("combo", "blend-mode",
 					{
-						initialValue: "no premultiplied alpha blend",
+						initialValue: "use effects blend mode",
 						items: ["no premultiplied alpha blend", "use effects blend mode"]
 					}
 					)
