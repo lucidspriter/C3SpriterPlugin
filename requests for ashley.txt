@@ -1,0 +1,9 @@
+# Requests for Ashley
+
+Use this log to capture missing SDK features or blocking questions discovered during the port.
+Each entry should note:
+- A short title or question.
+- What is missing or unclear.
+- Links or references to any investigation so far.
+
+(Leave additional entries below this note.)
