@@ -130,10 +130,30 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this._projectDataPromise = null;
                 this._projectDataLoadError = null;
                 this._isProjectDataReady = false;
+
+                this._managedTextures = new Set();
+                this._registeredTimelines = new Set();
+                this._eventListenerDisposables = new Set();
+                this._isReleased = false;
         }
 
         _release()
         {
+                if (!this._isReleased)
+                {
+                        this._isReleased = true;
+
+                        this._removeRuntimeEventListeners();
+                        this._disposeRegisteredTimelines();
+                        this._releaseManagedTextures();
+                        this._clearAnimationStateCaches();
+                        this._clearProjectDataReferences();
+
+                        this._managedTextures = null;
+                        this._registeredTimelines = null;
+                        this._eventListenerDisposables = null;
+                }
+
                 super._release();
         }
 
@@ -341,8 +361,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
         _onProjectDataLoaded(projectFileName, projectData)
         {
-                this._projectFileName = projectFileName;
                 this._projectDataPromise = null;
+
+                if (this.isDestroyed || this._isReleased)
+                {
+                        return;
+                }
+
+                this._projectFileName = projectFileName;
                 this._projectDataLoadError = null;
                 this._rawSpriterProject = projectData;
                 this._isProjectDataReady = true;
@@ -383,11 +409,23 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
         _handleProjectDataLoadError(projectFileName, error)
         {
+                const loadError = error instanceof Error ? error : new Error(String(error));
+
+                this._projectDataPromise = null;
+
+                if (this.isDestroyed || this._isReleased)
+                {
+                        if (typeof console !== "undefined" && console)
+                        {
+                                console.error(`[Spriter] Failed to load project '${projectFileName}':`, loadError);
+                        }
+                        return;
+                }
+
                 this._projectFileName = projectFileName;
                 this._rawSpriterProject = null;
-                this._projectDataPromise = null;
                 this._isProjectDataReady = false;
-                this._projectDataLoadError = error instanceof Error ? error : new Error(String(error));
+                this._projectDataLoadError = loadError;
 
                 if (typeof console !== "undefined" && console)
                 {
@@ -395,9 +433,278 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 }
         }
 
+        _registerManagedTexture(texture)
+        {
+                if (this._isReleased || !texture || !this._managedTextures)
+                {
+                        return texture;
+                }
+
+                this._managedTextures.add(texture);
+                return texture;
+        }
+
+        _releaseManagedTextures()
+        {
+                if (!this._managedTextures)
+                {
+                        return;
+                }
+
+                for (const texture of this._managedTextures)
+                {
+                        this._disposeTextureHandle(texture);
+                }
+
+                this._managedTextures.clear();
+        }
+
+        _disposeTextureHandle(texture)
+        {
+                if (!texture)
+                {
+                        return;
+                }
+
+                try
+                {
+                        if (typeof texture.Release === "function")
+                        {
+                                texture.Release();
+                        }
+                        else if (typeof texture.release === "function")
+                        {
+                                texture.release();
+                        }
+                        else if (typeof texture.destroy === "function")
+                        {
+                                texture.destroy();
+                        }
+                }
+                catch (error)
+                {
+                        this._logCleanupWarning("texture", error);
+                }
+        }
+
+        _registerTimelineInstance(timeline)
+        {
+                if (this._isReleased || !timeline || !this._registeredTimelines)
+                {
+                        return timeline;
+                }
+
+                this._registeredTimelines.add(timeline);
+                return timeline;
+        }
+
+        _disposeRegisteredTimelines()
+        {
+                if (!this._registeredTimelines)
+                {
+                        return;
+                }
+
+                for (const timeline of this._registeredTimelines)
+                {
+                        this._disposeTimelineInstance(timeline);
+                }
+
+                this._registeredTimelines.clear();
+        }
+
+        _disposeTimelineInstance(timeline)
+        {
+                if (!timeline)
+                {
+                        return;
+                }
+
+                try
+                {
+                        if (typeof timeline.destroy === "function")
+                        {
+                                timeline.destroy();
+                        }
+                        else if (typeof timeline.release === "function")
+                        {
+                                timeline.release();
+                        }
+                        else if (typeof timeline.dispose === "function")
+                        {
+                                timeline.dispose();
+                        }
+                }
+                catch (error)
+                {
+                        this._logCleanupWarning("timeline", error);
+                }
+        }
+
+        _registerRuntimeEventListener(target, type, handler, options)
+        {
+                if (this._isReleased || !this._eventListenerDisposables || !target || !type || typeof handler !== "function")
+                {
+                        return null;
+                }
+
+                let remover = null;
+
+                if (typeof target.addEventListener === "function" && typeof target.removeEventListener === "function")
+                {
+                        target.addEventListener(type, handler, options);
+                        remover = () =>
+                        {
+                                try
+                                {
+                                        target.removeEventListener(type, handler, options);
+                                }
+                                catch (error)
+                                {
+                                        this._logCleanupWarning(`event listener '${type}'`, error);
+                                }
+                        };
+                }
+                else if (typeof target.on === "function" && typeof target.off === "function")
+                {
+                        target.on(type, handler, options);
+                        remover = () =>
+                        {
+                                try
+                                {
+                                        target.off(type, handler, options);
+                                }
+                                catch (error)
+                                {
+                                        this._logCleanupWarning(`event listener '${type}'`, error);
+                                }
+                        };
+                }
+                else if (typeof target.addListener === "function" && typeof target.removeListener === "function")
+                {
+                        target.addListener(type, handler, options);
+                        remover = () =>
+                        {
+                                try
+                                {
+                                        target.removeListener(type, handler, options);
+                                }
+                                catch (error)
+                                {
+                                        this._logCleanupWarning(`event listener '${type}'`, error);
+                                }
+                        };
+                }
+
+                if (typeof remover === "function")
+                {
+                        this._eventListenerDisposables.add(remover);
+                        return remover;
+                }
+
+                return null;
+        }
+
+        _removeRuntimeEventListeners()
+        {
+                if (!this._eventListenerDisposables)
+                {
+                        return;
+                }
+
+                for (const dispose of this._eventListenerDisposables)
+                {
+                        try
+                        {
+                                dispose();
+                        }
+                        catch (error)
+                        {
+                                this._logCleanupWarning("event listener", error);
+                        }
+                }
+
+                this._eventListenerDisposables.clear();
+        }
+
+        _clearAnimationStateCaches()
+        {
+                if (Array.isArray(this.nodeStack))
+                {
+                        this.nodeStack.length = 0;
+                }
+
+                if (Array.isArray(this.appliedCharMaps))
+                {
+                        this.appliedCharMaps.length = 0;
+                }
+
+                if (Array.isArray(this.c2ObjectArray))
+                {
+                        this.c2ObjectArray.length = 0;
+                }
+
+                if (Array.isArray(this.objectArray))
+                {
+                        this.objectArray.length = 0;
+                }
+
+                if (Array.isArray(this.objectsToSet))
+                {
+                        this.objectsToSet.length = 0;
+                }
+
+                this.boneWidthArray = {};
+                this.boneIkOverrides = {};
+                this.objectOverrides = {};
+                this.soundLineToTrigger = {};
+                this.eventLineToTrigger = {};
+                this.lastFoundObject = "";
+        }
+
+        _clearProjectDataReferences()
+        {
+                this._projectFileName = "";
+                this._rawSpriterProject = null;
+                this._projectDataPromise = null;
+                this._projectDataLoadError = null;
+                this._isProjectDataReady = false;
+
+                this.folders = [];
+                this.entities = [];
+                this.tagDefs = [];
+        }
+
+        _logCleanupWarning(resourceType, error)
+        {
+                if (typeof console !== "undefined" && console && typeof console.warn === "function")
+                {
+                        console.warn(`[Spriter] Failed to clean up ${resourceType}:`, error);
+                }
+        }
+
         _onDestroy()
         {
+                if (this.isDestroyed)
+                {
+                        return;
+                }
+
                 this.isDestroyed = true;
+
+                this._removeRuntimeEventListeners();
+                this._disposeRegisteredTimelines();
+                this._clearAnimationStateCaches();
+
+                if (typeof this._StopTicking === "function")
+                {
+                        this._StopTicking();
+                }
+
+                if (typeof this._StopTicking2 === "function")
+                {
+                        this._StopTicking2();
+                }
         }
 
         _draw(renderer)
