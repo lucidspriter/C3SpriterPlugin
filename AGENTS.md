@@ -4,6 +4,7 @@
 - This repository is in the process of porting the legacy Spriter plugin found under `scml/` to Construct's Addon SDK v2.
 - Reference the official Construct guide on porting: <https://www.construct.net/en/make-games/manuals/addon-sdk/guide/porting-addon-sdk-v2>.
 - While porting, take the opportunity to dramatically clean up the codebase—the legacy implementation is known to be messy, so prefer clear structure, modern patterns, and thorough documentation.
+- When you need direction on which area of the port to tackle next, start in `docs/`. The root roadmap (`docs/MVP_PLAN.md`) links to detailed phase checklists under `docs/phases/` that outline the current priorities.
 
 ## Research expectations
 - Use the linked Construct manual page as the primary starting point.

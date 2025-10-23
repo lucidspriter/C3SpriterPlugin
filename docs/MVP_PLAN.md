@@ -6,8 +6,9 @@ This document captures the high-level phases required to port the Spriter plugin
 
 1. Review the phase list below to see the overall progression toward the MVP and beyond. Each phase links to its own checklist.
 2. Open the corresponding phase file when you begin work to see detailed tasks, add notes, or record blockers.
-3. Update the checkboxes in both this overview and the phase files as tasks are completed so newcomers can instantly see progress.
-4. Record any external follow-ups (e.g., SDK gaps) in `requests for ashley.txt` as described in `AGENTS.md`.
+3. Use your judgement to select a manageable slice of work at a time; if the next set of tasks looks large enough to risk context loss or tangled bugs, pause and ask your human collaborator to review progress before continuing. Avoid over-splitting trivial or tightly-coupled changes.
+4. Update the checkboxes in both this overview and the phase files as tasks are completed so newcomers can instantly see progress.
+5. Record any external follow-ups (e.g., SDK gaps) in `requests for ashley.txt` as described in `AGENTS.md`.
 
 ## Phase overview
 
