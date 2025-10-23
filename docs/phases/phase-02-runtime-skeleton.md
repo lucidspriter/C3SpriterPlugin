@@ -5,7 +5,7 @@ Port the foundational runtime structure to SDK v2 so Spriter instances can be cr
 
 ## Checklist
 - [x] Port initialization/storage fields from the legacy instance into the SDK v2 constructor and `_onCreate` implementation.
-- [ ] Implement asset loading and parsing helpers to ensure Spriter data is available during `_onCreate`.
+- [x] Implement asset loading and parsing helpers to ensure Spriter data is available during `_onCreate`.
 - [ ] Add `_onDestroy` and `_release` cleanup logic for textures, timelines, and event listeners created during initialization.
 
 ## Using this file
