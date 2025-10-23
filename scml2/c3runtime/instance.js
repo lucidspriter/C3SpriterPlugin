@@ -1,3 +1,5 @@
+import { isPromiseLike, normaliseProjectFileName } from "./project-utils.js";
+
 const C3 = globalThis.C3;
 
 const PROPERTY_INDEX = Object.freeze({
@@ -122,6 +124,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
                 this.appliedCharMaps = [];
                 this.doGetFromPreload = false;
+
+                this._projectFileName = "";
+                this._rawSpriterProject = null;
+                this._projectDataPromise = null;
+                this._projectDataLoadError = null;
+                this._isProjectDataReady = false;
         }
 
         _release()
@@ -132,6 +140,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
         _onCreate()
         {
                 this._initialiseLegacyRuntimeState();
+                this._loadProjectDataIfNeeded();
         }
 
         _initialiseLegacyRuntimeState()
@@ -227,22 +236,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this.drawSelf = this.properties[PROPERTY_INDEX.DRAW_SELF] === 1;
                 this.NoPremultiply = this.properties[PROPERTY_INDEX.BLEND_MODE] === 0;
 
-                const scmlFileName = this.properties[PROPERTY_INDEX.SCML_FILE];
-                if (typeof scmlFileName === "string" && scmlFileName.length > 0)
-                {
-                        let normalisedFileName = scmlFileName.toLowerCase();
-
-                        if (normalisedFileName.endsWith(".scml"))
-                        {
-                                normalisedFileName = normalisedFileName.replace(/\.scml$/, ".scon");
-                        }
-
-                        this.properties[PROPERTY_INDEX.SCML_FILE] = normalisedFileName;
-                }
-                else
-                {
-                        this.properties[PROPERTY_INDEX.SCML_FILE] = "";
-                }
+                const normalisedProjectFile = normaliseProjectFileName(this.properties[PROPERTY_INDEX.SCML_FILE]);
+                this.properties[PROPERTY_INDEX.SCML_FILE] = normalisedProjectFile;
 
                 this.force = false;
                 this.inAnimTrigger = false;
@@ -254,6 +249,149 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                         const opacityRatio = Number.isFinite(startingOpacity) ? startingOpacity / 100.0 : 1.0;
                         const clampedOpacity = Math.min(1.0, Math.max(0.0, opacityRatio));
                         worldInfo.SetOpacity(clampedOpacity);
+                }
+        }
+
+        _loadProjectDataIfNeeded()
+        {
+                if (isPromiseLike(this._projectDataPromise) || this._isProjectDataReady)
+                {
+                        return;
+                }
+
+                const sdkType = (typeof this.GetSdkType === "function") ? this.GetSdkType() : null;
+                const runtime = (typeof this.GetRuntime === "function") ? this.GetRuntime() : null;
+                const projectFileName = normaliseProjectFileName(this.properties[PROPERTY_INDEX.SCML_FILE]);
+
+                if (!projectFileName)
+                {
+                        this._projectFileName = "";
+                        this._rawSpriterProject = null;
+                        this._projectDataLoadError = null;
+                        this._isProjectDataReady = false;
+                        return;
+                }
+
+                if (!sdkType || typeof sdkType._requestProjectDataLoad !== "function")
+                {
+                        this._projectDataLoadError = new Error("Spriter type is missing project data loading support.");
+                        return;
+                }
+
+                const hasCachedData = (typeof sdkType._hasProjectData === "function") ? sdkType._hasProjectData(projectFileName) : false;
+
+                const loadPromise = sdkType._requestProjectDataLoad(projectFileName, runtime);
+
+                if (!isPromiseLike(loadPromise))
+                {
+                        if (hasCachedData && typeof sdkType._getCachedProjectData === "function")
+                        {
+                                const cachedData = sdkType._getCachedProjectData(projectFileName);
+                                if (cachedData)
+                                {
+                                        this._onProjectDataLoaded(projectFileName, cachedData);
+                                }
+                        }
+                        return;
+                }
+
+                this._projectDataPromise = loadPromise;
+
+                if (!hasCachedData)
+                {
+                        this._addRuntimeLoadPromise(loadPromise);
+                }
+
+                loadPromise
+                        .then((projectData) =>
+                        {
+                                this._onProjectDataLoaded(projectFileName, projectData);
+                        })
+                        .catch((error) =>
+                        {
+                                this._handleProjectDataLoadError(projectFileName, error);
+                        });
+        }
+
+        _addRuntimeLoadPromise(promise)
+        {
+                if (!isPromiseLike(promise))
+                {
+                        return;
+                }
+
+                if (typeof this.AddLoadPromise === "function")
+                {
+                        this.AddLoadPromise(promise);
+                        return;
+                }
+
+                if (this._runtimeInterface && typeof this._runtimeInterface.AddLoadPromise === "function")
+                {
+                        this._runtimeInterface.AddLoadPromise(promise);
+                        return;
+                }
+
+                const runtime = (typeof this.GetRuntime === "function") ? this.GetRuntime() : null;
+                if (runtime && typeof runtime.AddLoadPromise === "function")
+                {
+                        runtime.AddLoadPromise(promise);
+                }
+        }
+
+        _onProjectDataLoaded(projectFileName, projectData)
+        {
+                this._projectFileName = projectFileName;
+                this._projectDataPromise = null;
+                this._projectDataLoadError = null;
+                this._rawSpriterProject = projectData;
+                this._isProjectDataReady = true;
+
+                if (projectData && typeof projectData === "object")
+                {
+                        if (Array.isArray(projectData.folder))
+                        {
+                                this.folders = projectData.folder;
+                        }
+
+                        if (Array.isArray(projectData.entity))
+                        {
+                                this.entities = projectData.entity;
+                        }
+
+                        if (Array.isArray(projectData.tag_list))
+                        {
+                                this.tagDefs = projectData.tag_list
+                                        .map((tag) =>
+                                        {
+                                                if (tag && typeof tag.name === "string")
+                                                {
+                                                        return tag.name;
+                                                }
+
+                                                if (typeof tag === "string")
+                                                {
+                                                        return tag;
+                                                }
+
+                                                return null;
+                                        })
+                                        .filter((tagName) => typeof tagName === "string");
+                        }
+                }
+        }
+
+        _handleProjectDataLoadError(projectFileName, error)
+        {
+                this._projectFileName = projectFileName;
+                this._rawSpriterProject = null;
+                this._projectDataPromise = null;
+                this._isProjectDataReady = false;
+                this._projectDataLoadError = error instanceof Error ? error : new Error(String(error));
+
+                if (typeof console !== "undefined" && console)
+                {
+                        console.error(`[Spriter] Failed to load project '${projectFileName}':`, this._projectDataLoadError);
                 }
         }
 
