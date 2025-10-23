@@ -11,8 +11,10 @@ This document captures the high-level phases required to port the Spriter plugin
 
 ## Phase overview
 
-- [ ] [Phase 1 — Define the MVP contract](phases/phase-01-define-mvp-contract.md)
-- [ ] [Phase 2 — Recreate the SDK v2 runtime skeleton](phases/phase-02-runtime-skeleton.md)
+- [x] [Phase 1 — Define the MVP contract](phases/phase-01-define-mvp-contract.md)
+- [ ] [Phase 2 — Recreate the SDK v2 runtime skeleton](phases/phase-02-runtime-skeleton.md) — Start by reviewing the
+  [Phase 01a legacy runtime survey](phases/phase-01a-legacy-runtime-survey.md) for the subsystems that need to be
+  reconstructed in SDK v2.
 - [ ] [Phase 3 — Implement ticking and playback control](phases/phase-03-ticking-and-playback.md)
 - [ ] [Phase 4 — Render to the screen](phases/phase-04-rendering.md)
 - [ ] [Phase 5 — Harden the MVP](phases/phase-05-mvp-hardening.md)
