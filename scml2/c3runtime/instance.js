@@ -1,5 +1,89 @@
 const C3 = globalThis.C3;
 
+const PROPERTY_INDEX = Object.freeze({
+        SCML_FILE: 0,
+        STARTING_ENTITY: 1,
+        STARTING_ANIMATION: 2,
+        STARTING_OPACITY: 3,
+        DRAW_SELF: 4,
+        NICKNAME: 5,
+        BLEND_MODE: 6
+});
+
+const DRAW_SELF_OPTIONS = ["false", "true"];
+const BLEND_MODE_OPTIONS = ["no premultiplied alpha blend", "use effects blend mode"];
+
+function toStringOrEmpty(value)
+{
+        if (typeof value === "string")
+        {
+                return value;
+        }
+
+        if (value == null)
+        {
+                return "";
+        }
+
+        return String(value);
+}
+
+function toNumberOrDefault(value, defaultValue)
+{
+        const numberValue = Number(value);
+        return Number.isFinite(numberValue) ? numberValue : defaultValue;
+}
+
+function normaliseComboValue(value, options, defaultIndex = 0)
+{
+        if (typeof value === "number" && Number.isInteger(value))
+        {
+                if (value >= 0 && value < options.length)
+                {
+                        return value;
+                }
+        }
+
+        if (typeof value === "string")
+        {
+                const trimmed = value.trim();
+                const lowerCased = trimmed.toLowerCase();
+
+                for (let i = 0, len = options.length; i < len; i++)
+                {
+                        if (options[i].toLowerCase() === lowerCased)
+                        {
+                                return i;
+                        }
+                }
+
+                const numericValue = Number(trimmed);
+
+                if (Number.isInteger(numericValue) && numericValue >= 0 && numericValue < options.length)
+                {
+                        return numericValue;
+                }
+        }
+
+        return defaultIndex;
+}
+
+function normaliseLegacyRuntimeProperties(initialProperties)
+{
+        const source = Array.isArray(initialProperties) ? initialProperties : [];
+        const normalised = [...source];
+
+        normalised[PROPERTY_INDEX.SCML_FILE] = toStringOrEmpty(source[PROPERTY_INDEX.SCML_FILE]);
+        normalised[PROPERTY_INDEX.STARTING_ENTITY] = toStringOrEmpty(source[PROPERTY_INDEX.STARTING_ENTITY]);
+        normalised[PROPERTY_INDEX.STARTING_ANIMATION] = toStringOrEmpty(source[PROPERTY_INDEX.STARTING_ANIMATION]);
+        normalised[PROPERTY_INDEX.STARTING_OPACITY] = toNumberOrDefault(source[PROPERTY_INDEX.STARTING_OPACITY], 100);
+        normalised[PROPERTY_INDEX.DRAW_SELF] = normaliseComboValue(source[PROPERTY_INDEX.DRAW_SELF], DRAW_SELF_OPTIONS, 0);
+        normalised[PROPERTY_INDEX.NICKNAME] = toStringOrEmpty(source[PROPERTY_INDEX.NICKNAME]);
+        normalised[PROPERTY_INDEX.BLEND_MODE] = normaliseComboValue(source[PROPERTY_INDEX.BLEND_MODE], BLEND_MODE_OPTIONS, 1);
+
+        return normalised;
+}
+
 C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorldInstanceBase
 {
         constructor()
@@ -9,7 +93,35 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 const properties = this._getInitProperties();
                 this._initialProperties = properties ? [...properties] : [];
 
-                // TODO: initialise Spriter runtime state once ported to SDK v2.
+                this.properties = normaliseLegacyRuntimeProperties(this._initialProperties);
+
+                this.lastData = "";
+                this.progress = 0;
+
+                this.entity = 0;
+                this.entities = [];
+
+                this.currentSpriterTime = 0;
+                this.currentAdjustedTime = 0;
+                this.secondTime = 0;
+
+                this.start_time = 0;
+                this.lastKnownTime = 0;
+
+                const runtime = (typeof this.GetRuntime === "function") ? this.GetRuntime() : null;
+                if (runtime && typeof runtime.GetWallTime === "function")
+                {
+                        this.start_time = runtime.GetWallTime();
+                        this.lastKnownTime = this.start_time;
+                }
+
+                this.drawSelf = false;
+                this.ignoreGlobalTimeScale = false;
+
+                this.NoPremultiply = this.properties[PROPERTY_INDEX.BLEND_MODE] === 0;
+
+                this.appliedCharMaps = [];
+                this.doGetFromPreload = false;
         }
 
         _release()
@@ -19,12 +131,135 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
         _onCreate()
         {
-                // TODO: create runtime resources for the Spriter instance.
+                this._initialiseLegacyRuntimeState();
+        }
+
+        _initialiseLegacyRuntimeState()
+        {
+                this.COMPONENTANGLE = "0";
+                this.COMPONENTX = "1";
+                this.COMPONENTY = "2";
+                this.COMPONENTSCALEX = "3";
+                this.COMPONENTSCALEY = "4";
+                this.COMPONENTIMAGE = "5";
+                this.COMPONENTPIVOTX = "6";
+                this.COMPONENTPIVOTY = "7";
+                this.COMPONENTENTITY = "8";
+                this.COMPONENTANIMATION = "9";
+                this.COMPONENTTIMERATIO = "10";
+
+                this.nodeStack = [];
+                this.isDestroyed = false;
+                this.folders = [];
+                this.tagDefs = [];
+
+                this.currentAnimation = "";
+                this.secondAnimation = "";
+                this.animBlend = 0.0;
+                this.blendStartTime = 0.0;
+                this.blendEndTime = 0.0;
+                this.blendPoseTime = 0.0;
+
+                this.lastKnownInstDataAsObj = null;
+                this.lastZ = null;
+                this.c2ObjectArray = [];
+                this.objectArray = [];
+                this.boneWidthArray = {};
+                this.boneIkOverrides = {};
+                this.objectOverrides = {};
+                this.objInfoVarDefs = [];
+                this.animPlaying = true;
+                this.speedRatio = 1.0;
+
+                this.setLayersForSprites = true;
+                this.setVisibilityForObjects = true;
+                this.setCollisionsForObjects = true;
+
+                const worldInfo = (typeof this.GetWorldInfo === "function") ? this.GetWorldInfo() : null;
+                const worldWidth = (worldInfo && typeof worldInfo.GetWidth === "function") ? worldInfo.GetWidth() : 50.0;
+                this.scaleRatio = worldWidth / 50.0;
+                this.subEntScaleX = 1.0;
+                this.subEntScaleY = 1.0;
+                this.xFlip = false;
+                this.yFlip = false;
+                this.playTo = -1;
+                this.changeToStartFrom = 0;
+
+                if (typeof this._StartTicking === "function")
+                {
+                        this._StartTicking();
+                }
+
+                if (typeof this._StartTicking2 === "function")
+                {
+                        this._StartTicking2();
+                }
+
+                this.startingEntName = null;
+                this.startingAnimName = null;
+                this.startingLoopType = null;
+
+                this.leftBuffer = 0;
+                this.rightBuffer = 0;
+                this.topBuffer = 0;
+                this.bottomBuffer = 0;
+
+                this.PAUSENEVER = 0;
+                this.PAUSEALLOUTSIDEBUFFER = 1;
+                this.PAUSEALLBUTSOUNDOUTSIDEBUFFER = 2;
+                this.pauseWhenOutsideBuffer = this.PAUSENEVER;
+                this.loadingScon = false;
+
+                this.PLAYFROMSTART = 0;
+                this.PLAYFROMCURRENTTIME = 1;
+                this.PLAYFROMCURRENTTIMERATIO = 2;
+                this.BLENDTOSTART = 3;
+                this.BLENDATCURRENTTIMERATIO = 4;
+
+                this.soundToTrigger = "";
+                this.soundLineToTrigger = {};
+                this.eventToTrigger = "";
+                this.eventLineToTrigger = {};
+
+                this.lastFoundObject = "";
+                this.objectsToSet = [];
+
+                this.drawSelf = this.properties[PROPERTY_INDEX.DRAW_SELF] === 1;
+                this.NoPremultiply = this.properties[PROPERTY_INDEX.BLEND_MODE] === 0;
+
+                const scmlFileName = this.properties[PROPERTY_INDEX.SCML_FILE];
+                if (typeof scmlFileName === "string" && scmlFileName.length > 0)
+                {
+                        let normalisedFileName = scmlFileName.toLowerCase();
+
+                        if (normalisedFileName.endsWith(".scml"))
+                        {
+                                normalisedFileName = normalisedFileName.replace(/\.scml$/, ".scon");
+                        }
+
+                        this.properties[PROPERTY_INDEX.SCML_FILE] = normalisedFileName;
+                }
+                else
+                {
+                        this.properties[PROPERTY_INDEX.SCML_FILE] = "";
+                }
+
+                this.force = false;
+                this.inAnimTrigger = false;
+                this.changeAnimTo = null;
+
+                if (worldInfo && typeof worldInfo.SetOpacity === "function")
+                {
+                        const startingOpacity = this.properties[PROPERTY_INDEX.STARTING_OPACITY];
+                        const opacityRatio = Number.isFinite(startingOpacity) ? startingOpacity / 100.0 : 1.0;
+                        const clampedOpacity = Math.min(1.0, Math.max(0.0, opacityRatio));
+                        worldInfo.SetOpacity(clampedOpacity);
+                }
         }
 
         _onDestroy()
         {
-                // TODO: clean up resources created during _onCreate.
+                this.isDestroyed = true;
         }
 
         _draw(renderer)
