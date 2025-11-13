@@ -5,7 +5,7 @@ Ensure the SDK v2 runtime can advance Spriter animations each tick and expose mi
 
 ## Checklist
 - [x] Port timekeeping helpers (e.g., `getNowTime`) and ensure they respect Construct's timescale options when advancing animations.
-- [ ] Implement entity/animation selection logic and keyframe interpolation so playback state updates every `_tick`. _(Entity selection and animation timing added; keyframe interpolation remains to be ported.)_
+- [x] Implement entity/animation selection logic and keyframe interpolation so playback state updates every `_tick`. _(Mainline curves and timeline interpolation now update state caches each frame.)_
 - [x] Expose at least one action (e.g., `Set Animation`) through `C3.Plugins.Spriter.Acts` to drive playback from Construct events.
 
 ## Using this file

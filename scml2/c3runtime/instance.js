@@ -141,6 +141,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this._eventListenerDisposables = new Set();
                 this._isReleased = false;
                 this._hasShownBlendWarning = false;
+
+                this._animationStateCache = new WeakMap();
+                this.currentFrameState = {
+                        bones: [],
+                        objects: [],
+                        mainlineKeyIndex: -1,
+                        mainlineKeyTime: 0,
+                        adjustedTime: 0
+                };
         }
 
         _release()
@@ -690,6 +699,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this.currentAnimationName = "";
                 this.currentSpriterTime = 0;
                 this.currentAdjustedTime = 0;
+
+                this._resetFrameState();
+                this._animationStateCache = new WeakMap();
         }
 
         _clearProjectDataReferences()
@@ -711,6 +723,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this.currentAdjustedTime = 0;
                 this.tagDefs = [];
                 this._hasShownBlendWarning = false;
+
+                this._resetFrameState();
+                this._animationStateCache = new WeakMap();
         }
 
         _logCleanupWarning(resourceType, error)
@@ -959,6 +974,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                         this.currentAnimationName = "";
                         this.currentSpriterTime = 0;
                         this.currentAdjustedTime = 0;
+                        this._resetFrameState();
                         return false;
                 }
 
@@ -990,6 +1006,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                         this.startingEntName = entity.name;
                 }
 
+                this._resetFrameState();
                 return true;
         }
 
@@ -1080,6 +1097,1174 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 return allowFallback ? { animation: animations[0], index: 0 } : { animation: null, index: -1 };
         }
 
+        _resetFrameState()
+        {
+                if (!this.currentFrameState)
+                {
+                        this.currentFrameState = {
+                                bones: [],
+                                objects: [],
+                                mainlineKeyIndex: -1,
+                                mainlineKeyTime: 0,
+                                adjustedTime: 0
+                        };
+                        return;
+                }
+
+                if (Array.isArray(this.currentFrameState.bones))
+                {
+                        this.currentFrameState.bones.length = 0;
+                }
+
+                if (Array.isArray(this.currentFrameState.objects))
+                {
+                        this.currentFrameState.objects.length = 0;
+                }
+
+                this.currentFrameState.mainlineKeyIndex = -1;
+                this.currentFrameState.mainlineKeyTime = 0;
+                this.currentFrameState.adjustedTime = 0;
+        }
+
+        _resolveMainlineState(animation, rawTime)
+        {
+                const length = this._getAnimationLength(animation);
+                const isLooping = this._isAnimationLooping(animation);
+                const time = this._normaliseTimeWithinAnimation(rawTime, length, isLooping);
+
+                const mainlineKeys = this._getAnimationMainlineKeys(animation);
+                if (!mainlineKeys.length)
+                {
+                        const clampedTime = Math.max(0, Math.min(length, time));
+                        return {
+                                key: null,
+                                index: -1,
+                                nextKey: null,
+                                nextIndex: -1,
+                                ratio: 0,
+                                curveRatio: 0,
+                                keyTime: 0,
+                                nextKeyTime: length,
+                                adjustedTime: clampedTime,
+                                time,
+                                length,
+                                isLooping
+                        };
+                }
+
+                let keyIndex = 0;
+                let keyTime = this._coerceNumber(this._getMainlineKeyTime(mainlineKeys[0]), 0);
+
+                for (let i = 0, len = mainlineKeys.length; i < len; i++)
+                {
+                        const candidate = mainlineKeys[i];
+                        const candidateTime = this._coerceNumber(this._getMainlineKeyTime(candidate), 0);
+                        if (time >= candidateTime)
+                        {
+                                keyIndex = i;
+                                keyTime = candidateTime;
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+
+                const key = mainlineKeys[keyIndex];
+                let nextIndex = keyIndex;
+
+                if (mainlineKeys.length > 1)
+                {
+                        if (keyIndex + 1 < mainlineKeys.length)
+                        {
+                                nextIndex = keyIndex + 1;
+                        }
+                        else if (isLooping)
+                        {
+                                nextIndex = 0;
+                        }
+                }
+
+                const nextKey = mainlineKeys[nextIndex] || key;
+                let nextKeyTime = this._coerceNumber(this._getMainlineKeyTime(nextKey), length);
+                let ratio = 0;
+
+                if (nextIndex !== keyIndex)
+                {
+                        let startTime = keyTime;
+                        let endTime = nextKeyTime;
+                        let resolvedTime = time;
+
+                        if (endTime < startTime)
+                        {
+                                endTime += length;
+                                if (resolvedTime < startTime)
+                                {
+                                        resolvedTime += length;
+                                }
+                        }
+
+                        const span = endTime - startTime;
+                        if (span > 0)
+                        {
+                                ratio = Math.max(0, Math.min(1, (resolvedTime - startTime) / span));
+                        }
+                }
+
+                const curveRatio = this._getKeyCurveRatio(key, ratio);
+                const adjustedRaw = this._lerp(keyTime, nextKeyTime, curveRatio);
+                const adjustedTime = this._wrapAnimationTime(adjustedRaw, length, isLooping);
+
+                return {
+                        key,
+                        index: keyIndex,
+                        nextKey,
+                        nextIndex,
+                        ratio,
+                        curveRatio,
+                        keyTime,
+                        nextKeyTime,
+                        adjustedTime,
+                        time,
+                        length,
+                        isLooping
+                };
+        }
+
+        _updateAnimationFrameState(animation, mainlineState)
+        {
+                if (!animation || typeof animation !== "object")
+                {
+                        this._resetFrameState();
+                        return;
+                }
+
+                const resolvedState = mainlineState || this._resolveMainlineState(animation, this.currentSpriterTime);
+                const cache = this._prepareAnimationCache(animation);
+                const frameState = this.currentFrameState || {
+                        bones: [],
+                        objects: [],
+                        mainlineKeyIndex: -1,
+                        mainlineKeyTime: 0,
+                        adjustedTime: 0
+                };
+
+                this.currentFrameState = frameState;
+
+                frameState.bones.length = 0;
+                frameState.objects.length = 0;
+                frameState.mainlineKeyIndex = resolvedState.index;
+                frameState.mainlineKeyTime = resolvedState.keyTime;
+                frameState.adjustedTime = resolvedState.adjustedTime;
+
+                if (!resolvedState.key)
+                {
+                        return;
+                }
+
+                const length = resolvedState.length;
+                const isLooping = resolvedState.isLooping;
+                const sampleTime = resolvedState.adjustedTime;
+
+                const boneRefs = this._getMainlineBoneRefs(resolvedState.key);
+                const objectRefs = this._getMainlineObjectRefs(resolvedState.key);
+
+                let zIndex = 0;
+                for (const ref of boneRefs)
+                {
+                        const timelineInfo = this._resolveTimelineReference(ref, cache);
+                        if (!timelineInfo)
+                        {
+                                continue;
+                        }
+
+                        const sampled = this._sampleTimelineState(timelineInfo, cache, sampleTime, length, isLooping);
+                        if (!sampled)
+                        {
+                                continue;
+                        }
+
+                        sampled.parent = this._coerceNumber(ref && ref.parent, -1);
+                        sampled.ref = ref;
+                        sampled.zIndex = zIndex++;
+                        frameState.bones.push(sampled);
+                }
+
+                zIndex = 0;
+                for (const ref of objectRefs)
+                {
+                        const timelineInfo = this._resolveTimelineReference(ref, cache);
+                        if (!timelineInfo)
+                        {
+                                continue;
+                        }
+
+                        const sampled = this._sampleTimelineState(timelineInfo, cache, sampleTime, length, isLooping);
+                        if (!sampled)
+                        {
+                                continue;
+                        }
+
+                        sampled.parent = this._coerceNumber(ref && ref.parent, -1);
+                        sampled.ref = ref;
+                        sampled.zIndex = zIndex++;
+                        frameState.objects.push(sampled);
+                }
+        }
+
+        _prepareAnimationCache(animation)
+        {
+                if (!this._animationStateCache)
+                {
+                        this._animationStateCache = new WeakMap();
+                }
+
+                let cache = this._animationStateCache.get(animation);
+                if (cache)
+                {
+                        return cache;
+                }
+
+                const mainlineKeys = this._getAnimationMainlineKeys(animation);
+                const timelines = this._getAnimationTimelines(animation);
+
+                const timelineInfos = [];
+                const timelineInfoById = new Map();
+                const timelineByName = new Map();
+                const timelineKeysById = new Map();
+                const timelineStatesById = new Map();
+
+                for (let i = 0; i < timelines.length; i++)
+                {
+                        const timeline = timelines[i];
+                        if (!timeline || typeof timeline !== "object")
+                        {
+                                continue;
+                        }
+
+                        const id = this._coerceNumber(timeline.id, i);
+                        const name = this._getTimelineName(timeline);
+                        const objectType = this._getTimelineObjectType(timeline);
+                        const defaults = this._getTimelineDefaultObject(timeline);
+
+                        const info = {
+                                id,
+                                timeline,
+                                name,
+                                objectType,
+                                defaults
+                        };
+
+                        timelineInfos.push(info);
+                        timelineInfoById.set(id, info);
+
+                        if (typeof name === "string" && name)
+                        {
+                                timelineByName.set(name.toLowerCase(), info);
+                        }
+
+                        const keys = this._getTimelineKeys(timeline);
+                        timelineKeysById.set(id, keys);
+                }
+
+                cache = {
+                        mainlineKeys,
+                        timelines,
+                        timelineInfos,
+                        timelineInfoById,
+                        timelineByName,
+                        timelineKeysById,
+                        timelineStatesById
+                };
+
+                this._animationStateCache.set(animation, cache);
+                return cache;
+        }
+
+        _getAnimationMainlineKeys(animation)
+        {
+                if (!animation || typeof animation !== "object")
+                {
+                        return [];
+                }
+
+                if (Array.isArray(animation.mainlineKeys))
+                {
+                        return animation.mainlineKeys;
+                }
+
+                if (Array.isArray(animation.mainline))
+                {
+                        return animation.mainline;
+                }
+
+                if (animation.mainline && typeof animation.mainline === "object")
+                {
+                        const mainline = animation.mainline;
+                        if (Array.isArray(mainline.keys))
+                        {
+                                return mainline.keys;
+                        }
+
+                        if (Array.isArray(mainline.key))
+                        {
+                                return mainline.key;
+                        }
+                }
+
+                return [];
+        }
+
+        _getAnimationTimelines(animation)
+        {
+                if (!animation || typeof animation !== "object")
+                {
+                        return [];
+                }
+
+                if (Array.isArray(animation.timelines))
+                {
+                        return animation.timelines;
+                }
+
+                if (Array.isArray(animation.timeline))
+                {
+                        return animation.timeline;
+                }
+
+                return [];
+        }
+
+        _getTimelineKeys(timeline)
+        {
+                if (!timeline || typeof timeline !== "object")
+                {
+                        return [];
+                }
+
+                if (Array.isArray(timeline.keys))
+                {
+                        return timeline.keys;
+                }
+
+                if (Array.isArray(timeline.key))
+                {
+                        return timeline.key;
+                }
+
+                return [];
+        }
+
+        _getTimelineName(timeline)
+        {
+                if (!timeline || typeof timeline !== "object")
+                {
+                        return "";
+                }
+
+                if (typeof timeline.name === "string")
+                {
+                        return timeline.name;
+                }
+
+                return "";
+        }
+
+        _getTimelineObjectType(timeline)
+        {
+                if (!timeline || typeof timeline !== "object")
+                {
+                        return "sprite";
+                }
+
+                const type = timeline.objectType ?? timeline.object_type ?? timeline.type;
+                if (typeof type === "string" && type)
+                {
+                        return type;
+                }
+
+                return "sprite";
+        }
+
+        _getTimelineDefaultObject(timeline)
+        {
+                if (!timeline || typeof timeline !== "object")
+                {
+                        return null;
+                }
+
+                if (timeline.object && typeof timeline.object === "object")
+                {
+                        return timeline.object;
+                }
+
+                return null;
+        }
+
+        _getMainlineKeyTime(key)
+        {
+                if (!key || typeof key !== "object")
+                {
+                        return 0;
+                }
+
+                return this._coerceNumber(key.time, 0);
+        }
+
+        _getMainlineBoneRefs(key)
+        {
+                if (!key || typeof key !== "object")
+                {
+                        return [];
+                }
+
+                if (Array.isArray(key.bone_ref))
+                {
+                        return key.bone_ref;
+                }
+
+                if (Array.isArray(key.bones))
+                {
+                        return key.bones;
+                }
+
+                return [];
+        }
+
+        _getMainlineObjectRefs(key)
+        {
+                if (!key || typeof key !== "object")
+                {
+                        return [];
+                }
+
+                if (Array.isArray(key.object_ref))
+                {
+                        return key.object_ref;
+                }
+
+                if (Array.isArray(key.objects))
+                {
+                        return key.objects;
+                }
+
+                return [];
+        }
+
+        _resolveTimelineReference(ref, cache)
+        {
+                if (!ref || typeof ref !== "object" || !cache)
+                {
+                        return null;
+                }
+
+                const timelineIdRaw = ref.timeline;
+                if (timelineIdRaw != null)
+                {
+                        const numericId = Number(timelineIdRaw);
+                        if (Number.isInteger(numericId) && cache.timelineInfoById.has(numericId))
+                        {
+                                return cache.timelineInfoById.get(numericId);
+                        }
+
+                        if (typeof timelineIdRaw === "string")
+                        {
+                                const trimmed = timelineIdRaw.trim().toLowerCase();
+                                if (trimmed && cache.timelineByName.has(trimmed))
+                                {
+                                        return cache.timelineByName.get(trimmed);
+                                }
+
+                                const parsed = Number(trimmed);
+                                if (Number.isInteger(parsed) && cache.timelineInfoById.has(parsed))
+                                {
+                                        return cache.timelineInfoById.get(parsed);
+                                }
+                        }
+                }
+
+                if (typeof ref.timeline === "string")
+                {
+                        const trimmed = ref.timeline.trim().toLowerCase();
+                        if (trimmed && cache.timelineByName.has(trimmed))
+                        {
+                                return cache.timelineByName.get(trimmed);
+                        }
+                }
+
+                if (cache.timelineInfos && cache.timelineInfos.length)
+                {
+                        return cache.timelineInfos[0] || null;
+                }
+
+                return null;
+        }
+
+        _sampleTimelineState(timelineInfo, cache, time, length, isLooping)
+        {
+                if (!timelineInfo || !cache)
+                {
+                        return null;
+                }
+
+                const keys = cache.timelineKeysById.get(timelineInfo.id);
+                if (!Array.isArray(keys) || !keys.length)
+                {
+                        return null;
+                }
+
+                const selection = this._findTimelineKeyIndices(keys, time, length, isLooping);
+                const currentKey = keys[selection.currentIndex];
+                if (!currentKey)
+                {
+                        return null;
+                }
+
+                const baseState = this._normaliseTimelineKeyObject(timelineInfo.timeline, currentKey, timelineInfo.objectType, timelineInfo.defaults);
+                if (!baseState)
+                {
+                        return null;
+                }
+
+                let targetState = cache.timelineStatesById.get(timelineInfo.id);
+                if (!targetState)
+                {
+                        targetState = this._createEmptyTimelineState(timelineInfo);
+                        cache.timelineStatesById.set(timelineInfo.id, targetState);
+                }
+
+                if (selection.nextIndex !== selection.currentIndex)
+                {
+                        const nextKey = keys[selection.nextIndex];
+                        const nextState = this._normaliseTimelineKeyObject(timelineInfo.timeline, nextKey, timelineInfo.objectType, timelineInfo.defaults);
+                        if (nextState)
+                        {
+                                const curveRatio = this._getKeyCurveRatio(currentKey, selection.ratio);
+                                const spin = this._getKeySpin(currentKey);
+                                this._writeInterpolatedState(targetState, baseState, nextState, curveRatio, spin);
+                        }
+                        else
+                        {
+                                this._writeObjectState(targetState, baseState);
+                        }
+                }
+                else
+                {
+                        this._writeObjectState(targetState, baseState);
+                }
+
+                const nextKey = keys[selection.nextIndex] || currentKey;
+
+                targetState.timelineId = timelineInfo.id;
+                targetState.timelineName = timelineInfo.name;
+                targetState.timeline = timelineInfo.timeline;
+                targetState.timelineKeyIndex = selection.currentIndex;
+                targetState.timelineKeyId = this._coerceNumber(currentKey && currentKey.id, selection.currentIndex);
+                targetState.timelineKeyTime = selection.currentKeyTime;
+                targetState.timelineNextKeyIndex = selection.nextIndex;
+                targetState.timelineNextKeyId = this._coerceNumber(nextKey && nextKey.id, selection.nextIndex);
+                targetState.timelineNextKeyTime = selection.nextKeyTime;
+                targetState.spin = this._getKeySpin(currentKey);
+                targetState.time = this._normaliseTimeWithinAnimation(time, length, isLooping);
+
+                return targetState;
+        }
+
+        _createEmptyTimelineState(timelineInfo)
+        {
+                return {
+                        type: timelineInfo.objectType || "sprite",
+                        x: 0,
+                        y: 0,
+                        angle: 0,
+                        scaleX: 1,
+                        scaleY: 1,
+                        alpha: 1,
+                        pivotX: 0,
+                        pivotY: 0,
+                        folder: -1,
+                        file: -1,
+                        entity: null,
+                        animation: null,
+                        t: 0,
+                        defaultPivot: false,
+                        frame: 0,
+                        timelineId: timelineInfo.id,
+                        timelineName: timelineInfo.name,
+                        timeline: timelineInfo.timeline,
+                        spin: 1,
+                        timelineKeyIndex: 0,
+                        timelineKeyId: 0,
+                        timelineKeyTime: 0,
+                        timelineNextKeyIndex: 0,
+                        timelineNextKeyId: 0,
+                        timelineNextKeyTime: 0,
+                        time: 0,
+                        parent: -1,
+                        ref: null,
+                        zIndex: 0
+                };
+        }
+
+        _findTimelineKeyIndices(keys, time, length, isLooping)
+        {
+                if (!Array.isArray(keys) || !keys.length)
+                {
+                        return {
+                                currentIndex: 0,
+                                nextIndex: 0,
+                                ratio: 0,
+                                currentKeyTime: 0,
+                                nextKeyTime: 0
+                        };
+                }
+
+                const normalisedTime = this._normaliseTimeWithinAnimation(time, length, isLooping);
+
+                let currentIndex = 0;
+                let currentKeyTime = this._coerceNumber(keys[0] && keys[0].time, 0);
+
+                for (let i = 0; i < keys.length; i++)
+                {
+                        const candidate = keys[i];
+                        const candidateTime = this._coerceNumber(candidate && candidate.time, 0);
+                        if (normalisedTime >= candidateTime)
+                        {
+                                currentIndex = i;
+                                currentKeyTime = candidateTime;
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+
+                let nextIndex = currentIndex;
+                if (keys.length > 1)
+                {
+                        if (currentIndex + 1 < keys.length)
+                        {
+                                nextIndex = currentIndex + 1;
+                        }
+                        else if (isLooping)
+                        {
+                                nextIndex = 0;
+                        }
+                }
+
+                const nextKeyTime = this._coerceNumber(keys[nextIndex] && keys[nextIndex].time, currentKeyTime);
+
+                let ratio = 0;
+                if (nextIndex !== currentIndex)
+                {
+                        let startTime = currentKeyTime;
+                        let endTime = nextKeyTime;
+                        let adjustedTime = normalisedTime;
+
+                        if (endTime < startTime)
+                        {
+                                endTime += length;
+                                if (adjustedTime < startTime)
+                                {
+                                        adjustedTime += length;
+                                }
+                        }
+
+                        const span = endTime - startTime;
+                        if (span > 0)
+                        {
+                                ratio = Math.max(0, Math.min(1, (adjustedTime - startTime) / span));
+                        }
+                }
+
+                return {
+                        currentIndex,
+                        nextIndex,
+                        ratio,
+                        currentKeyTime,
+                        nextKeyTime
+                };
+        }
+
+        _getKeyCurveRatio(key, ratio)
+        {
+                const clamped = Math.max(0, Math.min(1, Number.isFinite(ratio) ? ratio : 0));
+
+                if (!key || typeof key !== "object")
+                {
+                        return clamped;
+                }
+
+                const rawType = typeof key.curve_type === "string" ? key.curve_type : key.curveType;
+                const curveType = rawType ? rawType.toLowerCase() : "linear";
+
+                switch (curveType)
+                {
+                        case "linear":
+                                return clamped;
+                        case "quadratic":
+                                return this._qerp(0, this._coerceNumber(key.c1, 0), 1, clamped);
+                        case "cubic":
+                                return this._cerp(0, this._coerceNumber(key.c1, 0), this._coerceNumber(key.c2, 0), 1, clamped);
+                        case "quartic":
+                                return this._quartic(0, this._coerceNumber(key.c1, 0), this._coerceNumber(key.c2, 0), this._coerceNumber(key.c3, 0), 1, clamped);
+                        case "quintic":
+                                return this._quintic(0, this._coerceNumber(key.c1, 0), this._coerceNumber(key.c2, 0), this._coerceNumber(key.c3, 0), this._coerceNumber(key.c4, 0), 1, clamped);
+                        case "bezier":
+                                return this._cubicBezierAtTime(clamped,
+                                        this._coerceNumber(key.c1, 0),
+                                        this._coerceNumber(key.c2, 0),
+                                        this._coerceNumber(key.c3, 0),
+                                        this._coerceNumber(key.c4, 0),
+                                        1
+                                );
+                        case "instant":
+                                return clamped >= 1 ? 1 : 0;
+                        default:
+                                return clamped;
+                }
+        }
+
+        _getKeySpin(key)
+        {
+                if (!key || typeof key !== "object")
+                {
+                        return 1;
+                }
+
+                const spin = Number(key.spin);
+                if (!Number.isFinite(spin))
+                {
+                        return 1;
+                }
+
+                if (spin === 0)
+                {
+                        return 0;
+                }
+
+                return spin < 0 ? -1 : 1;
+        }
+
+        _normaliseTimelineKeyObject(timeline, key, objectType, defaults)
+        {
+                const source = this._extractTimelineObjectSource(key, objectType);
+                if (!source || typeof source !== "object")
+                {
+                        return null;
+                }
+
+                const type = typeof source.type === "string" && source.type ? source.type : (objectType || "sprite");
+
+                const fallbackPivotX = defaults ? this._coerceNumber(defaults.pivotX ?? defaults.pivot_x, NaN) : NaN;
+                const fallbackPivotY = defaults ? this._coerceNumber(defaults.pivotY ?? defaults.pivot_y, NaN) : NaN;
+                const pivotXRaw = source.pivotX ?? source.pivot_x;
+                const pivotYRaw = source.pivotY ?? source.pivot_y;
+
+                let pivotX = this._coerceNumber(pivotXRaw, NaN);
+                if (!Number.isFinite(pivotX))
+                {
+                        pivotX = Number.isFinite(fallbackPivotX) ? fallbackPivotX : 0;
+                }
+
+                let pivotY = this._coerceNumber(pivotYRaw, NaN);
+                if (!Number.isFinite(pivotY))
+                {
+                        pivotY = Number.isFinite(fallbackPivotY) ? fallbackPivotY : 0;
+                }
+
+                const folderFallback = defaults ? this._coerceNumber(defaults.folder, -1) : -1;
+                const fileFallback = defaults ? this._coerceNumber(defaults.file, -1) : -1;
+
+                const defaultPivotRaw = source.useDefaultPivot ?? source.use_default_pivot ?? source.defaultPivot ?? (defaults ? defaults.useDefaultPivot ?? defaults.defaultPivot : false);
+
+                return {
+                        type,
+                        x: this._coerceNumber(source.x, 0),
+                        y: this._coerceNumber(source.y, 0),
+                        angle: this._coerceNumber(source.angle, 0),
+                        scaleX: this._coerceNumber(source.scaleX ?? source.scale_x, 1),
+                        scaleY: this._coerceNumber(source.scaleY ?? source.scale_y, 1),
+                        alpha: this._coerceNumber(source.a ?? source.alpha, 1),
+                        pivotX,
+                        pivotY,
+                        folder: this._coerceNumber(source.folder, folderFallback),
+                        file: this._coerceNumber(source.file, fileFallback),
+                        entity: source.entity ?? (defaults ? defaults.entity : null),
+                        animation: source.animation ?? (defaults ? defaults.animation : null),
+                        t: this._coerceNumber(source.t, this._coerceNumber(defaults ? defaults.t : 0, 0)),
+                        defaultPivot: this._toBoolean(defaultPivotRaw, false),
+                        frame: this._coerceNumber(source.frame, this._coerceNumber(defaults ? defaults.frame : 0, 0))
+                };
+        }
+
+        _extractTimelineObjectSource(key, objectType)
+        {
+                if (!key || typeof key !== "object")
+                {
+                        return null;
+                }
+
+                const type = typeof objectType === "string" ? objectType.toLowerCase() : "";
+
+                if (type === "bone")
+                {
+                        if (Array.isArray(key.bones) && key.bones.length)
+                        {
+                                return key.bones[0];
+                        }
+
+                        if (key.bone)
+                        {
+                                return key.bone;
+                        }
+                }
+
+                if (Array.isArray(key.objects) && key.objects.length)
+                {
+                        return key.objects[0];
+                }
+
+                if (key.object)
+                {
+                        return key.object;
+                }
+
+                if (Array.isArray(key.bones) && key.bones.length)
+                {
+                        return key.bones[0];
+                }
+
+                if (key.bone)
+                {
+                        return key.bone;
+                }
+
+                return null;
+        }
+
+        _writeObjectState(target, source)
+        {
+                if (!target || !source)
+                {
+                        return;
+                }
+
+                target.type = source.type;
+                target.x = source.x;
+                target.y = source.y;
+                target.angle = source.angle;
+                target.scaleX = source.scaleX;
+                target.scaleY = source.scaleY;
+                target.alpha = source.alpha;
+                target.pivotX = source.pivotX;
+                target.pivotY = source.pivotY;
+                target.folder = source.folder;
+                target.file = source.file;
+                target.entity = source.entity;
+                target.animation = source.animation;
+                target.t = source.t;
+                target.defaultPivot = !!source.defaultPivot;
+                target.frame = source.frame;
+        }
+
+        _writeInterpolatedState(target, fromState, toState, t, spin)
+        {
+                if (!target || !fromState)
+                {
+                        return;
+                }
+
+                if (!toState)
+                {
+                        this._writeObjectState(target, fromState);
+                        return;
+                }
+
+                const ratio = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0));
+
+                target.type = fromState.type;
+                target.x = this._lerp(fromState.x, toState.x, ratio);
+                target.y = this._lerp(fromState.y, toState.y, ratio);
+                target.angle = this._lerpAngle(fromState.angle, toState.angle, ratio, spin);
+                target.scaleX = this._lerp(fromState.scaleX, toState.scaleX, ratio);
+                target.scaleY = this._lerp(fromState.scaleY, toState.scaleY, ratio);
+                target.alpha = this._lerp(fromState.alpha, toState.alpha, ratio);
+                target.pivotX = fromState.pivotX;
+                target.pivotY = fromState.pivotY;
+                target.folder = ratio < 1 ? fromState.folder : toState.folder;
+                target.file = ratio < 1 ? fromState.file : toState.file;
+                target.entity = ratio < 1 ? fromState.entity : toState.entity;
+                target.animation = ratio < 1 ? fromState.animation : toState.animation;
+                target.t = this._lerp(fromState.t, toState.t, ratio);
+                target.defaultPivot = !!(fromState.defaultPivot && toState.defaultPivot);
+                target.frame = fromState.frame;
+        }
+
+        _normaliseTimeWithinAnimation(time, length, isLooping)
+        {
+                if (!Number.isFinite(time))
+                {
+                        return 0;
+                }
+
+                if (length <= 0)
+                {
+                        return 0;
+                }
+
+                if (isLooping)
+                {
+                        const mod = ((time % length) + length) % length;
+                        return mod;
+                }
+
+                return Math.max(0, Math.min(length, time));
+        }
+
+        _wrapAnimationTime(time, length, isLooping)
+        {
+                if (!Number.isFinite(time))
+                {
+                        return 0;
+                }
+
+                if (length <= 0)
+                {
+                        return 0;
+                }
+
+                if (isLooping)
+                {
+                        return ((time % length) + length) % length;
+                }
+
+                return Math.max(0, Math.min(length, time));
+        }
+
+        _lerp(a, b, t)
+        {
+                return ((b - a) * t) + a;
+        }
+
+        _qerp(a, b, c, t)
+        {
+                return this._lerp(this._lerp(a, b, t), this._lerp(b, c, t), t);
+        }
+
+        _cerp(a, b, c, d, t)
+        {
+                return this._lerp(this._qerp(a, b, c, t), this._qerp(b, c, d, t), t);
+        }
+
+        _quartic(a, b, c, d, e, t)
+        {
+                return this._lerp(this._cerp(a, b, c, d, t), this._cerp(b, c, d, e, t), t);
+        }
+
+        _quintic(a, b, c, d, e, f, t)
+        {
+                return this._lerp(this._quartic(a, b, c, d, e, t), this._quartic(b, c, d, e, f, t), t);
+        }
+
+        _cubicBezierAtTime(t, x1, y1, x2, y2, duration)
+        {
+                const ax = 3 * x1 - 3 * x2 + 1;
+                const bx = 3 * x2 - 6 * x1;
+                const cx = 3 * x1;
+
+                const ay = 3 * y1 - 3 * y2 + 1;
+                const by = 3 * y2 - 6 * y1;
+                const cy = 3 * y1;
+
+                const epsilon = this._solveEpsilon(duration);
+                return this._solve(ax, bx, cx, ay, by, cy, t, epsilon);
+        }
+
+        _sampleCurve(ax, bx, cx, t)
+        {
+                return ((ax * t + bx) * t + cx) * t;
+        }
+
+        _sampleCurveDerivativeX(ax, bx, cx, t)
+        {
+                return (3.0 * ax * t + 2.0 * bx) * t + cx;
+        }
+
+        _solveEpsilon(duration)
+        {
+                return 1.0 / (200.0 * Math.max(0.01, duration));
+        }
+
+        _solve(ax, bx, cx, ay, by, cy, x, epsilon)
+        {
+                return this._sampleCurve(ay, by, cy, this._solveCurveX(ax, bx, cx, x, epsilon));
+        }
+
+        _solveCurveX(ax, bx, cx, x, epsilon)
+        {
+                let t2 = x;
+                for (let i = 0; i < 8; i++)
+                {
+                        const x2 = this._sampleCurve(ax, bx, cx, t2) - x;
+                        if (this._fabs(x2) < epsilon)
+                        {
+                                return t2;
+                        }
+
+                        const d2 = this._sampleCurveDerivativeX(ax, bx, cx, t2);
+                        if (this._fabs(d2) < 1e-6)
+                        {
+                                break;
+                        }
+
+                        t2 -= x2 / d2;
+                }
+
+                let t0 = 0;
+                let t1 = 1;
+                t2 = x;
+
+                while (t0 < t1)
+                {
+                        const x2 = this._sampleCurve(ax, bx, cx, t2);
+                        if (this._fabs(x2 - x) < epsilon)
+                        {
+                                return t2;
+                        }
+
+                        if (x > x2)
+                        {
+                                t0 = t2;
+                        }
+                        else
+                        {
+                                t1 = t2;
+                        }
+
+                        t2 = (t1 - t0) * 0.5 + t0;
+                }
+
+                return t2;
+        }
+
+        _fabs(n)
+        {
+                return n >= 0 ? n : -n;
+        }
+
+        _lerpAngle(a, b, t, spin)
+        {
+                if (!Number.isFinite(a))
+                {
+                        return Number.isFinite(b) ? b : 0;
+                }
+
+                if (!Number.isFinite(b))
+                {
+                        return a;
+                }
+
+                if (spin === 0)
+                {
+                        return a;
+                }
+
+                const ratio = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0));
+                const useDegrees = Math.abs(a) > Math.PI * 2 || Math.abs(b) > Math.PI * 2;
+                const from = useDegrees ? this._degreesToRadians(a) : a;
+                const to = useDegrees ? this._degreesToRadians(b) : b;
+                const diff = this._angleDifference(from, to);
+                const resultRad = spin === -1 ? from + diff * ratio : from - diff * ratio;
+
+                if (useDegrees)
+                {
+                        return this._radiansToDegrees(resultRad);
+                }
+
+                return resultRad;
+        }
+
+        _angleDifference(a, b)
+        {
+                if (!Number.isFinite(a) || !Number.isFinite(b))
+                {
+                        return 0;
+                }
+
+                const pi = Math.PI;
+                const rad = pi * 2;
+                let start = a;
+                let end = b;
+
+                while (end - start < -pi)
+                {
+                        start -= rad;
+                }
+
+                while (end - start > pi)
+                {
+                        end -= rad;
+                }
+
+                return Math.abs(end - start);
+        }
+
+        _degreesToRadians(angleInDegrees)
+        {
+                return angleInDegrees * 0.0174533;
+        }
+
+        _radiansToDegrees(angleInRadians)
+        {
+                return angleInRadians / 0.0174533;
+        }
+
+        _toBoolean(value, fallback = false)
+        {
+                if (typeof value === "boolean")
+                {
+                        return value;
+                }
+
+                if (typeof value === "number")
+                {
+                        if (!Number.isFinite(value))
+                        {
+                                return fallback;
+                        }
+                        return value !== 0;
+                }
+
+                if (typeof value === "string")
+                {
+                        const trimmed = value.trim();
+                        if (!trimmed)
+                        {
+                                return fallback;
+                        }
+
+                        const lower = trimmed.toLowerCase();
+                        if (lower === "true")
+                        {
+                                return true;
+                        }
+
+                        if (lower === "false")
+                        {
+                                return false;
+                        }
+
+                        const numeric = Number(trimmed);
+                        if (Number.isFinite(numeric))
+                        {
+                                return numeric !== 0;
+                        }
+                }
+
+                return fallback;
+        }
+
         _setAnimation(animationIdentifier, startFrom = 0, blendDuration = 0)
         {
                 const allowFallback = animationIdentifier == null || animationIdentifier === "";
@@ -1138,8 +2323,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 }
 
                 this.currentSpriterTime = nextTime;
-                this.currentAdjustedTime = Math.max(0, Math.min(length, this.currentSpriterTime));
                 this.lastKnownTime = this._getNowTime();
+
+                const mainlineState = this._resolveMainlineState(animation, this.currentSpriterTime);
+                this.currentAdjustedTime = mainlineState.adjustedTime;
 
                 this.playTo = -1;
                 this.changeToStartFrom = startFrom;
@@ -1152,6 +2339,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this.animPlaying = true;
                 this.force = true;
 
+                this._updateAnimationFrameState(animation, mainlineState);
                 this._updateWorldBoundsFromAnimation(animation);
                 return true;
         }
@@ -1312,6 +2500,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 const animation = this.currentAnimation;
                 if (!animation)
                 {
+                        this._resetFrameState();
                         return;
                 }
 
@@ -1320,6 +2509,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 {
                         this.currentSpriterTime = 0;
                         this.currentAdjustedTime = 0;
+                        this._resetFrameState();
                         return;
                 }
 
@@ -1390,7 +2580,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                         }
                 }
 
-                this.currentAdjustedTime = Math.max(0, Math.min(length, this.currentSpriterTime));
+                const mainlineState = this._resolveMainlineState(animation, this.currentSpriterTime);
+                this.currentAdjustedTime = mainlineState.adjustedTime;
+
+                this._updateAnimationFrameState(animation, mainlineState);
 
                 if (animationFinished)
                 {
