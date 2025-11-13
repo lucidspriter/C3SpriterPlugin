@@ -147,6 +147,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this._currentBoneStates = [];
                 this._currentObjectStates = [];
                 this._timelineStateCache = new Map();
+                this._foldersById = new Map();
+                this._atlasFrameCache = new Map();
         }
 
         _release()
@@ -164,6 +166,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                         this._managedTextures = null;
                         this._registeredTimelines = null;
                         this._eventListenerDisposables = null;
+                        this._foldersById = null;
+                        this._atlasFrameCache = null;
                 }
 
                 super._release();
@@ -389,8 +393,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 {
                         if (Array.isArray(projectData.folder))
                         {
-                                this.folders = projectData.folder;
+                                this.folders = this._normaliseFolderDefinitions(projectData.folder);
                         }
+                        else
+                        {
+                                this.folders = [];
+                        }
+
+                        this._rebuildFolderIndex();
 
                         if (Array.isArray(projectData.entity))
                         {
@@ -422,10 +432,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                                         })
                                         .filter((tagName) => typeof tagName === "string");
                         }
+                        else
+                        {
+                                this.tagDefs = [];
+                        }
                 }
                 else
                 {
+                        this.folders = [];
+                        this._rebuildFolderIndex();
                         this.entities = [];
+                        this.tagDefs = [];
                 }
 
                 this._applyPendingPlaybackPreferences();
@@ -742,6 +759,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this._isProjectDataReady = false;
 
                 this.folders = [];
+                if (this._foldersById)
+                {
+                        this._foldersById.clear();
+                }
                 this.entities = [];
                 this.entity = null;
                 this.entityIndex = -1;
@@ -752,6 +773,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this.currentAdjustedTime = 0;
                 this.tagDefs = [];
                 this._hasShownBlendWarning = false;
+
+                if (this._atlasFrameCache)
+                {
+                        this._atlasFrameCache.clear();
+                }
         }
 
         _logCleanupWarning(resourceType, error)
@@ -1902,13 +1928,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 const flipX = this.xFlip ? -1 : 1;
                 const flipY = this.yFlip ? -1 : 1;
 
+                const worldInfo = (typeof this.GetWorldInfo === "function") ? this.GetWorldInfo() : null;
+                const baseX = (worldInfo && typeof worldInfo.GetX === "function") ? worldInfo.GetX() : 0;
+                const baseY = (worldInfo && typeof worldInfo.GetY === "function") ? worldInfo.GetY() : 0;
+                const baseAngle = (worldInfo && typeof worldInfo.GetAngle === "function") ? worldInfo.GetAngle() : 0;
+                const baseAlpha = (worldInfo && typeof worldInfo.GetOpacity === "function") ? worldInfo.GetOpacity() : 1;
+
                 return {
-                        x: 0,
-                        y: 0,
-                        angle: 0,
+                        x: baseX,
+                        y: baseY,
+                        angle: baseAngle,
                         scaleX: baseScaleX * flipX,
                         scaleY: baseScaleY * flipY,
-                        alpha: 1
+                        alpha: baseAlpha
                 };
         }
 
@@ -2268,7 +2300,209 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
         _draw(renderer)
         {
-                // TODO: render the Spriter animation once the runtime is implemented.
+                if (!this.drawSelf || !renderer)
+                {
+                        return;
+                }
+
+                const objectStates = Array.isArray(this._currentObjectStates) ? this._currentObjectStates : [];
+                if (!objectStates.length)
+                {
+                        return;
+                }
+
+                const worldInfo = (typeof this.GetWorldInfo === "function") ? this.GetWorldInfo() : null;
+                if (!worldInfo)
+                {
+                        return;
+                }
+
+                if (this.NoPremultiply && typeof renderer.SetNoPremultiplyAlphaBlend === "function")
+                {
+                        renderer.SetNoPremultiplyAlphaBlend();
+                }
+                else if (typeof renderer.SetBlendMode === "function" && typeof worldInfo.GetBlendMode === "function")
+                {
+                        renderer.SetBlendMode(worldInfo.GetBlendMode());
+                }
+
+                const geometryQuad = new C3.Quad();
+                const uvQuad = new C3.Quad();
+                const boundingRect = new C3.Rect();
+
+                const mirrorFactor = this.xFlip ? -1 : 1;
+                const flipFactor = this.yFlip ? -1 : 1;
+
+                for (const state of objectStates)
+                {
+                        if (!state || state.objectType !== "sprite")
+                        {
+                                continue;
+                        }
+
+                        const fileInfo = this._getFileInfo(state.folder, state.file);
+                        if (!fileInfo)
+                        {
+                                continue;
+                        }
+
+                        const frame = this._getAtlasFrame(fileInfo.atlasIndex);
+                        if (!frame || typeof frame.GetImageInfo !== "function")
+                        {
+                                continue;
+                        }
+
+                        const imageInfo = frame.GetImageInfo();
+                        if (!imageInfo)
+                        {
+                                continue;
+                        }
+
+                        const texture = (typeof imageInfo.GetTexture === "function") ? imageInfo.GetTexture() : null;
+                        if (!texture || typeof renderer.SetTexture !== "function")
+                        {
+                                continue;
+                        }
+
+                        const textureWidth = this._coerceNumber((typeof imageInfo.GetWidth === "function") ? imageInfo.GetWidth() : imageInfo._width, 0);
+                        const textureHeight = this._coerceNumber((typeof imageInfo.GetHeight === "function") ? imageInfo.GetHeight() : imageInfo._height, 0);
+
+                        if (textureWidth <= 0 || textureHeight <= 0)
+                        {
+                                continue;
+                        }
+
+                        const texRect = (typeof imageInfo.GetTexRect === "function") ? imageInfo.GetTexRect() : null;
+                        const texLeft = texRect && typeof texRect._left === "number" ? texRect._left : 0;
+                        const texTop = texRect && typeof texRect._top === "number" ? texRect._top : 0;
+                        const texRight = texRect && typeof texRect._right === "number" ? texRect._right : 1;
+                        const texBottom = texRect && typeof texRect._bottom === "number" ? texRect._bottom : 1;
+
+                        const worldState = state.world || {};
+                        const localState = state.local || {};
+
+                        const pivotX = (localState.pivotX != null) ? localState.pivotX : fileInfo.pivotX;
+                        const pivotY = (localState.pivotY != null) ? localState.pivotY : fileInfo.pivotY;
+
+                        const scaleX = this._coerceNumber(worldState.scaleX, 1);
+                        const scaleY = this._coerceNumber(worldState.scaleY, 1);
+                        const alpha = Math.min(1, Math.max(0, this._coerceNumber(worldState.alpha, 1)));
+
+                        let angleRad = this._degreesToRadians(this._coerceNumber(worldState.angle, 0));
+
+                        let atlasWidth = fileInfo.atlasW;
+                        let atlasHeight = fileInfo.atlasH;
+
+                        if (fileInfo.atlasRotated)
+                        {
+                                angleRad -= Math.PI / 2;
+                                const temp = atlasWidth;
+                                atlasWidth = atlasHeight;
+                                atlasHeight = temp;
+                        }
+
+                        if (mirrorFactor * flipFactor === -1)
+                        {
+                                angleRad -= Math.PI;
+
+                                if (!fileInfo.atlasRotated)
+                                {
+                                        angleRad *= -1;
+                                        angleRad = Math.PI - angleRad;
+                                }
+                        }
+
+                        const atlasX = fileInfo.atlasX;
+                        const atlasY = fileInfo.atlasY;
+
+                        let uvLeft = atlasX / textureWidth;
+                        let uvTop = atlasY / textureHeight;
+                        let uvRight = (atlasX + atlasWidth) / textureWidth;
+                        let uvBottom = (atlasY + atlasHeight) / textureHeight;
+
+                        if (mirrorFactor === -1)
+                        {
+                                const swap = uvLeft;
+                                uvLeft = uvRight;
+                                uvRight = swap;
+                        }
+
+                        if (flipFactor === -1)
+                        {
+                                const swap = uvTop;
+                                uvTop = uvBottom;
+                                uvBottom = swap;
+                        }
+
+                        const uvLeftAbs = this._lerp(texLeft, texRight, uvLeft);
+                        const uvRightAbs = this._lerp(texLeft, texRight, uvRight);
+                        const uvTopAbs = this._lerp(texTop, texBottom, uvTop);
+                        const uvBottomAbs = this._lerp(texTop, texBottom, uvBottom);
+
+                        uvQuad.setRect(uvLeftAbs, uvTopAbs, uvRightAbs, uvBottomAbs);
+
+                        const width = fileInfo.width || fileInfo.atlasW;
+                        const height = fileInfo.height || fileInfo.atlasH;
+
+                        const absPivotX = pivotX * width * scaleX;
+                        const absPivotY = pivotY * height * scaleY;
+                        const reverseAbsPivotX = (1 - pivotX) * width * scaleX;
+                        const reverseAbsPivotY = (1 - pivotY) * height * scaleY;
+
+                        const xOff = scaleX * fileInfo.atlasXOff;
+                        const yOff = scaleY * fileInfo.atlasYOff;
+                        const reverseXOff = scaleX * (width - (fileInfo.atlasXOff + fileInfo.atlasW));
+                        const reverseYOff = scaleY * (height - (fileInfo.atlasYOff + fileInfo.atlasH));
+
+                        const baseX = this._coerceNumber(worldState.x, 0);
+                        const baseY = this._coerceNumber(worldState.y, 0);
+
+                        if (fileInfo.atlasRotated)
+                        {
+                                boundingRect.set(baseX, baseY, baseX + (fileInfo.atlasH * scaleY), baseY + (fileInfo.atlasW * scaleX));
+
+                                const offsetX = (mirrorFactor === -1) ? (yOff - absPivotY) : (reverseYOff - reverseAbsPivotY);
+                                const offsetY = (flipFactor === -1) ? (reverseXOff - reverseAbsPivotX) : (xOff - absPivotX);
+
+                                boundingRect.offset(offsetX, offsetY);
+                        }
+                        else
+                        {
+                                boundingRect.set(baseX, baseY, baseX + (fileInfo.atlasW * scaleX), baseY + (fileInfo.atlasH * scaleY));
+
+                                const offsetX = (mirrorFactor === -1) ? (reverseXOff - reverseAbsPivotX) : (xOff - absPivotX);
+                                const offsetY = (flipFactor === -1) ? (reverseYOff - reverseAbsPivotY) : (yOff - absPivotY);
+
+                                boundingRect.offset(offsetX, offsetY);
+                        }
+
+                        boundingRect.offset(-baseX, -baseY);
+                        geometryQuad.setFromRotatedRect(boundingRect, angleRad);
+                        geometryQuad.offset(baseX, baseY);
+
+                        geometryQuad.getBoundingBox(boundingRect);
+                        boundingRect.normalize();
+
+                        renderer.SetTexture(texture);
+
+                        if (this.NoPremultiply && typeof renderer.SetOpacity === "function")
+                        {
+                                renderer.SetOpacity(alpha);
+                        }
+                        else if (typeof renderer.SetColorRgba === "function")
+                        {
+                                renderer.SetColorRgba(alpha, alpha, alpha, alpha);
+                        }
+
+                        if (typeof renderer.Quad4 === "function")
+                        {
+                                renderer.Quad4(geometryQuad, uvQuad);
+                        }
+                        else if (typeof renderer.Quad3 === "function")
+                        {
+                                renderer.Quad3(geometryQuad, boundingRect);
+                        }
+                }
         }
 
         _tick()
@@ -2367,6 +2601,259 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 }
 
                 this._updateAnimationState();
+        }
+
+        _normaliseFolderDefinitions(folderDefinitions)
+        {
+                if (!Array.isArray(folderDefinitions))
+                {
+                        return [];
+                }
+
+                const folders = [];
+
+                for (let i = 0; i < folderDefinitions.length; i++)
+                {
+                        const folder = this._normaliseFolderDefinition(folderDefinitions[i], i);
+                        if (folder)
+                        {
+                                folders.push(folder);
+                        }
+                }
+
+                return folders;
+        }
+
+        _normaliseFolderDefinition(folderDefinition, index)
+        {
+                if (!folderDefinition || typeof folderDefinition !== "object")
+                {
+                        return null;
+                }
+
+                const folderIdRaw = ("id" in folderDefinition) ? Number(folderDefinition.id) : NaN;
+                const folderId = Number.isInteger(folderIdRaw) ? folderIdRaw : index;
+                const atlasIndex = this._coerceNumber(folderDefinition.atlas, 0);
+
+                const filesSource = Array.isArray(folderDefinition.file)
+                        ? folderDefinition.file
+                        : Array.isArray(folderDefinition.files)
+                                ? folderDefinition.files
+                                : [];
+
+                const files = [];
+                const filesById = new Map();
+
+                for (let i = 0; i < filesSource.length; i++)
+                {
+                        const normalised = this._normaliseFileDefinition(filesSource[i], i, atlasIndex);
+                        if (normalised)
+                        {
+                                files.push(normalised);
+                                filesById.set(normalised.id, normalised);
+                        }
+                }
+
+                return {
+                        id: folderId,
+                        index,
+                        name: typeof folderDefinition.name === "string" ? folderDefinition.name : "",
+                        atlasIndex,
+                        files,
+                        filesById
+                };
+        }
+
+        _normaliseFileDefinition(fileDefinition, index, fallbackAtlasIndex)
+        {
+                if (!fileDefinition || typeof fileDefinition !== "object")
+                {
+                        return null;
+                }
+
+                const fileIdRaw = ("id" in fileDefinition) ? Number(fileDefinition.id) : NaN;
+                const fileId = Number.isInteger(fileIdRaw) ? fileIdRaw : index;
+
+                const widthFallback = this._coerceNumber(fileDefinition.aw, 0);
+                const heightFallback = this._coerceNumber(fileDefinition.ah, 0);
+
+                const width = this._coerceNumber(fileDefinition.width ?? fileDefinition.w, widthFallback);
+                const height = this._coerceNumber(fileDefinition.height ?? fileDefinition.h, heightFallback);
+
+                const pivotX = this._coerceNumber(fileDefinition.pivotX ?? fileDefinition.pivot_x, 0);
+                let pivotY = this._coerceNumber(fileDefinition.pivotY ?? fileDefinition.pivot_y, 0);
+
+                if (fileDefinition.hasOwnProperty("pivot_y") && !fileDefinition.hasOwnProperty("pivotY"))
+                {
+                        pivotY = 1 - pivotY;
+                }
+
+                const atlasW = this._coerceNumber(fileDefinition.aw, width || widthFallback);
+                const atlasH = this._coerceNumber(fileDefinition.ah, height || heightFallback);
+                const atlasX = this._coerceNumber(fileDefinition.ax, 0);
+                const atlasY = this._coerceNumber(fileDefinition.ay, 0);
+                const atlasXOff = this._coerceNumber(fileDefinition.axoff, 0);
+                const atlasYOff = this._coerceNumber(fileDefinition.ayoff, 0);
+
+                const atlasRotatedRaw = fileDefinition.arot;
+                let atlasRotated = false;
+
+                if (typeof atlasRotatedRaw === "string")
+                {
+                        atlasRotated = atlasRotatedRaw.toLowerCase() === "true";
+                }
+                else if (typeof atlasRotatedRaw === "boolean")
+                {
+                        atlasRotated = atlasRotatedRaw;
+                }
+
+                const atlasIndex = this._coerceNumber(fileDefinition.atlas, fallbackAtlasIndex);
+
+                return {
+                        id: fileId,
+                        index,
+                        name: typeof fileDefinition.name === "string" ? fileDefinition.name : "",
+                        width,
+                        height,
+                        pivotX,
+                        pivotY,
+                        atlasIndex,
+                        atlasW,
+                        atlasH,
+                        atlasX,
+                        atlasY,
+                        atlasXOff,
+                        atlasYOff,
+                        atlasRotated
+                };
+        }
+
+        _rebuildFolderIndex()
+        {
+                if (!this._foldersById)
+                {
+                        this._foldersById = new Map();
+                }
+                else
+                {
+                        this._foldersById.clear();
+                }
+
+                if (!Array.isArray(this.folders))
+                {
+                        return;
+                }
+
+                for (const folder of this.folders)
+                {
+                        if (!folder)
+                        {
+                                continue;
+                        }
+
+                        const id = Number.isInteger(folder.id) ? folder.id : folder.index;
+                        this._foldersById.set(id, folder);
+                }
+        }
+
+        _getFolder(folderId)
+        {
+                if (!Array.isArray(this.folders) || this.folders.length === 0)
+                {
+                        return null;
+                }
+
+                if (Number.isInteger(folderId) && this._foldersById && this._foldersById.has(folderId))
+                {
+                        return this._foldersById.get(folderId);
+                }
+
+                if (Number.isInteger(folderId) && folderId >= 0 && folderId < this.folders.length)
+                {
+                        return this.folders[folderId];
+                }
+
+                return null;
+        }
+
+        _getFileInfo(folderId, fileId)
+        {
+                const folder = this._getFolder(Number.isInteger(folderId) ? folderId : this._coerceNumber(folderId, -1));
+                if (!folder)
+                {
+                        return null;
+                }
+
+                const filesById = folder.filesById;
+
+                if (filesById && Number.isInteger(fileId) && filesById.has(fileId))
+                {
+                        return filesById.get(fileId);
+                }
+
+                const numericFileId = this._coerceNumber(fileId, -1);
+                if (numericFileId >= 0 && numericFileId < folder.files.length)
+                {
+                        return folder.files[numericFileId];
+                }
+
+                return null;
+        }
+
+        _getAtlasFrame(atlasIndex)
+        {
+                if (!Number.isInteger(atlasIndex) || atlasIndex < 0)
+                {
+                        return null;
+                }
+
+                if (!this._atlasFrameCache)
+                {
+                        this._atlasFrameCache = new Map();
+                }
+
+                if (this._atlasFrameCache.has(atlasIndex))
+                {
+                        return this._atlasFrameCache.get(atlasIndex);
+                }
+
+                if (typeof this.GetObjectClass !== "function")
+                {
+                        return null;
+                }
+
+                const objectClass = this.GetObjectClass();
+                if (!objectClass || typeof objectClass.GetAnimations !== "function")
+                {
+                        return null;
+                }
+
+                const animations = objectClass.GetAnimations();
+                if (!Array.isArray(animations) || animations.length === 0)
+                {
+                        return null;
+                }
+
+                const firstAnimation = animations[0];
+                if (!firstAnimation || typeof firstAnimation.GetFrames !== "function")
+                {
+                        return null;
+                }
+
+                const frames = firstAnimation.GetFrames();
+                if (!Array.isArray(frames) || atlasIndex >= frames.length)
+                {
+                        return null;
+                }
+
+                const frame = frames[atlasIndex] || null;
+
+                if (frame)
+                {
+                        this._atlasFrameCache.set(atlasIndex, frame);
+                }
+
+                return frame;
         }
 
         _saveToJson()
