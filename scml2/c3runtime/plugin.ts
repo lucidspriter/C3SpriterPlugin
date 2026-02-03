@@ -8,3 +8,6 @@ C3.Plugins.MyCompany_DrawingPlugin = class DrawingPlugin extends globalThis.ISDK
 		super();
 	}
 };
+
+// Necessary for TypeScript to treat this file as a module
+export {}

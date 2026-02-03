@@ -1,6 +1,11 @@
+
 const C3 = globalThis.C3;
 
-C3.Plugins.Spriter.Exps =
+C3.Plugins.MyCompany_DrawingPlugin.Exps =
 {
-        // TODO: port expressions from the legacy runtime.
+	Double(number)
+	{
+		return number * 2;
+	}
 };
+

@@ -1,4 +1,6 @@
 
+import type { SDKEditorInstanceClass } from "./instance.ts";
+
 const SDK = globalThis.SDK;
 
 ////////////////////////////////////////////
@@ -41,13 +43,15 @@ const PLUGIN_CLASS = SDK.Plugins.MyCompany_DrawingPlugin = class MyDrawingPlugin
 		
 		this._info.SetProperties([
 			new SDK.PluginProperty("link", "edit-image", {
-				linkCallback: function (sdkType) {
+				linkCallback: function (param) {
+					const sdkType = param as SDK.ITypeBase;
 					sdkType.GetObjectType().EditImage();
 				},
 				callbackType: "once-for-type"
 			}),
 			new SDK.PluginProperty("link", "make-original-size", {
-				linkCallback: function (sdkInst) {
+				linkCallback: function (param) {
+					const sdkInst = param as SDKEditorInstanceClass;
 					sdkInst.OnMakeOriginalSize();
 				},
 				callbackType: "for-each-instance"

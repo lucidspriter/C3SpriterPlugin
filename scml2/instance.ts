@@ -3,9 +3,9 @@ const SDK = globalThis.SDK;
 
 const PLUGIN_CLASS = SDK.Plugins.MyCompany_DrawingPlugin;
 
-PLUGIN_CLASS.Instance = class MyDrawingInstance extends SDK.IWorldInstanceBase
+class MyDrawingInstance extends SDK.IWorldInstanceBase
 {
-	constructor(sdkType, inst)
+	constructor(sdkType: SDK.ITypeBase, inst: SDK.IWorldInstance)
 	{
 		super(sdkType, inst);
 	}
@@ -24,7 +24,7 @@ PLUGIN_CLASS.Instance = class MyDrawingInstance extends SDK.IWorldInstanceBase
 		this.OnMakeOriginalSize();
 	}
 	
-	Draw(iRenderer, iDrawParams)
+	Draw(iRenderer: SDK.Gfx.IWebGLRenderer, iDrawParams: SDK.Gfx.IDrawParams)
 	{
 		const texture = this.GetTexture();
 		
@@ -87,12 +87,16 @@ PLUGIN_CLASS.Instance = class MyDrawingInstance extends SDK.IWorldInstanceBase
 		this.GetObjectType().EditImage();
 	}
 	
-	OnPropertyChanged(id, value)
+	OnPropertyChanged(id: string, value: EditorPropertyValueType)
 	{
 	}
 	
-	LoadC2Property(name, valueString)
+	LoadC2Property(name: string, valueString: string)
 	{
 		return false;		// not handled
 	}
 };
+
+PLUGIN_CLASS.Instance = MyDrawingInstance;
+
+export type { MyDrawingInstance as SDKEditorInstanceClass };

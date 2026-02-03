@@ -1,7 +1,9 @@
 
+import type { SDKInstanceClass } from "./instance.ts";
+
 const C3 = globalThis.C3;
 
-C3.Plugins.MyCompany_DrawingPlugin.Type = class DrawingType extends globalThis.ISDKObjectTypeBase
+C3.Plugins.MyCompany_DrawingPlugin.Type = class DrawingType extends globalThis.ISDKObjectTypeBase<SDKInstanceClass>
 {
 	constructor()
 	{
@@ -13,14 +15,14 @@ C3.Plugins.MyCompany_DrawingPlugin.Type = class DrawingType extends globalThis.I
 		this.runtime.assets.loadImageAsset(this.getImageInfo());
 	}
 
-	_loadTextures(renderer)
+	_loadTextures(renderer: IRenderer)
 	{
 		return renderer.loadTextureForImageInfo(this.getImageInfo(), {
 			sampling: this.runtime.sampling
 		});
 	}
 
-	_releaseTextures(renderer)
+	_releaseTextures(renderer: IRenderer)
 	{
 		renderer.releaseTextureForImageInfo(this.getImageInfo());
 	}

@@ -1,10 +1,10 @@
 
 const C3 = globalThis.C3;
 
-const tempQuad = new C3.Quad();
-
-C3.Plugins.MyCompany_DrawingPlugin.Instance = class DrawingInstance extends globalThis.ISDKWorldInstanceBase
+class DrawingInstance extends globalThis.ISDKWorldInstanceBase
 {
+	_testProperty: number;
+
 	constructor()
 	{
 		super();
@@ -14,7 +14,7 @@ C3.Plugins.MyCompany_DrawingPlugin.Instance = class DrawingInstance extends glob
 		const properties = this._getInitProperties();
 		if (properties)
 		{
-			this._testProperty = properties[0];
+			this._testProperty = properties[0] as number;
 		}
 	}
 	
@@ -23,7 +23,7 @@ C3.Plugins.MyCompany_DrawingPlugin.Instance = class DrawingInstance extends glob
 		super._release();
 	}
 	
-	_draw(renderer)
+	_draw(renderer: IRenderer)
 	{
 		const imageInfo = this.objectType.getImageInfo();
 		const texture = imageInfo.getTexture(renderer);
@@ -60,12 +60,12 @@ C3.Plugins.MyCompany_DrawingPlugin.Instance = class DrawingInstance extends glob
 		};
 	}
 	
-	_loadFromJson(o)
+	_loadFromJson(o: JSONValue)
 	{
 		// load state for savegames
 	}
 
-	_setTestProperty(n)
+	_setTestProperty(n: number)
 	{
 		this._testProperty = n;
 	}
@@ -75,3 +75,7 @@ C3.Plugins.MyCompany_DrawingPlugin.Instance = class DrawingInstance extends glob
 		return this._testProperty;
 	}
 };
+
+C3.Plugins.MyCompany_DrawingPlugin.Instance = DrawingInstance;
+
+export type { DrawingInstance as SDKInstanceClass };
