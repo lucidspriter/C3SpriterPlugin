@@ -42,9 +42,30 @@
 				"aceCategories": {
 					"custom": "Custom"
 				},
-				"conditions": {},
+				"conditions": {
+					"on-ready": {
+						"list-name": "On ready",
+						"display-text": "On ready",
+						"description": "Triggered when the Spriter project file has finished loading."
+					},
+					"on-load-failed": {
+						"list-name": "On load failed",
+						"display-text": "On load failed",
+						"description": "Triggered when the Spriter project file fails to load."
+					},
+					"is-ready": {
+						"list-name": "Is ready",
+						"display-text": "Is ready",
+						"description": "Check if the Spriter project file has finished loading successfully."
+					}
+				},
 				"actions": {},
-				"expressions": {}
+				"expressions": {
+					"last-error": {
+						"description": "Get the last Spriter load error message (empty string if none).",
+						"translated-name": "LastError"
+					}
+				}
 			}
 		}
 	}

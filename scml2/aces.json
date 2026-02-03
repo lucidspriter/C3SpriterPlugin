@@ -2,8 +2,33 @@
 	"$schema": "../aces.schema.json",
 
 	"custom": {
-		"conditions": [],
+		"conditions": [
+			{
+				"id": "on-ready",
+				"scriptName": "OnReady",
+				"isTrigger": true,
+				"highlight": true
+			},
+			{
+				"id": "on-load-failed",
+				"scriptName": "OnLoadFailed",
+				"isTrigger": true,
+				"highlight": true
+			},
+			{
+				"id": "is-ready",
+				"scriptName": "IsReady",
+				"highlight": true
+			}
+		],
 		"actions": [],
-		"expressions": []
+		"expressions": [
+			{
+				"id": "last-error",
+				"expressionName": "LastError",
+				"highlight": false,
+				"returnType": "string"
+			}
+		]
 	}
 }
