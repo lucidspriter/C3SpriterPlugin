@@ -1,22 +1,20 @@
-﻿{
-	"$schema": "../plugin.addon.schema.json",
-	
+{
 	"is-c3-addon": true,
 	"sdk-version": 2,
 	"min-construct-version": "r401",
 	"type": "plugin",
-	"name": "My drawing plugin",
-	"id": "MyCompany_DrawingPlugin",
-	"version": "1.0.0.0",
-	"author": "Scirra",
-	"website": "https://www.construct.net",
-	"documentation": "https://www.construct.net",
-	"description": "Example custom drawing Construct 3 plugin.",
+	"name": "Scml",
+	"id": "Spriter",
+	"version": "6-26-2024",
+	"author": "BrashMonkey",
+	"website": "https://brashmonkey.com/forum/index.php?/topic/12434-spriter-plug-in-for-construct-3/",
+	"documentation": "https://brashmonkey.com/forum/index.php?/topic/12434-spriter-plug-in-for-construct-3/",
+	"description": "Load and playback SCML files from BrashMonkey's Spriter animation toolkit.",
 	"editor-scripts": [
-						"plugin.js",
-						"type.js",
-						"instance.js"
-					],
+		"plugin.js",
+		"type.js",
+		"instance.js"
+	],
 	"file-list": [
 		"c3runtime/main.js",
 		"c3runtime/plugin.js",

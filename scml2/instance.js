@@ -1,9 +1,8 @@
-
 const SDK = globalThis.SDK;
 
-const PLUGIN_CLASS = SDK.Plugins.MyCompany_DrawingPlugin;
+const PLUGIN_CLASS = SDK.Plugins.Spriter;
 
-PLUGIN_CLASS.Instance = class MyDrawingInstance extends SDK.IWorldInstanceBase
+PLUGIN_CLASS.Instance = class SpriterInstance extends SDK.IWorldInstanceBase
 {
 	constructor(sdkType, inst)
 	{
@@ -20,71 +19,17 @@ PLUGIN_CLASS.Instance = class MyDrawingInstance extends SDK.IWorldInstanceBase
 	
 	OnPlacedInLayout()
 	{
-		// Initialise to size of image
-		this.OnMakeOriginalSize();
+		// Placeholder size until SCML metadata can drive bounds.
+		this._inst.SetSize(50, 50);
 	}
 	
 	Draw(iRenderer, iDrawParams)
 	{
-		const texture = this.GetTexture();
-		
-		if (texture)
-		{
-			this._inst.ApplyBlendMode(iRenderer);
-			iRenderer.SetTexture(texture);
-			iRenderer.SetColor(this._inst.GetColor());
-			iRenderer.Quad3(this._inst.GetQuad(), this.GetTexRect());
-		}
-		else
-		{
-			// render placeholder
-			iRenderer.SetAlphaBlend();
-			iRenderer.SetColorFillMode();
-			
-			if (this.HadTextureError())
-				iRenderer.SetColorRgba(0.25, 0, 0, 0.25);
-			else
-				iRenderer.SetColorRgba(0, 0, 0.1, 0.1);
-			
-			iRenderer.Quad(this._inst.GetQuad());
-		}
-	}
-	
-	GetTexture()
-	{
-		const image = this.GetObjectType().GetImage();
-		return super.GetTexture(image);
-	}
-	
-	IsOriginalSizeKnown()
-	{
-		return true;
-	}
-	
-	GetOriginalWidth()
-	{
-		return this.GetObjectType().GetImage().GetWidth();
-	}
-	
-	GetOriginalHeight()
-	{
-		return this.GetObjectType().GetImage().GetHeight();
-	}
-	
-	OnMakeOriginalSize()
-	{
-		const image = this.GetObjectType().GetImage();
-		this._inst.SetSize(image.GetWidth(), image.GetHeight());
-	}
-	
-	HasDoubleTapHandler()
-	{
-		return true;
-	}
-	
-	OnDoubleTap()
-	{
-		this.GetObjectType().EditImage();
+		// Editor-only placeholder until runtime rendering is implemented.
+		iRenderer.SetAlphaBlend();
+		iRenderer.SetColorFillMode();
+		iRenderer.SetColorRgba(0.0, 0.3, 0.8, 0.15);
+		iRenderer.Quad(this._inst.GetQuad());
 	}
 	
 	OnPropertyChanged(id, value)

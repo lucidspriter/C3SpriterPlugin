@@ -1,20 +1,25 @@
 
 const C3 = globalThis.C3;
 
-class DrawingInstance extends globalThis.ISDKWorldInstanceBase
+class SpriterInstance extends globalThis.ISDKWorldInstanceBase
 {
-	_testProperty: number;
+	_initialProperties: readonly JSONValue[];
+	_didLogTick: boolean;
+	_didLogDraw: boolean;
 
 	constructor()
 	{
 		super();
 		
-		this._testProperty = 0;
-		
 		const properties = this._getInitProperties();
-		if (properties)
+		this._initialProperties = properties ? [...properties] : [];
+		this._didLogTick = false;
+		this._didLogDraw = false;
+
+		// Keep a basic update loop active so we can verify preview is running.
+		if (typeof this._StartTicking === "function")
 		{
-			this._testProperty = properties[0] as number;
+			this._StartTicking();
 		}
 	}
 	
@@ -22,35 +27,27 @@ class DrawingInstance extends globalThis.ISDKWorldInstanceBase
 	{
 		super._release();
 	}
+
+	_tick()
+	{
+		if (this._didLogTick)
+		{
+			return;
+		}
+
+		this._didLogTick = true;
+		console.log("[Spriter] Tick reached runtime update phase.");
+	}
 	
 	_draw(renderer: IRenderer)
 	{
-		const imageInfo = this.objectType.getImageInfo();
-		const texture = imageInfo.getTexture(renderer);
-		
-		if (!texture)
-			return;			// dynamic texture load which hasn't completed yet; can't draw anything
-		
-		let quad = this.getBoundingQuad();
-		const rcTex = imageInfo.getTexRect();
-		
-		renderer.setTexture(texture);
-		
-		if (this.runtime.isPixelRoundingEnabled)
+		if (!this._didLogDraw)
 		{
-			const ox = Math.round(this.x) - this.x;
-			const oy = Math.round(this.y) - this.y;
-
-			if (ox !== 0 && oy !== 0)
-			{
-				quad = new DOMQuad(new DOMPoint(quad.p1.x + ox, quad.p1.y + oy),
-								   new DOMPoint(quad.p2.x + ox, quad.p2.y + oy),
-								   new DOMPoint(quad.p3.x + ox, quad.p3.y + oy),
-								   new DOMPoint(quad.p4.x + ox, quad.p4.y + oy));
-			}
+			this._didLogDraw = true;
+			console.log("[Spriter] Draw reached runtime render phase.");
 		}
-		
-		renderer.quad3(quad, rcTex);
+
+		// No rendering yet.
 	}
 	
 	_saveToJson()
@@ -64,18 +61,8 @@ class DrawingInstance extends globalThis.ISDKWorldInstanceBase
 	{
 		// load state for savegames
 	}
-
-	_setTestProperty(n: number)
-	{
-		this._testProperty = n;
-	}
-
-	_getTestProperty()
-	{
-		return this._testProperty;
-	}
 };
 
-C3.Plugins.MyCompany_DrawingPlugin.Instance = DrawingInstance;
+C3.Plugins.Spriter.Instance = SpriterInstance;
 
-export type { DrawingInstance as SDKInstanceClass };
+export type { SpriterInstance as SDKInstanceClass };

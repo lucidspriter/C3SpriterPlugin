@@ -1,7 +1,5 @@
-
-import type { SDKEditorInstanceClass } from "./instance.ts";
-
 const SDK = globalThis.SDK;
+const lang = globalThis.lang;
 
 ////////////////////////////////////////////
 // The plugin ID is how Construct identifies different kinds of plugins.
@@ -11,14 +9,12 @@ const SDK = globalThis.SDK;
 // Only the plugin name is displayed in the editor, so to rename your plugin change the name but NOT the ID.
 // If you want to completely replace a plugin, make it deprecated (it will be hidden but old projects keep working),
 // and create an entirely new plugin with a different plugin ID.
-const PLUGIN_ID = "MyCompany_DrawingPlugin";
+const PLUGIN_ID = "Spriter";
 ////////////////////////////////////////////
 
 const PLUGIN_CATEGORY = "general";
 
-let app = null;
-
-const PLUGIN_CLASS = SDK.Plugins.MyCompany_DrawingPlugin = class MyDrawingPlugin extends SDK.IPluginBase
+const PLUGIN_CLASS = SDK.Plugins.Spriter = class Spriter extends SDK.IPluginBase
 {
 	constructor()
 	{
@@ -26,37 +22,45 @@ const PLUGIN_CLASS = SDK.Plugins.MyCompany_DrawingPlugin = class MyDrawingPlugin
 		
 		SDK.Lang.PushContext("plugins." + PLUGIN_ID.toLowerCase());
 		
-		this._info.SetName(globalThis.lang(".name"));
-		this._info.SetDescription(globalThis.lang(".description"));
+		this._info.SetName(lang(".name"));
+		this._info.SetDescription(lang(".description"));
 		this._info.SetCategory(PLUGIN_CATEGORY);
-		this._info.SetAuthor("Scirra");
-		this._info.SetHelpUrl(globalThis.lang(".help-url"));
-		this._info.SetPluginType("world");			// mark as world plugin, which can draw
-		this._info.SetIsResizable(true);			// allow to be resized
-		this._info.SetIsRotatable(true);			// allow to be rotated
-		this._info.SetHasImage(true);
-		this._info.SetSupportsEffects(true);		// allow effects
+		this._info.SetAuthor("BrashMonkey");
+		this._info.SetHelpUrl(lang(".help-url"));
+		this._info.SetPluginType("world");
+		this._info.SetIsResizable(true);
+		this._info.SetIsRotatable(true);
+		this._info.SetHasAnimations(true);
+		this._info.SetIsTiled(false);
+		this._info.SetIsSingleGlobal(false);
+		this._info.SetSupportsEffects(true);
 		this._info.SetMustPreDraw(true);
+		this._info.SetCanBeBundled(false);
 		this._info.SetRuntimeModuleMainScript("c3runtime/main.js");
+
+		this._info.AddCommonPositionACEs();
+		this._info.AddCommonAngleACEs();
+		this._info.AddCommonAppearanceACEs();
+		this._info.AddCommonZOrderACEs();
+		this._info.AddCommonSceneGraphACEs();
 		
 		SDK.Lang.PushContext(".properties");
 		
+		// Keep these property IDs and ordering aligned with the legacy addon.
 		this._info.SetProperties([
-			new SDK.PluginProperty("link", "edit-image", {
-				linkCallback: function (param) {
-					const sdkType = param as SDK.ITypeBase;
-					sdkType.GetObjectType().EditImage();
-				},
-				callbackType: "once-for-type"
+			new SDK.PluginProperty("text", "scml-file", ""),
+			new SDK.PluginProperty("text", "starting-entity", ""),
+			new SDK.PluginProperty("text", "starting-animation", ""),
+			new SDK.PluginProperty("float", "starting-opacity", 100),
+			new SDK.PluginProperty("combo", "draw-self", {
+				initialValue: "false",
+				items: ["false", "true"]
 			}),
-			new SDK.PluginProperty("link", "make-original-size", {
-				linkCallback: function (param) {
-					const sdkInst = param as SDKEditorInstanceClass;
-					sdkInst.OnMakeOriginalSize();
-				},
-				callbackType: "for-each-instance"
-			}),
-			new SDK.PluginProperty("integer", "test-property", 0)
+			new SDK.PluginProperty("text", "nickname-in-c2", ""),
+			new SDK.PluginProperty("combo", "blend-mode", {
+				initialValue: "use effects blend mode",
+				items: ["no premultiplied alpha blend", "use effects blend mode"]
+			})
 		]);
 		
 		SDK.Lang.PopContext();		// .properties
@@ -66,3 +70,6 @@ const PLUGIN_CLASS = SDK.Plugins.MyCompany_DrawingPlugin = class MyDrawingPlugin
 };
 
 PLUGIN_CLASS.Register(PLUGIN_ID, PLUGIN_CLASS);
+
+// Necessary for TypeScript to treat this file as a module
+export {}
