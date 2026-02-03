@@ -4,7 +4,7 @@
 Display Spriter animations through the Construct renderer so the MVP requirement of "load and play an animation" is visibly met.
 
 ## Checklist
-- [ ] Translate the legacy `Draw` routine to SDK v2, adapting renderer calls to the new APIs.
+- [ ] Translate the legacy `Draw` routine to SDK v2, adapting renderer calls to the new APIs. _(Self-draw pose evaluation and quad rendering have been ported; non-self-draw parity and edge-case validation remain.)_
 - [ ] Handle flipping, blending, texture atlas lookups, and layer ordering so each timeline element renders correctly.
 - [ ] Build or update a Construct test project to confirm animations appear and respond to playback actions.
 

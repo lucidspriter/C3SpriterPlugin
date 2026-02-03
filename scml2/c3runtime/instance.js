@@ -14,6 +14,8 @@ const PROPERTY_INDEX = Object.freeze({
 
 const DRAW_SELF_OPTIONS = ["false", "true"];
 const BLEND_MODE_OPTIONS = ["no premultiplied alpha blend", "use effects blend mode"];
+const SPRITER_ANGLE_RANGE = 360;
+const TAU = Math.PI * 2;
 
 function toStringOrEmpty(value)
 {
@@ -268,6 +270,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
                 this.lastFoundObject = "";
                 this.objectsToSet = [];
+                this._drawState.length = 0;
 
                 this.drawSelf = this.properties[PROPERTY_INDEX.DRAW_SELF] === 1;
                 this.NoPremultiply = this.properties[PROPERTY_INDEX.BLEND_MODE] === 0;
@@ -446,6 +449,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 }
 
                 this._applyPendingPlaybackPreferences();
+                this._evaluateCurrentFrameForDrawing();
+                this._requestRenderUpdate();
         }
 
         _handleProjectDataLoadError(projectFileName, error)
@@ -473,6 +478,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this.currentAnimation = null;
                 this.currentAnimationIndex = -1;
                 this.currentAnimationName = "";
+                this.folders = [];
+                this.objectArray = [];
+                if (this._objectArrayLookup instanceof Map)
+                {
+                        this._objectArrayLookup.clear();
+                }
+                if (Array.isArray(this._drawState))
+                {
+                        this._drawState.length = 0;
+                }
 
                 if (typeof console !== "undefined" && console)
                 {
@@ -748,6 +763,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 this.currentAnimationName = "";
                 this.currentSpriterTime = 0;
                 this.currentAdjustedTime = 0;
+
+                if (Array.isArray(this._drawState))
+                {
+                        this._drawState.length = 0;
+                }
         }
 
         _clearProjectDataReferences()
@@ -797,6 +817,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
                 const normalised = { ...entityDefinition };
                 const animations = [];
+                const sourceObjInfo = Array.isArray(entityDefinition.obj_info) ? entityDefinition.obj_info : [];
+                const objInfo = sourceObjInfo.filter((info) => info && typeof info === "object");
 
                 const sourceAnimations = [];
 
@@ -818,6 +840,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                         }
                 }
 
+                normalised.obj_info = objInfo;
                 normalised.animation = animations;
                 normalised.animations = animations;
                 return normalised;
@@ -1606,6 +1629,32 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
         {
                 const numberValue = Number(value);
                 return Number.isFinite(numberValue) ? numberValue : fallback;
+        }
+
+        _coerceInteger(value, fallback = 0)
+        {
+                const numberValue = Number(value);
+                return Number.isInteger(numberValue) ? numberValue : fallback;
+        }
+
+        _clamp(min, max, value)
+        {
+                if (value < min)
+                {
+                        return min;
+                }
+
+                if (value > max)
+                {
+                        return max;
+                }
+
+                return value;
+        }
+
+        _lerp(a, b, t)
+        {
+                return ((b - a) * t) + a;
         }
 
         _getAnimationLength(animation)
@@ -2523,6 +2572,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 {
                         this.currentSpriterTime = 0;
                         this.currentAdjustedTime = 0;
+                        if (Array.isArray(this._drawState))
+                        {
+                                this._drawState.length = 0;
+                        }
                         return;
                 }
 
@@ -2594,6 +2647,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
                 }
 
                 this.currentAdjustedTime = Math.max(0, Math.min(length, this.currentSpriterTime));
+                this._evaluateCurrentFrameForDrawing();
+                if (this.drawSelf && this._drawState.length > 0)
+                {
+                        this._requestRenderUpdate();
+                }
 
                 if (animationFinished)
                 {
