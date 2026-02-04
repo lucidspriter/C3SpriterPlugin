@@ -28,6 +28,30 @@
 				"expressionName": "LastError",
 				"highlight": false,
 				"returnType": "string"
+			},
+			{
+				"id": "time",
+				"expressionName": "Time",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"id": "object-count",
+				"expressionName": "ObjectCount",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"id": "entity-name",
+				"expressionName": "EntityName",
+				"highlight": false,
+				"returnType": "string"
+			},
+			{
+				"id": "animation-name",
+				"expressionName": "AnimationName",
+				"highlight": false,
+				"returnType": "string"
 			}
 		]
 	}

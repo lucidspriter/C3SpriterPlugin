@@ -64,6 +64,22 @@
 					"last-error": {
 						"description": "Get the last Spriter load error message (empty string if none).",
 						"translated-name": "LastError"
+					},
+					"time": {
+						"description": "Get the current playback time (in seconds) for the selected animation.",
+						"translated-name": "Time"
+					},
+					"object-count": {
+						"description": "Get the number of sprite objects in the currently evaluated pose.",
+						"translated-name": "ObjectCount"
+					},
+					"entity-name": {
+						"description": "Get the name of the currently selected entity.",
+						"translated-name": "EntityName"
+					},
+					"animation-name": {
+						"description": "Get the name of the currently selected animation.",
+						"translated-name": "AnimationName"
 					}
 				}
 			}
