@@ -265,7 +265,247 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	
 	_draw(renderer)
 	{
-		// TODO (Phase 4): self-draw rendering.
+		if (!this.drawSelf || !renderer)
+		{
+			return;
+		}
+
+		const poseObjects = Array.isArray(this._poseObjectStates) ? this._poseObjectStates : [];
+		if (!poseObjects.length)
+		{
+			return;
+		}
+
+		const worldInfo = (typeof this.GetWorldInfo === "function")
+			? this.GetWorldInfo()
+			: (typeof this.getWorldInfo === "function")
+				? this.getWorldInfo()
+				: null;
+
+		// Blend mode: match existing C3 behaviour where possible.
+		const getBlendMode = worldInfo
+			? (typeof worldInfo.GetBlendMode === "function")
+				? worldInfo.GetBlendMode.bind(worldInfo)
+				: (typeof worldInfo.getBlendMode === "function")
+					? worldInfo.getBlendMode.bind(worldInfo)
+					: null
+			: null;
+
+		if (this.noPremultiply && typeof renderer.SetNoPremultiplyAlphaBlend === "function")
+		{
+			renderer.SetNoPremultiplyAlphaBlend();
+		}
+		else if (typeof renderer.SetBlendMode === "function" && getBlendMode)
+		{
+			renderer.SetBlendMode(getBlendMode());
+		}
+		else if (typeof renderer.setBlendMode === "function" && getBlendMode)
+		{
+			renderer.setBlendMode(getBlendMode());
+		}
+		else if (typeof renderer.SetAlphaBlend === "function")
+		{
+			renderer.SetAlphaBlend();
+		}
+		else if (typeof renderer.setAlphaBlendMode === "function")
+		{
+			renderer.setAlphaBlendMode();
+		}
+
+		// Debug self-draw: draw solid coloured quads for each pose object so motion is visible.
+		if (typeof renderer.SetColorFillMode === "function")
+		{
+			renderer.SetColorFillMode();
+		}
+		else if (typeof renderer.setColorFillMode === "function")
+		{
+			renderer.setColorFillMode();
+		}
+
+		const getX = worldInfo
+			? (typeof worldInfo.GetX === "function")
+				? worldInfo.GetX.bind(worldInfo)
+				: (typeof worldInfo.getX === "function")
+					? worldInfo.getX.bind(worldInfo)
+					: null
+			: null;
+		const getY = worldInfo
+			? (typeof worldInfo.GetY === "function")
+				? worldInfo.GetY.bind(worldInfo)
+				: (typeof worldInfo.getY === "function")
+					? worldInfo.getY.bind(worldInfo)
+					: null
+			: null;
+		const getAngle = worldInfo
+			? (typeof worldInfo.GetAngle === "function")
+				? worldInfo.GetAngle.bind(worldInfo)
+				: (typeof worldInfo.getAngle === "function")
+					? worldInfo.getAngle.bind(worldInfo)
+					: null
+			: null;
+
+		const instX = getX ? getX() : toFiniteNumber(this.x, 0);
+		const instY = getY ? getY() : toFiniteNumber(this.y, 0);
+		const instAngle = getAngle ? getAngle() : toFiniteNumber(this.angle, 0);
+
+		const rootTransform = {
+			x: instX,
+			y: instY,
+			angle: Number.isFinite(instAngle) ? instAngle : 0,
+			scaleX: 1,
+			scaleY: 1,
+			alpha: 1
+		};
+
+		// In SDK v2 runtime, renderer.quad(...) expects a DOMQuad-like object (p1..p4).
+		// Passing a C3.Quad to renderer.quad(...) throws in C3.Quad.fromDOMQuad, so only use
+		// C3 geometry types when using the legacy-style renderer APIs (Quad3/Quad4).
+		const quadDom = (typeof renderer.quad === "function") ? renderer.quad.bind(renderer) : null;
+		const quadC3 = (typeof renderer.Quad === "function") ? renderer.Quad.bind(renderer) : null;
+		const quad3C3 = (typeof renderer.Quad3 === "function") ? renderer.Quad3.bind(renderer) : null;
+		const quad3Dom = (typeof renderer.quad3 === "function") ? renderer.quad3.bind(renderer) : null;
+
+		const geometryQuad = (!quadDom && (quadC3 || quad3C3) && C3 && C3.Quad) ? new C3.Quad() : null;
+		const boundingRect = (!quadDom && (quadC3 || quad3C3) && C3 && C3.Rect) ? new C3.Rect() : null;
+
+		const setColorRgba = (typeof renderer.SetColorRgba === "function")
+			? renderer.SetColorRgba.bind(renderer)
+			: (typeof renderer.setColorRgba === "function")
+				? renderer.setColorRgba.bind(renderer)
+				: null;
+
+		const quad3 = quad3C3 || quad3Dom;
+		const quad = quadDom || quadC3;
+
+		const baseOpacity = clamp01(this.startingOpacity / 100);
+
+		for (let i = 0, len = poseObjects.length; i < len; i++)
+		{
+			const state = poseObjects[i];
+			if (!state)
+			{
+				continue;
+			}
+
+			const widthRaw = toFiniteNumber(state.width, 0);
+			const heightRaw = toFiniteNumber(state.height, 0);
+			const width = widthRaw > 0 ? widthRaw : 50;
+			const height = heightRaw > 0 ? heightRaw : 50;
+
+			const world = combineTransforms(rootTransform, {
+				x: toFiniteNumber(state.x, 0),
+				y: toFiniteNumber(state.y, 0),
+				angle: toFiniteNumber(state.angle, 0),
+				scaleX: toFiniteNumber(state.scaleX, 1),
+				scaleY: toFiniteNumber(state.scaleY, 1),
+				alpha: toFiniteNumber(state.alpha, 1)
+			});
+
+			let pivotX = clamp01(toFiniteNumber(state.pivotX, 0));
+			let pivotY = clamp01(toFiniteNumber(state.pivotY, 0));
+
+			let scaleX = toFiniteNumber(world.scaleX, 1);
+			let scaleY = toFiniteNumber(world.scaleY, 1);
+
+			// Keep the rect dimensions positive; pivot flips keep the origin stable.
+			if (scaleX < 0)
+			{
+				scaleX = -scaleX;
+				pivotX = 1 - pivotX;
+			}
+
+			if (scaleY < 0)
+			{
+				scaleY = -scaleY;
+				pivotY = 1 - pivotY;
+			}
+
+			const scaledW = width * scaleX;
+			const scaledH = height * scaleY;
+			if (!Number.isFinite(scaledW) || !Number.isFinite(scaledH) || scaledW === 0 || scaledH === 0)
+			{
+				continue;
+			}
+
+			const baseX = toFiniteNumber(world.x, 0);
+			const baseY = toFiniteNumber(world.y, 0);
+			const angle = toFiniteNumber(world.angle, 0);
+
+			const left = baseX - pivotX * scaledW;
+			const top = baseY - pivotY * scaledH;
+			const cos = Math.cos(angle);
+			const sin = Math.sin(angle);
+
+			const tlx = left;
+			const tly = top;
+			const trx = left + scaledW;
+			const try_ = top;
+			const brx = left + scaledW;
+			const bry = top + scaledH;
+			const blx = left;
+			const bly = top + scaledH;
+
+			const dx1 = tlx - baseX;
+			const dy1 = tly - baseY;
+			const dx2 = trx - baseX;
+			const dy2 = try_ - baseY;
+			const dx3 = brx - baseX;
+			const dy3 = bry - baseY;
+			const dx4 = blx - baseX;
+			const dy4 = bly - baseY;
+
+			const domQuad = {
+				p1: { x: baseX + dx1 * cos - dy1 * sin, y: baseY + dx1 * sin + dy1 * cos, z: 0, w: 1 },
+				p2: { x: baseX + dx2 * cos - dy2 * sin, y: baseY + dx2 * sin + dy2 * cos, z: 0, w: 1 },
+				p3: { x: baseX + dx3 * cos - dy3 * sin, y: baseY + dx3 * sin + dy3 * cos, z: 0, w: 1 },
+				p4: { x: baseX + dx4 * cos - dy4 * sin, y: baseY + dx4 * sin + dy4 * cos, z: 0, w: 1 }
+			};
+
+			const alpha = clamp01(toFiniteNumber(world.alpha, 1) * baseOpacity);
+			if (alpha <= 0)
+			{
+				continue;
+			}
+
+			if (setColorRgba)
+			{
+				// Deterministic colour per file/timeline so parts are visually distinct.
+				const seed = (toFiniteNumber(state.file, i) * 97 + toFiniteNumber(state.folder, 0) * 57 + i * 13) | 0;
+				const r = ((seed >> 0) & 0xFF) / 255;
+				const g = ((seed >> 8) & 0xFF) / 255;
+				const b = ((seed >> 16) & 0xFF) / 255;
+				setColorRgba(r, g, b, alpha * 0.7);
+			}
+
+			if (quadDom)
+			{
+				quadDom(domQuad);
+			}
+			else if (quadC3 && geometryQuad && boundingRect)
+			{
+				boundingRect.set(left, top, left + scaledW, top + scaledH);
+				boundingRect.offset(-baseX, -baseY);
+				geometryQuad.setFromRotatedRect(boundingRect, angle);
+				geometryQuad.offset(baseX, baseY);
+				quadC3(geometryQuad);
+			}
+			else if (quad3C3 && geometryQuad && boundingRect)
+			{
+				boundingRect.set(left, top, left + scaledW, top + scaledH);
+				boundingRect.offset(-baseX, -baseY);
+				geometryQuad.setFromRotatedRect(boundingRect, angle);
+				geometryQuad.offset(baseX, baseY);
+				geometryQuad.getBoundingBox(boundingRect);
+				boundingRect.normalize();
+				quad3C3(geometryQuad, boundingRect);
+			}
+			else if (quad3Dom)
+			{
+				// In case this runtime uses dom quads + rects.
+				const domRect = { x: left, y: top, width: scaledW, height: scaledH };
+				quad3Dom(domQuad, domRect);
+			}
+		}
 	}
 
 	_getDtSeconds()

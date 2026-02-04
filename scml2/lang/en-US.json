@@ -28,7 +28,11 @@
 					},
 					"draw-self": {
 						"name": "Draw self",
-						"desc": "Whether the object should render the animation itself (self-draw) or drive separate Construct objects."
+						"desc": "Whether the object should render the animation itself (self-draw) or drive separate Construct objects.",
+						"items": {
+							"false": "False",
+							"true": "True"
+						}
 					},
 					"nickname-in-c2": {
 						"name": "Nickname (C2)",
@@ -36,7 +40,11 @@
 					},
 					"blend-mode": {
 						"name": "Blend mode",
-						"desc": "Controls premultiplied alpha handling when self-drawing."
+						"desc": "Controls premultiplied alpha handling when self-drawing.",
+						"items": {
+							"no premultiplied alpha blend": "No premultiplied alpha blend",
+							"use effects blend mode": "Use effects blend mode"
+						}
 					}
 				},
 				"aceCategories": {
