@@ -60,6 +60,10 @@ const PLUGIN_CLASS = SDK.Plugins.Spriter = class Spriter extends SDK.IPluginBase
 			new SDK.PluginProperty("combo", "blend-mode", {
 				initialValue: "use effects blend mode",
 				items: ["no premultiplied alpha blend", "use effects blend mode"]
+			}),
+			new SDK.PluginProperty("combo", "draw-debug", {
+				initialValue: "false",
+				items: ["false", "true"]
 			})
 		]);
 		

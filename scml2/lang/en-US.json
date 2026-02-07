@@ -45,6 +45,14 @@
 							"no premultiplied alpha blend": "No premultiplied alpha blend",
 							"use effects blend mode": "Use effects blend mode"
 						}
+					},
+					"draw-debug": {
+						"name": "Draw debug",
+						"desc": "Draw overlay guides for troubleshooting pose assembly (sprite bounds, sprite pivot dots, and bone lines).",
+						"items": {
+							"false": "False",
+							"true": "True"
+						}
 					}
 				},
 				"aceCategories": {

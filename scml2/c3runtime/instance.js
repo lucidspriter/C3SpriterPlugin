@@ -17,6 +17,63 @@ function normaliseProjectFileName(fileName)
 	return normalised;
 }
 
+function normaliseAssetPath(path)
+{
+	if (typeof path !== "string")
+	{
+		return "";
+	}
+
+	return path.trim().replace(/\\/g, "/");
+}
+
+function getDirectoryPath(path)
+{
+	const normalised = normaliseAssetPath(path);
+	const lastSlash = normalised.lastIndexOf("/");
+	return lastSlash >= 0 ? normalised.slice(0, lastSlash) : "";
+}
+
+function joinPaths(dir, file)
+{
+	const base = normaliseAssetPath(dir);
+	const leaf = normaliseAssetPath(file);
+
+	if (!base)
+	{
+		return leaf;
+	}
+
+	if (!leaf)
+	{
+		return base;
+	}
+
+	return `${base.replace(/\/+$/, "")}/${leaf.replace(/^\/+/, "")}`;
+}
+
+function toAtlasImagePath(atlasName)
+{
+	const normalised = normaliseAssetPath(atlasName);
+	if (!normalised)
+	{
+		return "";
+	}
+
+	if (normalised.toLowerCase().endsWith(".png"))
+	{
+		return normalised;
+	}
+
+	const dot = normalised.lastIndexOf(".");
+	if (dot > 0)
+	{
+		return `${normalised.slice(0, dot)}.png`;
+	}
+
+	return `${normalised}.png`;
+}
+
 function isPromiseLike(value)
 {
 	return !!(value && typeof value.then === "function");
@@ -41,6 +98,39 @@ function toFiniteNumber(value, defaultValue)
 {
 	const numberValue = Number(value);
 	return Number.isFinite(numberValue) ? numberValue : defaultValue;
+}
+
+function toBoolean(value, defaultValue = false)
+{
+	if (typeof value === "boolean")
+	{
+		return value;
+	}
+
+	if (typeof value === "number")
+	{
+		return value !== 0;
+	}
+
+	if (typeof value === "string")
+	{
+		const trimmed = value.trim().toLowerCase();
+		if (trimmed === "true")
+		{
+			return true;
+		}
+		if (trimmed === "false")
+		{
+			return false;
+		}
+		const numericValue = Number(trimmed);
+		if (Number.isFinite(numericValue))
+		{
+			return numericValue !== 0;
+		}
+	}
+
+	return defaultValue;
 }
 
 function spinAngleDegrees(startDegrees, endDegrees, spin)
@@ -76,7 +166,9 @@ function spinAngleDegrees(startDegrees, endDegrees, spin)
 
 function degreesToRadians(degrees)
 {
-	return degrees * (Math.PI / 180);
+	// Legacy plugin converted Spriter angles with "360 - angle" before radians.
+	// Equivalent here: negate the radian angle so rotation direction matches old projects.
+	return -degrees * (Math.PI / 180);
 }
 
 function combineTransforms(parent, child)
@@ -105,11 +197,13 @@ const PROPERTY_INDEX = Object.freeze({
 	STARTING_OPACITY: 3,
 	DRAW_SELF: 4,
 	NICKNAME: 5,
-	BLEND_MODE: 6
+	BLEND_MODE: 6,
+	DRAW_DEBUG: 7
 });
 
 const DRAW_SELF_OPTIONS = ["false", "true"];
 const BLEND_MODE_OPTIONS = ["no premultiplied alpha blend", "use effects blend mode"];
+const DRAW_DEBUG_OPTIONS = ["false", "true"];
 
 function toStringOrEmpty(value)
 {
@@ -178,6 +272,7 @@ function normaliseInitialProperties(initialProperties)
 	normalised[PROPERTY_INDEX.DRAW_SELF] = normaliseComboValue(source[PROPERTY_INDEX.DRAW_SELF], DRAW_SELF_OPTIONS, 0);
 	normalised[PROPERTY_INDEX.NICKNAME] = toStringOrEmpty(source[PROPERTY_INDEX.NICKNAME]);
 	normalised[PROPERTY_INDEX.BLEND_MODE] = normaliseComboValue(source[PROPERTY_INDEX.BLEND_MODE], BLEND_MODE_OPTIONS, 1);
+	normalised[PROPERTY_INDEX.DRAW_DEBUG] = normaliseComboValue(source[PROPERTY_INDEX.DRAW_DEBUG], DRAW_DEBUG_OPTIONS, 0);
 
 	return normalised;
 }
@@ -193,12 +288,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.properties = normaliseInitialProperties(this._initialProperties);
 
 		this.projectFileName = this.properties[PROPERTY_INDEX.SCML_FILE];
+		this._rawProjectFileName = toStringOrEmpty(this._initialProperties[PROPERTY_INDEX.SCML_FILE]);
+		this._rawProjectDir = getDirectoryPath(this._rawProjectFileName);
 		this.startingEntityName = this.properties[PROPERTY_INDEX.STARTING_ENTITY];
 		this.startingAnimationName = this.properties[PROPERTY_INDEX.STARTING_ANIMATION];
 		this.startingOpacity = this.properties[PROPERTY_INDEX.STARTING_OPACITY];
 		this.drawSelf = this.properties[PROPERTY_INDEX.DRAW_SELF] === 1;
 		this.nicknameInC2 = this.properties[PROPERTY_INDEX.NICKNAME];
 		this.noPremultiply = this.properties[PROPERTY_INDEX.BLEND_MODE] === 0;
+		this.drawDebug = this.properties[PROPERTY_INDEX.DRAW_DEBUG] === 1;
 
 		this.isReady = false;
 		this.loadError = null;
@@ -224,6 +322,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._fileLookup = new Map();
 		this._timelineById = new Map();
 		this._poseObjectStates = [];
+		this._poseBoneStates = [];
+		this._atlasFrameCache = new Map();
+		this._atlasTextureLoadState = new Map();
+		this._atlasImagePathByIndex = new Map();
+		this._atlasDebug = {
+			loggedMissingMetadata: false,
+			loggedFirstAtlasDraw: false,
+			loggedProjectAtlasFallback: false,
+			loggedFrameLookupIssue: false,
+			missingFrameIndices: new Set(),
+			missingAtlasImageIndices: new Set(),
+			pendingTextureIndices: new Set()
+		};
 
 		// Enable ticking (Addon SDK v2): _tick() runs before events; _tick2() runs after events.
 		// https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkinstancebase
@@ -232,6 +343,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		if (typeof this._setTicking2 === "function")
 			this._setTicking2(true);
+
+		// Recreate textures if the renderer context is lost (e.g. WebGL context loss).
+		if (typeof this._handleRendererContextLoss === "function")
+			this._handleRendererContextLoss();
 	}
 
 	_release()
@@ -271,7 +386,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		const poseObjects = Array.isArray(this._poseObjectStates) ? this._poseObjectStates : [];
-		if (!poseObjects.length)
+		const poseBones = Array.isArray(this._poseBoneStates) ? this._poseBoneStates : [];
+		if (!poseObjects.length && !(this.drawDebug && poseBones.length))
 		{
 			return;
 		}
@@ -312,14 +428,30 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			renderer.setAlphaBlendMode();
 		}
 
-		// Debug self-draw: draw solid coloured quads for each pose object so motion is visible.
-		if (typeof renderer.SetColorFillMode === "function")
+		const setColorFillMode = (typeof renderer.SetColorFillMode === "function")
+			? renderer.SetColorFillMode.bind(renderer)
+			: (typeof renderer.setColorFillMode === "function")
+				? renderer.setColorFillMode.bind(renderer)
+				: null;
+
+		const setTextureFillMode = (typeof renderer.SetTextureFillMode === "function")
+			? renderer.SetTextureFillMode.bind(renderer)
+			: (typeof renderer.setTextureFillMode === "function")
+				? renderer.setTextureFillMode.bind(renderer)
+				: null;
+
+		const setTexture = (typeof renderer.SetTexture === "function")
+			? renderer.SetTexture.bind(renderer)
+			: (typeof renderer.setTexture === "function")
+				? renderer.setTexture.bind(renderer)
+				: null;
+
+		// Default to debug quads until textures are ready.
+		let fillMode = "";
+		if (setColorFillMode)
 		{
-			renderer.SetColorFillMode();
-		}
-		else if (typeof renderer.setColorFillMode === "function")
-		{
-			renderer.setColorFillMode();
+			setColorFillMode();
+			fillMode = "color";
 		}
 
 		const getX = worldInfo
@@ -374,8 +506,92 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				? renderer.setColorRgba.bind(renderer)
 				: null;
 
+		const setOpacity = (typeof renderer.SetOpacity === "function")
+			? renderer.SetOpacity.bind(renderer)
+			: (typeof renderer.setOpacity === "function")
+				? renderer.setOpacity.bind(renderer)
+				: null;
+
 		const quad3 = quad3C3 || quad3Dom;
 		const quad = quadDom || quadC3;
+		const fullTexRect = { x: 0, y: 0, width: 1, height: 1, left: 0, top: 0, right: 1, bottom: 1 };
+		const debugSpriteOverlays = this.drawDebug ? [] : null;
+
+		const renderDebugQuad = (domDebugQuad, r, g, b, a) =>
+		{
+			if (!domDebugQuad || !setColorRgba || !setColorFillMode)
+			{
+				return;
+			}
+
+			if (fillMode !== "color")
+			{
+				setColorFillMode();
+				fillMode = "color";
+			}
+
+			setColorRgba(r, g, b, a);
+			if (quadDom)
+			{
+				quadDom(domDebugQuad);
+			}
+			else if (quad3Dom)
+			{
+				quad3Dom(domDebugQuad, fullTexRect);
+			}
+		};
+
+		const makeLineQuad = (x1, y1, x2, y2, halfThickness) =>
+		{
+			const dx = x2 - x1;
+			const dy = y2 - y1;
+			const len = Math.hypot(dx, dy);
+			const half = Math.max(0.25, toFiniteNumber(halfThickness, 1));
+
+			if (len <= 1e-6)
+			{
+				return {
+					p1: { x: x1 - half, y: y1 - half, z: 0, w: 1 },
+					p2: { x: x1 + half, y: y1 - half, z: 0, w: 1 },
+					p3: { x: x1 + half, y: y1 + half, z: 0, w: 1 },
+					p4: { x: x1 - half, y: y1 + half, z: 0, w: 1 }
+				};
+			}
+
+			const ux = dx / len;
+			const uy = dy / len;
+			const px = -uy * half;
+			const py = ux * half;
+
+			return {
+				p1: { x: x1 + px, y: y1 + py, z: 0, w: 1 },
+				p2: { x: x2 + px, y: y2 + py, z: 0, w: 1 },
+				p3: { x: x2 - px, y: y2 - py, z: 0, w: 1 },
+				p4: { x: x1 - px, y: y1 - py, z: 0, w: 1 }
+			};
+		};
+
+		const makeDotQuad = (x, y, radius) =>
+		{
+			const r = Math.max(0.5, toFiniteNumber(radius, 1.5));
+			return {
+				p1: { x: x - r, y: y - r, z: 0, w: 1 },
+				p2: { x: x + r, y: y - r, z: 0, w: 1 },
+				p3: { x: x + r, y: y + r, z: 0, w: 1 },
+				p4: { x: x - r, y: y + r, z: 0, w: 1 }
+			};
+		};
+
+		const sdkType = this.objectType;
+		const getOrLoadTexture = sdkType && typeof sdkType._getOrLoadTextureForPath === "function"
+			? sdkType._getOrLoadTextureForPath.bind(sdkType)
+			: null;
+		const hasTextureError = sdkType && typeof sdkType._hasTextureErrorForPath === "function"
+			? sdkType._hasTextureErrorForPath.bind(sdkType)
+			: null;
+		const getTextureSize = sdkType && typeof sdkType._getTextureSizeForPath === "function"
+			? sdkType._getTextureSizeForPath.bind(sdkType)
+			: null;
 
 		const baseOpacity = clamp01(this.startingOpacity / 100);
 
@@ -406,19 +622,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 			let scaleX = toFiniteNumber(world.scaleX, 1);
 			let scaleY = toFiniteNumber(world.scaleY, 1);
-
-			// Keep the rect dimensions positive; pivot flips keep the origin stable.
-			if (scaleX < 0)
-			{
-				scaleX = -scaleX;
-				pivotX = 1 - pivotX;
-			}
-
-			if (scaleY < 0)
-			{
-				scaleY = -scaleY;
-				pivotY = 1 - pivotY;
-			}
 
 			const scaledW = width * scaleX;
 			const scaledH = height * scaleY;
@@ -467,9 +670,335 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				continue;
 			}
 
+			if (debugSpriteOverlays)
+			{
+				debugSpriteOverlays.push({
+					quad: domQuad,
+					x: baseX,
+					y: baseY,
+					alpha
+				});
+			}
+
+			// Prefer atlas-based self draw (legacy behaviour): draw from this object's own frames using SCON atlas metadata.
+			const atlasW = toFiniteNumber(state.atlasW, 0);
+			const atlasH = toFiniteNumber(state.atlasH, 0);
+			const hasAtlas = atlasW > 0 && atlasH > 0;
+			const hasAtlasList = !!(this.projectData && Array.isArray(this.projectData.atlas) && this.projectData.atlas.length);
+
+			if (!hasAtlas && hasAtlasList && this._atlasDebug && !this._atlasDebug.loggedMissingMetadata)
+			{
+				this._atlasDebug.loggedMissingMetadata = true;
+				console.warn(`[Spriter] Atlas metadata missing for '${state.name || "(unnamed)"}' (aw/ah/ax/ay not set). Using debug fallback.`);
+			}
+
+			if (hasAtlas && quad3Dom && setTextureFillMode && setTexture)
+			{
+				const atlasIndexRaw = toFiniteNumber(state.atlasIndex, 0);
+				const atlasIndex = Number.isInteger(atlasIndexRaw) ? atlasIndexRaw : Math.trunc(atlasIndexRaw);
+				const atlasImagePathFromProject = this._atlasImagePathByIndex
+					? this._atlasImagePathByIndex.get(atlasIndex) || ""
+					: "";
+
+				const frame = this._getAtlasFrame(atlasIndex);
+				if (!frame && this._atlasDebug && !this._atlasDebug.missingFrameIndices.has(atlasIndex))
+				{
+					this._atlasDebug.missingFrameIndices.add(atlasIndex);
+					console.warn(`[Spriter] No atlas frame found at index ${atlasIndex}; using debug fallback.`);
+				}
+
+				const imageInfo = frame && typeof frame.GetImageInfo === "function"
+					? frame.GetImageInfo()
+					: frame && typeof frame.getImageInfo === "function"
+						? frame.getImageInfo()
+						: frame && frame._imageInfo
+							? frame._imageInfo
+							: null;
+
+				let texture = imageInfo && typeof imageInfo.GetTexture === "function"
+					? imageInfo.GetTexture()
+					: imageInfo && typeof imageInfo.getTexture === "function"
+						? imageInfo.getTexture()
+						: null;
+
+				// In some runtimes, atlas frame textures aren't ready until LoadStaticTexture() runs.
+				// Request it once per atlas frame and fall back to debug quads until it resolves.
+				if (!texture && imageInfo)
+				{
+					this._requestAtlasTextureLoad(atlasIndex, imageInfo, renderer);
+					if (this._atlasDebug && !this._atlasDebug.pendingTextureIndices.has(atlasIndex))
+					{
+						this._atlasDebug.pendingTextureIndices.add(atlasIndex);
+						console.log(`[Spriter] Atlas texture not ready for frame ${atlasIndex}; requested async texture load.`);
+					}
+				}
+
+				let imageWidth = toFiniteNumber(
+					imageInfo && typeof imageInfo.GetWidth === "function"
+						? imageInfo.GetWidth()
+						: imageInfo && imageInfo._width,
+					0
+				);
+
+				let imageHeight = toFiniteNumber(
+					imageInfo && typeof imageInfo.GetHeight === "function"
+						? imageInfo.GetHeight()
+						: imageInfo && imageInfo._height,
+					0
+				);
+
+				let texRect = imageInfo && typeof imageInfo.GetTexRect === "function"
+					? imageInfo.GetTexRect()
+					: imageInfo && typeof imageInfo.getTexRect === "function"
+						? imageInfo.getTexRect()
+						: null;
+
+				if ((!texture || imageWidth <= 0 || imageHeight <= 0) && atlasImagePathFromProject && getOrLoadTexture)
+				{
+					let atlasImagePath = atlasImagePathFromProject;
+					let projectTexture = getOrLoadTexture(atlasImagePath, renderer);
+
+					if (!projectTexture && hasTextureError && hasTextureError(atlasImagePath))
+					{
+						const slash = atlasImagePath.lastIndexOf("/");
+						if (slash >= 0)
+						{
+							const leafPath = atlasImagePath.slice(slash + 1);
+							if (leafPath && leafPath !== atlasImagePath)
+							{
+								const leafTexture = getOrLoadTexture(leafPath, renderer);
+								if (leafTexture)
+								{
+									atlasImagePath = leafPath;
+									projectTexture = leafTexture;
+								}
+							}
+						}
+					}
+
+					if (!projectTexture && hasTextureError && this._rawProjectDir && hasTextureError(atlasImagePath))
+					{
+						const altPath = joinPaths(this._rawProjectDir, atlasImagePath);
+						if (altPath && altPath !== atlasImagePath)
+						{
+							atlasImagePath = altPath;
+							projectTexture = getOrLoadTexture(atlasImagePath, renderer);
+						}
+					}
+
+					if (projectTexture)
+					{
+						texture = projectTexture;
+						texRect = fullTexRect;
+
+						const textureSize = getTextureSize ? getTextureSize(atlasImagePath) : null;
+						imageWidth = textureSize ? toFiniteNumber(textureSize.width, 0) : 0;
+						imageHeight = textureSize ? toFiniteNumber(textureSize.height, 0) : 0;
+
+						if (this._atlasDebug && !this._atlasDebug.loggedProjectAtlasFallback)
+						{
+							this._atlasDebug.loggedProjectAtlasFallback = true;
+							console.log("[Spriter] Atlas frame API unavailable; using project-file atlas texture fallback.");
+						}
+					}
+					else if (this._atlasDebug && !this._atlasDebug.missingAtlasImageIndices.has(atlasIndex))
+					{
+						this._atlasDebug.missingAtlasImageIndices.add(atlasIndex);
+						console.warn(`[Spriter] Atlas project texture not ready for index ${atlasIndex} ('${atlasImagePathFromProject}').`);
+					}
+				}
+
+				if (texture && imageWidth > 0 && imageHeight > 0)
+				{
+					const texLeft = toFiniteNumber(texRect && (texRect._left ?? texRect.left), 0);
+					const texRight = toFiniteNumber(texRect && (texRect._right ?? texRect.right), 1);
+					const texTop = toFiniteNumber(texRect && (texRect._top ?? texRect.top), 0);
+					const texBottom = toFiniteNumber(texRect && (texRect._bottom ?? texRect.bottom), 1);
+
+					const atlasX = toFiniteNumber(state.atlasX, 0);
+					const atlasY = toFiniteNumber(state.atlasY, 0);
+					const atlasXOff = toFiniteNumber(state.atlasXOff, 0);
+					const atlasYOff = toFiniteNumber(state.atlasYOff, 0);
+					const atlasRotated = !!state.atlasRotated;
+
+					let uvW = atlasW;
+					let uvH = atlasH;
+					let drawAngle = angle;
+
+					if (atlasRotated)
+					{
+						drawAngle -= Math.PI / 2;
+						uvW = atlasH;
+						uvH = atlasW;
+					}
+
+					const uvLeft = atlasX / imageWidth;
+					const uvTop = atlasY / imageHeight;
+					const uvRight = (atlasX + uvW) / imageWidth;
+					const uvBottom = (atlasY + uvH) / imageHeight;
+
+					const u0 = lerp(texLeft, texRight, uvLeft);
+					const u1 = lerp(texLeft, texRight, uvRight);
+					const v0 = lerp(texTop, texBottom, uvTop);
+					const v1 = lerp(texTop, texBottom, uvBottom);
+
+					const uvRect = {
+						x: u0,
+						y: v0,
+						width: u1 - u0,
+						height: v1 - v0,
+						left: u0,
+						top: v0,
+						right: u1,
+						bottom: v1
+					};
+
+					const absPivotX = pivotX * width * scaleX;
+					const absPivotY = pivotY * height * scaleY;
+					const reverseAbsPivotX = (1 - pivotX) * width * scaleX;
+					const reverseAbsPivotY = (1 - pivotY) * height * scaleY;
+
+					const xOff = scaleX * atlasXOff;
+					const yOff = scaleY * atlasYOff;
+					const reverseXOff = scaleX * (width - (atlasXOff + atlasW));
+					const reverseYOff = scaleY * (height - (atlasYOff + atlasH));
+
+					let rectLeft = baseX;
+					let rectTop = baseY;
+					let rectRight;
+					let rectBottom;
+					let offsetX;
+					let offsetY;
+
+					if (atlasRotated)
+					{
+						rectRight = baseX + atlasH * scaleY;
+						rectBottom = baseY + atlasW * scaleX;
+						offsetX = reverseYOff - reverseAbsPivotY;
+						offsetY = xOff - absPivotX;
+					}
+					else
+					{
+						rectRight = baseX + atlasW * scaleX;
+						rectBottom = baseY + atlasH * scaleY;
+						offsetX = xOff - absPivotX;
+						offsetY = yOff - absPivotY;
+					}
+
+					rectLeft += offsetX;
+					rectRight += offsetX;
+					rectTop += offsetY;
+					rectBottom += offsetY;
+
+					const cosA = Math.cos(drawAngle);
+					const sinA = Math.sin(drawAngle);
+
+					const atlTlx = rectLeft;
+					const atlTly = rectTop;
+					const atlTrx = rectRight;
+					const atlTry = rectTop;
+					const atlBrx = rectRight;
+					const atlBry = rectBottom;
+					const atlBlx = rectLeft;
+					const atlBly = rectBottom;
+
+					const adx1 = atlTlx - baseX;
+					const ady1 = atlTly - baseY;
+					const adx2 = atlTrx - baseX;
+					const ady2 = atlTry - baseY;
+					const adx3 = atlBrx - baseX;
+					const ady3 = atlBry - baseY;
+					const adx4 = atlBlx - baseX;
+					const ady4 = atlBly - baseY;
+
+					const atlasDomQuad = {
+						p1: { x: baseX + adx1 * cosA - ady1 * sinA, y: baseY + adx1 * sinA + ady1 * cosA, z: 0, w: 1 },
+						p2: { x: baseX + adx2 * cosA - ady2 * sinA, y: baseY + adx2 * sinA + ady2 * cosA, z: 0, w: 1 },
+						p3: { x: baseX + adx3 * cosA - ady3 * sinA, y: baseY + adx3 * sinA + ady3 * cosA, z: 0, w: 1 },
+						p4: { x: baseX + adx4 * cosA - ady4 * sinA, y: baseY + adx4 * sinA + ady4 * cosA, z: 0, w: 1 }
+					};
+
+					if (fillMode !== "texture")
+					{
+						setTextureFillMode();
+						fillMode = "texture";
+					}
+
+					setTexture(texture);
+
+					if (this.noPremultiply && setOpacity)
+					{
+						setOpacity(alpha);
+					}
+					else if (setColorRgba)
+					{
+						setColorRgba(1, 1, 1, alpha);
+					}
+
+					quad3Dom(atlasDomQuad, uvRect);
+					if (this._atlasDebug && !this._atlasDebug.loggedFirstAtlasDraw)
+					{
+						this._atlasDebug.loggedFirstAtlasDraw = true;
+						console.log(`[Spriter] Atlas textured draw active (index ${atlasIndex}).`);
+					}
+					continue;
+				}
+			}
+
+			if (!hasAtlas)
+			{
+				// Try to draw the actual Spriter image if it exists as a Construct project file.
+				const imageName = normaliseAssetPath(state.name);
+				let texture = null;
+
+				if (getOrLoadTexture && imageName)
+				{
+					texture = getOrLoadTexture(imageName, renderer);
+
+					// If the image path is relative to the .scon file's folder, try that on failure.
+					if (!texture && hasTextureError && this._rawProjectDir && hasTextureError(imageName))
+					{
+						const altPath = joinPaths(this._rawProjectDir, imageName);
+						if (altPath && altPath !== imageName)
+						{
+							texture = getOrLoadTexture(altPath, renderer);
+						}
+					}
+				}
+
+				if (texture && quad3Dom && setTextureFillMode && setTexture)
+				{
+					if (fillMode !== "texture")
+					{
+						setTextureFillMode();
+						fillMode = "texture";
+					}
+
+					setTexture(texture);
+
+					if (this.noPremultiply && setOpacity)
+					{
+						setOpacity(alpha);
+					}
+					else if (setColorRgba)
+					{
+						setColorRgba(1, 1, 1, alpha);
+					}
+
+					quad3Dom(domQuad, fullTexRect);
+					continue;
+				}
+			}
+
+			// Fallback: debug quads (also used while textures are still loading).
+			if (fillMode !== "color" && setColorFillMode)
+			{
+				setColorFillMode();
+				fillMode = "color";
+			}
+
 			if (setColorRgba)
 			{
-				// Deterministic colour per file/timeline so parts are visually distinct.
 				const seed = (toFiniteNumber(state.file, i) * 97 + toFiniteNumber(state.folder, 0) * 57 + i * 13) | 0;
 				const r = ((seed >> 0) & 0xFF) / 255;
 				const g = ((seed >> 8) & 0xFF) / 255;
@@ -501,10 +1030,271 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 			else if (quad3Dom)
 			{
-				// In case this runtime uses dom quads + rects.
-				const domRect = { x: left, y: top, width: scaledW, height: scaledH };
-				quad3Dom(domQuad, domRect);
+				quad3Dom(domQuad, { x: 0, y: 0, width: 1, height: 1, left: 0, top: 0, right: 1, bottom: 1 });
 			}
+		}
+
+		if (this.drawDebug && setColorFillMode && setColorRgba)
+		{
+			const toRootWorldPoint = (x, y) =>
+			{
+				const dx = toFiniteNumber(x, 0) * rootTransform.scaleX;
+				const dy = toFiniteNumber(y, 0) * rootTransform.scaleY;
+				const cosR = Math.cos(rootTransform.angle);
+				const sinR = Math.sin(rootTransform.angle);
+
+				return {
+					x: rootTransform.x + dx * cosR - dy * sinR,
+					y: rootTransform.y + dx * sinR + dy * cosR
+				};
+			};
+
+			const boneById = new Map();
+			for (const bone of poseBones)
+			{
+				if (!bone)
+				{
+					continue;
+				}
+
+				const id = toFiniteNumber(bone.id, NaN);
+				if (Number.isFinite(id))
+				{
+					boneById.set(id, bone);
+				}
+			}
+
+			for (const bone of poseBones)
+			{
+				if (!bone)
+				{
+					continue;
+				}
+
+				const child = toRootWorldPoint(bone.x, bone.y);
+				const parentId = toFiniteNumber(bone.parentId, NaN);
+				if (Number.isFinite(parentId))
+				{
+					const parentBone = boneById.get(parentId);
+					if (parentBone)
+					{
+						const parent = toRootWorldPoint(parentBone.x, parentBone.y);
+						renderDebugQuad(makeLineQuad(parent.x, parent.y, child.x, child.y, 3), 0.15, 0.85, 1, 0.35);
+					}
+				}
+
+				renderDebugQuad(makeDotQuad(child.x, child.y, 2.25), 0.15, 0.85, 1, 0.75);
+			}
+
+			if (debugSpriteOverlays)
+			{
+				for (const overlay of debugSpriteOverlays)
+				{
+					if (!overlay || !overlay.quad)
+					{
+						continue;
+					}
+
+					const q = overlay.quad;
+					const boxAlpha = clamp01(toFiniteNumber(overlay.alpha, 1) * 0.9);
+
+					renderDebugQuad(makeLineQuad(q.p1.x, q.p1.y, q.p2.x, q.p2.y, 1.25), 1, 0.55, 0.15, boxAlpha);
+					renderDebugQuad(makeLineQuad(q.p2.x, q.p2.y, q.p3.x, q.p3.y, 1.25), 1, 0.55, 0.15, boxAlpha);
+					renderDebugQuad(makeLineQuad(q.p3.x, q.p3.y, q.p4.x, q.p4.y, 1.25), 1, 0.55, 0.15, boxAlpha);
+					renderDebugQuad(makeLineQuad(q.p4.x, q.p4.y, q.p1.x, q.p1.y, 1.25), 1, 0.55, 0.15, boxAlpha);
+					renderDebugQuad(makeDotQuad(overlay.x, overlay.y, 2), 1, 0.2, 0.2, 0.9);
+				}
+			}
+		}
+	}
+
+	_getAtlasFrame(atlasIndex)
+	{
+		if (!Number.isInteger(atlasIndex) || atlasIndex < 0)
+		{
+			return null;
+		}
+
+		if (this._atlasFrameCache && this._atlasFrameCache.has(atlasIndex))
+		{
+			return this._atlasFrameCache.get(atlasIndex);
+		}
+
+		const sdkType = this.objectType;
+		if (sdkType && typeof sdkType._getAtlasFrame === "function")
+		{
+			const typeFrame = sdkType._getAtlasFrame(atlasIndex);
+			if (typeFrame)
+			{
+				this._atlasFrameCache.set(atlasIndex, typeFrame);
+				return typeFrame;
+			}
+		}
+
+		const getObjectClass = typeof this.GetObjectClass === "function"
+			? this.GetObjectClass.bind(this)
+			: typeof this.getObjectClass === "function"
+				? this.getObjectClass.bind(this)
+				: null;
+
+		if (!getObjectClass)
+		{
+			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
+			{
+				this._atlasDebug.loggedFrameLookupIssue = true;
+				console.warn("[Spriter] Atlas frame lookup: GetObjectClass/getObjectClass is unavailable on instance.");
+			}
+			return null;
+		}
+
+		const objectClass = getObjectClass();
+		if (!objectClass)
+		{
+			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
+			{
+				this._atlasDebug.loggedFrameLookupIssue = true;
+				console.warn("[Spriter] Atlas frame lookup: GetObjectClass() returned null.");
+			}
+			return null;
+		}
+
+		const getAnimations = typeof objectClass.GetAnimations === "function"
+			? objectClass.GetAnimations.bind(objectClass)
+			: typeof objectClass.getAnimations === "function"
+				? objectClass.getAnimations.bind(objectClass)
+				: null;
+
+		if (!getAnimations)
+		{
+			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
+			{
+				this._atlasDebug.loggedFrameLookupIssue = true;
+				console.warn("[Spriter] Atlas frame lookup: object class has no GetAnimations/getAnimations method.");
+			}
+			return null;
+		}
+
+		const animations = getAnimations();
+		if (!Array.isArray(animations) || !animations.length)
+		{
+			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
+			{
+				this._atlasDebug.loggedFrameLookupIssue = true;
+				console.warn("[Spriter] Atlas frame lookup: object class has no animations.");
+			}
+			return null;
+		}
+
+		const firstAnimation = animations[0];
+		if (!firstAnimation)
+		{
+			return null;
+		}
+
+		const getFrames = typeof firstAnimation.GetFrames === "function"
+			? firstAnimation.GetFrames.bind(firstAnimation)
+			: typeof firstAnimation.getFrames === "function"
+				? firstAnimation.getFrames.bind(firstAnimation)
+				: null;
+
+		if (!getFrames)
+		{
+			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
+			{
+				this._atlasDebug.loggedFrameLookupIssue = true;
+				console.warn("[Spriter] Atlas frame lookup: first animation has no GetFrames/getFrames method.");
+			}
+			return null;
+		}
+
+		const frames = getFrames();
+		if (!Array.isArray(frames) || atlasIndex >= frames.length)
+		{
+			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
+			{
+				this._atlasDebug.loggedFrameLookupIssue = true;
+				const count = Array.isArray(frames) ? frames.length : 0;
+				console.warn(`[Spriter] Atlas frame lookup: frame index ${atlasIndex} out of range (frames=${count}).`);
+			}
+			return null;
+		}
+
+		const frame = frames[atlasIndex] || null;
+		if (frame && this._atlasFrameCache)
+		{
+			this._atlasFrameCache.set(atlasIndex, frame);
+		}
+
+		return frame;
+	}
+
+	_requestAtlasTextureLoad(atlasIndex, imageInfo, renderer)
+	{
+		if (!Number.isInteger(atlasIndex) || atlasIndex < 0 || !imageInfo || !renderer)
+		{
+			return;
+		}
+
+		let entry = this._atlasTextureLoadState.get(atlasIndex);
+		if (!entry)
+		{
+			entry = { promise: null, error: null };
+			this._atlasTextureLoadState.set(atlasIndex, entry);
+		}
+
+		if (entry.promise || entry.error)
+		{
+			return;
+		}
+
+		const loadAsset = imageInfo.LoadAsset || imageInfo.loadAsset || null;
+		if (typeof loadAsset === "function")
+		{
+			loadAsset.call(imageInfo, this.runtime);
+		}
+
+		const loadStaticTexture = imageInfo.LoadStaticTexture || imageInfo.loadStaticTexture || null;
+		if (typeof loadStaticTexture !== "function")
+		{
+			return;
+		}
+
+		let options = undefined;
+		const getSampling = this.runtime && typeof this.runtime.GetSampling === "function"
+			? this.runtime.GetSampling.bind(this.runtime)
+			: null;
+		if (getSampling)
+		{
+			const sampling = getSampling();
+			if (sampling != null)
+			{
+				options = { sampling };
+			}
+		}
+
+		try
+		{
+			const maybePromise = loadStaticTexture.call(imageInfo, renderer, options);
+			if (maybePromise && typeof maybePromise.then === "function")
+			{
+				entry.promise = maybePromise
+					.catch((error) =>
+					{
+						const message = error instanceof Error ? error.message : String(error);
+						entry.error = message || "Unknown error";
+						console.error(`[Spriter] Failed atlas texture upload for frame ${atlasIndex}: ${entry.error}`, error);
+					})
+					.finally(() =>
+					{
+						entry.promise = null;
+					});
+			}
+		}
+		catch (error)
+		{
+			const message = error instanceof Error ? error.message : String(error);
+			entry.error = message || "Unknown error";
+			console.error(`[Spriter] Failed requesting atlas texture upload for frame ${atlasIndex}: ${entry.error}`, error);
 		}
 	}
 
@@ -598,6 +1388,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!animation || !projectData)
 		{
 			this._poseObjectStates.length = 0;
+			this._poseBoneStates.length = 0;
 			return;
 		}
 
@@ -606,6 +1397,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!keys.length)
 		{
 			this._poseObjectStates.length = 0;
+			this._poseBoneStates.length = 0;
 			return;
 		}
 
@@ -615,6 +1407,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!mainKey)
 		{
 			this._poseObjectStates.length = 0;
+			this._poseBoneStates.length = 0;
 			return;
 		}
 
@@ -640,6 +1433,31 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		for (const boneRef of boneRefs)
 		{
 			this._resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById);
+		}
+
+		const poseBones = this._poseBoneStates;
+		poseBones.length = 0;
+		for (const boneRef of boneRefs)
+		{
+			if (!boneRef)
+			{
+				continue;
+			}
+
+			const id = toFiniteNumber(boneRef.id, NaN);
+			const world = boneWorldById.get(id);
+			if (!world)
+			{
+				continue;
+			}
+
+			poseBones.push({
+				id,
+				parentId: toFiniteNumber(boneRef.parent, NaN),
+				x: toFiniteNumber(world.x, 0),
+				y: toFiniteNumber(world.y, 0),
+				alpha: toFiniteNumber(world.alpha, 1)
+			});
 		}
 
 		const poseObjects = this._poseObjectStates;
@@ -768,7 +1586,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			pivotY: Number.isFinite(evaluated.pivotY) ? evaluated.pivotY : (fileInfo ? fileInfo.pivotY : 0),
 			width: fileInfo ? fileInfo.width : 0,
 			height: fileInfo ? fileInfo.height : 0,
-			name: fileInfo ? fileInfo.name : ""
+			name: fileInfo ? fileInfo.name : "",
+			atlasIndex: fileInfo ? toFiniteNumber(fileInfo.atlasIndex, 0) : 0,
+			atlasW: fileInfo ? toFiniteNumber(fileInfo.atlasW, 0) : 0,
+			atlasH: fileInfo ? toFiniteNumber(fileInfo.atlasH, 0) : 0,
+			atlasX: fileInfo ? toFiniteNumber(fileInfo.atlasX, 0) : 0,
+			atlasY: fileInfo ? toFiniteNumber(fileInfo.atlasY, 0) : 0,
+			atlasXOff: fileInfo ? toFiniteNumber(fileInfo.atlasXOff, 0) : 0,
+			atlasYOff: fileInfo ? toFiniteNumber(fileInfo.atlasYOff, 0) : 0,
+			atlasRotated: fileInfo ? !!fileInfo.atlasRotated : false
 		};
 	}
 
@@ -818,7 +1644,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		return {
 			x: lerp(toFiniteNumber(startBone.x, 0), toFiniteNumber(endBone.x, toFiniteNumber(startBone.x, 0)), t),
-			y: lerp(toFiniteNumber(startBone.y, 0), toFiniteNumber(endBone.y, toFiniteNumber(startBone.y, 0)), t),
+			// Spriter and Construct use opposite Y axis directions for timeline bone offsets.
+			y: -lerp(toFiniteNumber(startBone.y, 0), toFiniteNumber(endBone.y, toFiniteNumber(startBone.y, 0)), t),
 			angle: degreesToRadians(angleDeg),
 			scaleX: lerp(toFiniteNumber(startBone.scale_x, 1), toFiniteNumber(endBone.scale_x, toFiniteNumber(startBone.scale_x, 1)), t),
 			scaleY: lerp(toFiniteNumber(startBone.scale_y, 1), toFiniteNumber(endBone.scale_y, toFiniteNumber(startBone.scale_y, 1)), t),
@@ -873,14 +1700,25 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const folder = toFiniteNumber(startObj.folder, -1);
 		const file = toFiniteNumber(startObj.file, -1);
 
+		const pivotX = toFiniteNumber(startObj.pivot_x, NaN);
+		let pivotY = toFiniteNumber(startObj.pivot_y, NaN);
+
+		// Spriter stores pivots in a coordinate system where pivot_y is inverted vs Construct.
+		// Match legacy plugin behaviour by converting pivot_y to Construct-style.
+		if (startObj && Object.prototype.hasOwnProperty.call(startObj, "pivot_y"))
+		{
+			pivotY = Number.isFinite(pivotY) ? 1 - pivotY : pivotY;
+		}
+
 		return {
 			folder,
 			file,
-			pivotX: toFiniteNumber(startObj.pivot_x, NaN),
-			pivotY: toFiniteNumber(startObj.pivot_y, NaN),
+			pivotX,
+			pivotY,
 			transform: {
 				x: lerp(toFiniteNumber(startObj.x, 0), toFiniteNumber(endObj.x, toFiniteNumber(startObj.x, 0)), t),
-				y: lerp(toFiniteNumber(startObj.y, 0), toFiniteNumber(endObj.y, toFiniteNumber(startObj.y, 0)), t),
+				// Spriter and Construct use opposite Y axis directions for timeline object offsets.
+				y: -lerp(toFiniteNumber(startObj.y, 0), toFiniteNumber(endObj.y, toFiniteNumber(startObj.y, 0)), t),
 				angle: degreesToRadians(angleDeg),
 				scaleX: lerp(toFiniteNumber(startObj.scale_x, 1), toFiniteNumber(endObj.scale_x, toFiniteNumber(startObj.scale_x, 1)), t),
 				scaleY: lerp(toFiniteNumber(startObj.scale_y, 1), toFiniteNumber(endObj.scale_y, toFiniteNumber(startObj.scale_y, 1)), t),
@@ -974,30 +1812,80 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._lastTickTimeSec = null;
 
 		this._fileLookup.clear();
-		const folders = Array.isArray(projectData.folder) ? projectData.folder : [];
-		for (const folder of folders)
+		this._atlasImagePathByIndex.clear();
+		const atlasEntries = Array.isArray(projectData && projectData.atlas) ? projectData.atlas : [];
+		for (let atlasIndex = 0; atlasIndex < atlasEntries.length; atlasIndex++)
 		{
-			const folderId = toFiniteNumber(folder && folder.id, NaN);
-			const files = folder && Array.isArray(folder.file) ? folder.file : [];
-			if (!Number.isFinite(folderId))
+			const atlasEntry = atlasEntries[atlasIndex];
+			const atlasName = atlasEntry && typeof atlasEntry.name === "string"
+				? atlasEntry.name
+				: atlasEntry && typeof atlasEntry.file === "string"
+					? atlasEntry.file
+					: atlasEntry && typeof atlasEntry.image === "string"
+						? atlasEntry.image
+						: "";
+			const atlasImagePath = toAtlasImagePath(atlasName);
+			if (atlasImagePath)
 			{
-				continue;
+				this._atlasImagePathByIndex.set(atlasIndex, atlasImagePath);
 			}
+		}
 
-			for (const file of files)
+		const folders = Array.isArray(projectData.folder) ? projectData.folder : [];
+		for (let folderIndex = 0; folderIndex < folders.length; folderIndex++)
+		{
+			const folder = folders[folderIndex];
+			const folderId = toFiniteNumber(folder && folder.id, folderIndex);
+			const folderAtlasIndex = toFiniteNumber(folder && folder.atlas, 0);
+
+			const filesSource = folder && Array.isArray(folder.file)
+				? folder.file
+				: folder && Array.isArray(folder.files)
+					? folder.files
+					: [];
+
+			for (let fileIndex = 0; fileIndex < filesSource.length; fileIndex++)
 			{
-				const fileId = toFiniteNumber(file && file.id, NaN);
-				if (!Number.isFinite(fileId))
+				const file = filesSource[fileIndex];
+				const fileId = toFiniteNumber(file && file.id, fileIndex);
+
+				const widthFallback = toFiniteNumber(file && file.aw, 0);
+				const heightFallback = toFiniteNumber(file && file.ah, 0);
+
+				const width = toFiniteNumber(file && (file.width ?? file.w), widthFallback);
+				const height = toFiniteNumber(file && (file.height ?? file.h), heightFallback);
+
+				const pivotX = toFiniteNumber(file && (file.pivotX ?? file.pivot_x), 0);
+				let pivotY = toFiniteNumber(file && (file.pivotY ?? file.pivot_y), 0);
+
+				if (file && Object.prototype.hasOwnProperty.call(file, "pivot_y") && !Object.prototype.hasOwnProperty.call(file, "pivotY"))
 				{
-					continue;
+					pivotY = 1 - pivotY;
 				}
 
+				const atlasIndex = toFiniteNumber(file && file.atlas, folderAtlasIndex);
+				const atlasW = toFiniteNumber(file && file.aw, 0);
+				const atlasH = toFiniteNumber(file && file.ah, 0);
+				const atlasX = toFiniteNumber(file && file.ax, 0);
+				const atlasY = toFiniteNumber(file && file.ay, 0);
+				const atlasXOff = toFiniteNumber(file && file.axoff, 0);
+				const atlasYOff = toFiniteNumber(file && file.ayoff, 0);
+				const atlasRotated = toBoolean(file && file.arot, false);
+
 				this._fileLookup.set(`${folderId}:${fileId}`, {
-					name: typeof file.name === "string" ? file.name : "",
-					width: toFiniteNumber(file.width, 0),
-					height: toFiniteNumber(file.height, 0),
-					pivotX: toFiniteNumber(file.pivot_x, 0),
-					pivotY: toFiniteNumber(file.pivot_y, 0)
+					name: file && typeof file.name === "string" ? file.name : "",
+					width,
+					height,
+					pivotX,
+					pivotY,
+					atlasIndex,
+					atlasW,
+					atlasH,
+					atlasX,
+					atlasY,
+					atlasXOff,
+					atlasYOff,
+					atlasRotated
 				});
 			}
 		}
@@ -1125,6 +2013,34 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (typeof this._trigger === "function" && cnds && typeof cnds.OnLoadFailed === "function")
 		{
 			this._trigger(cnds.OnLoadFailed);
+		}
+	}
+
+	_onRendererContextLost()
+	{
+		// If the renderer (e.g. WebGL) context is lost, any addon-created textures become invalid.
+		// Clear the shared cache so textures will be reloaded lazily on the next draw.
+		const sdkType = this.objectType;
+		if (sdkType && typeof sdkType._releaseAllTextures === "function")
+		{
+			sdkType._releaseAllTextures();
+		}
+
+		if (this._atlasTextureLoadState)
+		{
+			this._atlasTextureLoadState.clear();
+		}
+		if (this._atlasFrameCache)
+		{
+			this._atlasFrameCache.clear();
+		}
+		if (this._atlasDebug && this._atlasDebug.pendingTextureIndices)
+		{
+			this._atlasDebug.pendingTextureIndices.clear();
+		}
+		if (this._atlasDebug && this._atlasDebug.missingAtlasImageIndices)
+		{
+			this._atlasDebug.missingAtlasImageIndices.clear();
 		}
 	}
 	
