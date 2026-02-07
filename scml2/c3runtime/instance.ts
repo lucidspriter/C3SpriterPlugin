@@ -1685,17 +1685,7 @@ class SpriterInstance extends globalThis.ISDKWorldInstanceBase
 		const denom = endTime - startTime;
 		const linearT = denom > 0 ? clamp01((sampleTime - startTime) / denom) : 0;
 		const curvedT = evaluateCurveT(startKey, linearT);
-		const result = lerp(startTime, endTime, curvedT);
-
-		// DEBUG: Log mainline time adjustment; wrapped ones get ***** prefix
-		const _mlPrefix = nextIndex === 0 ? "***** " : "";
-		console.log(
-			`${_mlPrefix}[MAINLINE] keyIdx=${startIndex}/${mainKeys.length - 1} nextIdx=${nextIndex} isWrap=${nextIndex === 0}` +
-			` | rawTime=${timeMs.toFixed(1)} startTime=${startTime} endTime=${endTime} denom=${denom}` +
-			` | linearT=${linearT.toFixed(4)} curvedT=${curvedT.toFixed(4)} poseTimeMs=${result.toFixed(1)}`
-		);
-
-		return result;
+		return lerp(startTime, endTime, curvedT);
 	}
 
 	_findKeyIndexForTime(keys: any[], timeMs: number): number
@@ -1829,7 +1819,6 @@ class SpriterInstance extends globalThis.ISDKWorldInstanceBase
 			return null;
 		}
 
-		const tlName = timeline ? timeline.name : "?";
 		const startIndex = clamp(toFiniteNumber(keyIndex, 0), 0, keys.length - 1);
 		const startKey = keys[startIndex];
 		const nextIndex = (startIndex + 1) % keys.length;
@@ -1841,12 +1830,9 @@ class SpriterInstance extends globalThis.ISDKWorldInstanceBase
 
 		const lengthMs = this.animationLengthMs;
 		const startTime = toFiniteNumber(startKey.time, 0);
-		const rawNextKeyTime = nextKey ? nextKey.time : undefined;
 		let endTime = toFiniteNumber(nextKey && nextKey.time, 0);
-		const endTimeBeforeAdjust = endTime;
 		let sampleTime = timeMs;
 		const isLooping = this._isAnimationLooping(this.animation);
-		const isWrap = nextIndex === 0;
 
 		if (nextIndex === 0 && isLooping)
 		{
@@ -1880,16 +1866,6 @@ class SpriterInstance extends globalThis.ISDKWorldInstanceBase
 		const spun = spinAngleDegrees(startAngle, endAngle, spin);
 		const angleDeg = typeof spun === "number" ? spun : lerp(spun.start, spun.end, t);
 
-		// DEBUG: Log all timeline transform evaluations; wrapped ones get ***** prefix
-		const _bonePrefix = isWrap ? "***** " : "";
-		console.log(
-			`${_bonePrefix}[BONE ${tlName}] keyIdx=${startIndex}/${keys.length - 1} nextIdx=${nextIndex} isWrap=${isWrap} isLooping=${isLooping}` +
-			` | timeMs=${timeMs.toFixed(1)} startTime=${startTime} rawNextKeyTime=${rawNextKeyTime} endTimePre=${endTimeBeforeAdjust} endTimePost=${endTime}` +
-			` | sampleTime=${sampleTime.toFixed(1)} denom=${denom} linearT=${linearT.toFixed(4)} t=${t.toFixed(4)}` +
-			` | spin=${spin} startAngle=${startAngle} endAngle=${endAngle} angleDeg=${angleDeg.toFixed(2)}` +
-			` | startX=${toFiniteNumber(startBone.x, 0)} endX=${toFiniteNumber(endBone.x, 0)} x=${lerp(toFiniteNumber(startBone.x, 0), toFiniteNumber(endBone.x, toFiniteNumber(startBone.x, 0)), t).toFixed(2)}`
-		);
-
 		return {
 			x: lerp(toFiniteNumber(startBone.x, 0), toFiniteNumber(endBone.x, toFiniteNumber(startBone.x, 0)), t),
 			// Spriter and Construct use opposite Y axis directions for timeline bone offsets.
@@ -1909,7 +1885,6 @@ class SpriterInstance extends globalThis.ISDKWorldInstanceBase
 			return null;
 		}
 
-		const tlName = timeline ? timeline.name : "?";
 		const startIndex = clamp(toFiniteNumber(keyIndex, 0), 0, keys.length - 1);
 		const startKey = keys[startIndex];
 		const nextIndex = (startIndex + 1) % keys.length;
@@ -1921,12 +1896,9 @@ class SpriterInstance extends globalThis.ISDKWorldInstanceBase
 
 		const lengthMs = this.animationLengthMs;
 		const startTime = toFiniteNumber(startKey.time, 0);
-		const rawNextKeyTime = nextKey ? nextKey.time : undefined;
 		let endTime = toFiniteNumber(nextKey && nextKey.time, 0);
-		const endTimeBeforeAdjust = endTime;
 		let sampleTime = timeMs;
 		const isLooping = this._isAnimationLooping(this.animation);
-		const isWrap = nextIndex === 0;
 
 		if (nextIndex === 0 && isLooping)
 		{
@@ -1949,24 +1921,6 @@ class SpriterInstance extends globalThis.ISDKWorldInstanceBase
 		const spin = startKey.spin;
 		const startObj = startKey.object || null;
 		const endObj = nextKey.object || startObj;
-
-		// DEBUG: Log all timeline object evaluations; wrapped ones get ***** prefix
-		{
-			const sAngle = startObj ? toFiniteNumber(startObj.angle, 0) : "N/A";
-			const eAngle = endObj ? toFiniteNumber(endObj.angle, 0) : "N/A";
-			const sX = startObj ? toFiniteNumber(startObj.x, 0) : "N/A";
-			const eX = endObj ? toFiniteNumber(endObj.x, 0) : "N/A";
-			const sY = startObj ? toFiniteNumber(startObj.y, 0) : "N/A";
-			const eY = endObj ? toFiniteNumber(endObj.y, 0) : "N/A";
-			const _objPrefix = isWrap ? "***** " : "";
-			console.log(
-				`${_objPrefix}[OBJ ${tlName}] keyIdx=${startIndex}/${keys.length - 1} nextIdx=${nextIndex} isWrap=${isWrap} isLooping=${isLooping}` +
-				` | timeMs=${timeMs.toFixed(1)} startTime=${startTime} rawNextKeyTime=${rawNextKeyTime} endTimePre=${endTimeBeforeAdjust} endTimePost=${endTime}` +
-				` | sampleTime=${sampleTime.toFixed(1)} denom=${denom} linearT=${linearT.toFixed(4)} t=${t.toFixed(4)}` +
-				` | spin=${spin} startAngle=${sAngle} endAngle=${eAngle}` +
-				` | startX=${sX} endX=${eX} startY=${sY} endY=${eY}`
-			);
-		}
 
 		if (!startObj)
 		{
