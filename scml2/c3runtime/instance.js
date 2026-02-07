@@ -94,6 +94,137 @@ function lerp(a, b, t)
 	return a + (b - a) * t;
 }
 
+function qerp(a, b, c, t)
+{
+	return lerp(lerp(a, b, t), lerp(b, c, t), t);
+}
+
+function cerp(a, b, c, d, t)
+{
+	return lerp(qerp(a, b, c, t), qerp(b, c, d, t), t);
+}
+
+function quartic(a, b, c, d, e, t)
+{
+	return lerp(cerp(a, b, c, d, t), cerp(b, c, d, e, t), t);
+}
+
+function quintic(a, b, c, d, e, f, t)
+{
+	return lerp(quartic(a, b, c, d, e, t), quartic(b, c, d, e, f, t), t);
+}
+
+function sampleCurve(a, b, c, t)
+{
+	return ((a * t + b) * t + c) * t;
+}
+
+function sampleCurveDerivativeX(a, b, c, t)
+{
+	return (3 * a * t + 2 * b) * t + c;
+}
+
+function solveCurveX(a, b, c, x, epsilon)
+{
+	let t2 = x;
+
+	for (let i = 0; i < 8; i++)
+	{
+		const x2 = sampleCurve(a, b, c, t2) - x;
+		if (Math.abs(x2) < epsilon)
+		{
+			return t2;
+		}
+
+		const d2 = sampleCurveDerivativeX(a, b, c, t2);
+		if (Math.abs(d2) < 1e-6)
+		{
+			break;
+		}
+
+		t2 -= x2 / d2;
+	}
+
+	let t0 = 0;
+	let t1 = 1;
+	t2 = x;
+
+	while (t0 < t1)
+	{
+		const x2 = sampleCurve(a, b, c, t2);
+		if (Math.abs(x2 - x) < epsilon)
+		{
+			return t2;
+		}
+
+		if (x > x2)
+		{
+			t0 = t2;
+		}
+		else
+		{
+			t1 = t2;
+		}
+
+		t2 = (t1 - t0) * 0.5 + t0;
+	}
+
+	return t2;
+}
+
+function cubicBezierAtTime(t, p1x, p1y, p2x, p2y, duration)
+{
+	const cx = 3 * p1x;
+	const bx = 3 * (p2x - p1x) - cx;
+	const ax = 1 - cx - bx;
+
+	const cy = 3 * p1y;
+	const by = 3 * (p2y - p1y) - cy;
+	const ay = 1 - cy - by;
+
+	const epsilon = 1 / (200 * duration);
+	const solved = solveCurveX(ax, bx, cx, t, epsilon);
+	return sampleCurve(ay, by, cy, solved);
+}
+
+function evaluateCurveT(key, t)
+{
+	const linearT = clamp01(toFiniteNumber(t, 0));
+	const curveTypeRaw = key && typeof key === "object"
+		? (typeof key.curve_type === "string"
+			? key.curve_type
+			: (typeof key.curveType === "string" ? key.curveType : "linear"))
+		: "linear";
+	const curveType = curveTypeRaw.trim().toLowerCase();
+
+	switch (curveType)
+	{
+		case "linear":
+			return linearT;
+		case "quadratic":
+			return qerp(0, toFiniteNumber(key.c1, 0), 1, linearT);
+		case "cubic":
+			return cerp(0, toFiniteNumber(key.c1, 0), toFiniteNumber(key.c2, 0), 1, linearT);
+		case "quartic":
+			return quartic(0, toFiniteNumber(key.c1, 0), toFiniteNumber(key.c2, 0), toFiniteNumber(key.c3, 0), 1, linearT);
+		case "quintic":
+			return quintic(0, toFiniteNumber(key.c1, 0), toFiniteNumber(key.c2, 0), toFiniteNumber(key.c3, 0), toFiniteNumber(key.c4, 0), 1, linearT);
+		case "bezier":
+			return cubicBezierAtTime(
+				linearT,
+				toFiniteNumber(key.c1, 0),
+				toFiniteNumber(key.c2, 0),
+				toFiniteNumber(key.c3, 1),
+				toFiniteNumber(key.c4, 1),
+				1
+			);
+		case "instant":
+			return linearT >= 1 ? 1 : 0;
+		default:
+			return linearT;
+	}
+}
+
 function toFiniteNumber(value, defaultValue)
 {
 	const numberValue = Number(value);
@@ -1338,7 +1469,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const isLooping = this._isAnimationLooping(this.animation);
 		if (isLooping)
 		{
-			this.localTimeMs %= lengthMs;
+			while (this.localTimeMs < 0)
+			{
+				this.localTimeMs += lengthMs;
+			}
+
+			// Preserve the legacy edge case where an exact endpoint time can be sampled.
+			if (this.localTimeMs !== lengthMs)
+			{
+				this.localTimeMs %= lengthMs;
+			}
+
 			if (this.localTimeMs < 0)
 			{
 				this.localTimeMs += lengthMs;
@@ -1411,6 +1552,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
+		const poseTimeMs = this._getMainlineAdjustedTime(keys, mainKeyIndex, timeMs);
+
 		const boneRefs = Array.isArray(mainKey.bone_ref) ? mainKey.bone_ref : [];
 		const objectRefs = Array.isArray(mainKey.object_ref) ? mainKey.object_ref : [];
 
@@ -1432,7 +1575,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const boneWorldById = new Map();
 		for (const boneRef of boneRefs)
 		{
-			this._resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById);
+			this._resolveBoneTransform(boneRef, poseTimeMs, boneRefsById, boneWorldById);
 		}
 
 		const poseBones = this._poseBoneStates;
@@ -1465,7 +1608,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		for (const objectRef of objectRefs)
 		{
-			const state = this._evaluateObjectRef(objectRef, timeMs, boneRefsById, boneWorldById);
+			const state = this._evaluateObjectRef(objectRef, poseTimeMs, boneRefsById, boneWorldById);
 			if (state)
 			{
 				poseObjects.push(state);
@@ -1473,6 +1616,52 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		poseObjects.sort((a, b) => a.zIndex - b.zIndex);
+	}
+
+	_getMainlineAdjustedTime(mainKeys, mainKeyIndex, timeMs)
+	{
+		if (!Array.isArray(mainKeys) || !mainKeys.length)
+		{
+			return timeMs;
+		}
+
+		const animationLengthMs = this.animationLengthMs;
+		const startIndex = clamp(toFiniteNumber(mainKeyIndex, 0), 0, mainKeys.length - 1);
+		const startKey = mainKeys[startIndex];
+		if (!startKey)
+		{
+			return timeMs;
+		}
+
+		const nextIndex = (startIndex + 1) % mainKeys.length;
+		const nextKey = mainKeys[nextIndex] || startKey;
+		const startTime = toFiniteNumber(startKey.time, 0);
+		let endTime = toFiniteNumber(nextKey.time, 0);
+		let sampleTime = timeMs;
+
+		if (nextIndex === 0)
+		{
+			endTime += animationLengthMs;
+			if (sampleTime < startTime)
+			{
+				sampleTime += animationLengthMs;
+			}
+		}
+
+		const denom = endTime - startTime;
+		const linearT = denom > 0 ? clamp01((sampleTime - startTime) / denom) : 0;
+		const curvedT = evaluateCurveT(startKey, linearT);
+		const result = lerp(startTime, endTime, curvedT);
+
+		// DEBUG: Log mainline time adjustment; wrapped ones get ***** prefix
+		const _mlPrefix = nextIndex === 0 ? "***** " : "";
+		console.log(
+			`${_mlPrefix}[MAINLINE] keyIdx=${startIndex}/${mainKeys.length - 1} nextIdx=${nextIndex} isWrap=${nextIndex === 0}` +
+			` | rawTime=${timeMs.toFixed(1)} startTime=${startTime} endTime=${endTime} denom=${denom}` +
+			` | linearT=${linearT.toFixed(4)} curvedT=${curvedT.toFixed(4)} poseTimeMs=${result.toFixed(1)}`
+		);
+
+		return result;
 	}
 
 	_findKeyIndexForTime(keys, timeMs)
@@ -1606,17 +1795,26 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return null;
 		}
 
+		const tlName = timeline ? timeline.name : "?";
 		const startIndex = clamp(toFiniteNumber(keyIndex, 0), 0, keys.length - 1);
 		const startKey = keys[startIndex];
 		const nextIndex = (startIndex + 1) % keys.length;
-		const nextKey = keys[nextIndex];
+		let nextKey = keys[nextIndex];
+		if (!nextKey)
+		{
+			nextKey = startKey;
+		}
 
 		const lengthMs = this.animationLengthMs;
 		const startTime = toFiniteNumber(startKey.time, 0);
-		let endTime = toFiniteNumber(nextKey.time, startTime);
+		const rawNextKeyTime = nextKey ? nextKey.time : undefined;
+		let endTime = toFiniteNumber(nextKey && nextKey.time, 0);
+		const endTimeBeforeAdjust = endTime;
 		let sampleTime = timeMs;
+		const isLooping = this._isAnimationLooping(this.animation);
+		const isWrap = nextIndex === 0;
 
-		if (nextIndex === 0)
+		if (nextIndex === 0 && isLooping)
 		{
 			endTime += lengthMs;
 			if (sampleTime < startTime)
@@ -1624,9 +1822,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				sampleTime += lengthMs;
 			}
 		}
+		else if (nextIndex === 0 && !isLooping)
+		{
+			nextKey = startKey;
+			endTime = startTime;
+		}
 
 		const denom = endTime - startTime;
-		const t = denom > 0 ? clamp01((sampleTime - startTime) / denom) : 0;
+		const linearT = denom > 0 ? clamp01((sampleTime - startTime) / denom) : 0;
+		const t = evaluateCurveT(startKey, linearT);
 
 		const spin = startKey.spin;
 		const startBone = startKey.bone || startKey.object || null;
@@ -1641,6 +1845,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const endAngle = toFiniteNumber(endBone.angle, startAngle);
 		const spun = spinAngleDegrees(startAngle, endAngle, spin);
 		const angleDeg = typeof spun === "number" ? spun : lerp(spun.start, spun.end, t);
+
+		// DEBUG: Log all timeline transform evaluations; wrapped ones get ***** prefix
+		const _bonePrefix = isWrap ? "***** " : "";
+		console.log(
+			`${_bonePrefix}[BONE ${tlName}] keyIdx=${startIndex}/${keys.length - 1} nextIdx=${nextIndex} isWrap=${isWrap} isLooping=${isLooping}` +
+			` | timeMs=${timeMs.toFixed(1)} startTime=${startTime} rawNextKeyTime=${rawNextKeyTime} endTimePre=${endTimeBeforeAdjust} endTimePost=${endTime}` +
+			` | sampleTime=${sampleTime.toFixed(1)} denom=${denom} linearT=${linearT.toFixed(4)} t=${t.toFixed(4)}` +
+			` | spin=${spin} startAngle=${startAngle} endAngle=${endAngle} angleDeg=${angleDeg.toFixed(2)}` +
+			` | startX=${toFiniteNumber(startBone.x, 0)} endX=${toFiniteNumber(endBone.x, 0)} x=${lerp(toFiniteNumber(startBone.x, 0), toFiniteNumber(endBone.x, toFiniteNumber(startBone.x, 0)), t).toFixed(2)}`
+		);
 
 		return {
 			x: lerp(toFiniteNumber(startBone.x, 0), toFiniteNumber(endBone.x, toFiniteNumber(startBone.x, 0)), t),
@@ -1661,17 +1875,26 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return null;
 		}
 
+		const tlName = timeline ? timeline.name : "?";
 		const startIndex = clamp(toFiniteNumber(keyIndex, 0), 0, keys.length - 1);
 		const startKey = keys[startIndex];
 		const nextIndex = (startIndex + 1) % keys.length;
-		const nextKey = keys[nextIndex];
+		let nextKey = keys[nextIndex];
+		if (!nextKey)
+		{
+			nextKey = startKey;
+		}
 
 		const lengthMs = this.animationLengthMs;
 		const startTime = toFiniteNumber(startKey.time, 0);
-		let endTime = toFiniteNumber(nextKey.time, startTime);
+		const rawNextKeyTime = nextKey ? nextKey.time : undefined;
+		let endTime = toFiniteNumber(nextKey && nextKey.time, 0);
+		const endTimeBeforeAdjust = endTime;
 		let sampleTime = timeMs;
+		const isLooping = this._isAnimationLooping(this.animation);
+		const isWrap = nextIndex === 0;
 
-		if (nextIndex === 0)
+		if (nextIndex === 0 && isLooping)
 		{
 			endTime += lengthMs;
 			if (sampleTime < startTime)
@@ -1679,13 +1902,37 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				sampleTime += lengthMs;
 			}
 		}
+		else if (nextIndex === 0 && !isLooping)
+		{
+			nextKey = startKey;
+			endTime = startTime;
+		}
 
 		const denom = endTime - startTime;
-		const t = denom > 0 ? clamp01((sampleTime - startTime) / denom) : 0;
+		const linearT = denom > 0 ? clamp01((sampleTime - startTime) / denom) : 0;
+		const t = evaluateCurveT(startKey, linearT);
 
 		const spin = startKey.spin;
 		const startObj = startKey.object || null;
 		const endObj = nextKey.object || startObj;
+
+		// DEBUG: Log all timeline object evaluations; wrapped ones get ***** prefix
+		{
+			const sAngle = startObj ? toFiniteNumber(startObj.angle, 0) : "N/A";
+			const eAngle = endObj ? toFiniteNumber(endObj.angle, 0) : "N/A";
+			const sX = startObj ? toFiniteNumber(startObj.x, 0) : "N/A";
+			const eX = endObj ? toFiniteNumber(endObj.x, 0) : "N/A";
+			const sY = startObj ? toFiniteNumber(startObj.y, 0) : "N/A";
+			const eY = endObj ? toFiniteNumber(endObj.y, 0) : "N/A";
+			const _objPrefix = isWrap ? "***** " : "";
+			console.log(
+				`${_objPrefix}[OBJ ${tlName}] keyIdx=${startIndex}/${keys.length - 1} nextIdx=${nextIndex} isWrap=${isWrap} isLooping=${isLooping}` +
+				` | timeMs=${timeMs.toFixed(1)} startTime=${startTime} rawNextKeyTime=${rawNextKeyTime} endTimePre=${endTimeBeforeAdjust} endTimePost=${endTime}` +
+				` | sampleTime=${sampleTime.toFixed(1)} denom=${denom} linearT=${linearT.toFixed(4)} t=${t.toFixed(4)}` +
+				` | spin=${spin} startAngle=${sAngle} endAngle=${eAngle}` +
+				` | startX=${sX} endX=${eX} startY=${sY} endY=${eY}`
+			);
+		}
 
 		if (!startObj)
 		{
