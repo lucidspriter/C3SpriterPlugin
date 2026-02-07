@@ -1,4 +1,5 @@
 const C3 = globalThis.C3;
+console.log("[scml runtime: v4]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -467,6 +468,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			pendingTextureIndices: new Set()
 		};
 
+		// Non-self-draw state
+		this._objectArray = [];
+		this._c2ObjectMap = new Map();
+		this._objectsToSet = [];
+		this._timelineNameById = new Map();
+		this._nonSelfDrawDiagDone = false;
+		this.setLayersForSprites = true;
+		this.setVisibilityForObjects = true;
+		this.setCollisionsForObjects = true;
+
 		// Enable ticking (Addon SDK v2): _tick() runs before events; _tick2() runs after events.
 		// https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkinstancebase
 		if (typeof this._setTicking === "function")
@@ -502,11 +513,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		this._evaluatePose();
+
+		if (!this.drawSelf)
+		{
+			this._applyPoseToInstances();
+		}
 	}
 
 	_tick2()
 	{
-		// TODO (Phase 3): late tick tasks (after events), if needed.
+		this._applyObjectsToSet();
 	}
 	
 	_draw(renderer)
@@ -1766,6 +1782,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			width: fileInfo ? fileInfo.width : 0,
 			height: fileInfo ? fileInfo.height : 0,
 			name: fileInfo ? fileInfo.name : "",
+			timelineName: this._timelineNameById.get(timelineId) || "",
 			atlasIndex: fileInfo ? toFiniteNumber(fileInfo.atlasIndex, 0) : 0,
 			atlasW: fileInfo ? toFiniteNumber(fileInfo.atlasW, 0) : 0,
 			atlasH: fileInfo ? toFiniteNumber(fileInfo.atlasH, 0) : 0,
@@ -2012,6 +2029,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.playing = true;
 		this._lastTickTimeSec = null;
 
+		this._buildObjectArray();
+
 		this._fileLookup.clear();
 		this._atlasImagePathByIndex.clear();
 		const atlasEntries = Array.isArray(projectData && projectData.atlas) ? projectData.atlas : [];
@@ -2092,12 +2111,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		this._timelineById.clear();
+		this._timelineNameById.clear();
+		const entityNamePrefix = entity.name ? entity.name + "_" : "";
 		const timelines = Array.isArray(animation.timeline) ? animation.timeline : [];
 		for (let i = 0; i < timelines.length; i++)
 		{
 			const timeline = timelines[i];
 			const id = toFiniteNumber(timeline && timeline.id, i);
 			this._timelineById.set(id, timeline);
+			let tlName = timeline && timeline.name ? timeline.name : "";
+			if (entityNamePrefix && tlName.startsWith(entityNamePrefix))
+			{
+				tlName = tlName.slice(entityNamePrefix.length);
+			}
+			this._timelineNameById.set(id, tlName);
 		}
 
 		// Ensure we have an evaluated pose ready for the first draw.
@@ -2245,6 +2272,403 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 	}
 	
+	// ───── Non-self-draw infrastructure ─────
+
+	_buildObjectArray()
+	{
+		this._objectArray = [];
+		// Don't clear _c2ObjectMap here — associations persist across animation changes
+
+		const entity = this.entity;
+		if (!entity) return;
+
+		const entityNamePrefix = entity.name ? entity.name + "_" : "";
+		const seen = new Set();
+		const animations = Array.isArray(entity.animation) ? entity.animation : [];
+		for (const anim of animations)
+		{
+			const timelines = Array.isArray(anim.timeline) ? anim.timeline : [];
+			for (const tl of timelines)
+			{
+				let name = tl.name || "";
+				if (entityNamePrefix && name.startsWith(entityNamePrefix))
+				{
+					name = name.slice(entityNamePrefix.length);
+				}
+				const objType = tl.object_type || "sprite";
+				if (name && !seen.has(name) && objType !== "bone")
+				{
+					seen.add(name);
+					this._objectArray.push({
+						name,
+						entityName: entity.name || "",
+						spriterType: objType
+					});
+				}
+			}
+		}
+	}
+
+	_getWorldInfoOf(inst)
+	{
+		// SDK v1: GetWorldInfo() returns a WorldInfo object
+		if (typeof inst.GetWorldInfo === "function")
+			return inst.GetWorldInfo();
+		if (typeof inst.getWorldInfo === "function")
+			return inst.getWorldInfo();
+		if (inst._inst && typeof inst._inst.GetWorldInfo === "function")
+			return inst._inst.GetWorldInfo();
+		if (inst._inst && typeof inst._inst.getWorldInfo === "function")
+			return inst._inst.getWorldInfo();
+
+		// SDK v2: no WorldInfo object — position/size/angle are direct properties
+		// on the instance (this.x, this.y, this.angle, etc.).
+		// Return an adapter that maps WorldInfo method calls to direct property access.
+		if (typeof inst.x === "number" && typeof inst.y === "number")
+		{
+			return {
+				GetX() { return inst.x; },
+				GetY() { return inst.y; },
+				SetX(v) { inst.x = v; },
+				SetY(v) { inst.y = v; },
+				GetAngle() { return inst.angle || 0; },
+				SetAngle(v) { inst.angle = v; },
+				GetWidth() { return inst.width || 0; },
+				SetWidth(v) { inst.width = v; },
+				GetHeight() { return inst.height || 0; },
+				SetHeight(v) { inst.height = v; },
+				IsVisible() { return inst.isVisible !== false; },
+				SetVisible(v) { inst.isVisible = v; },
+				GetOpacity() { return inst.opacity != null ? inst.opacity : 1; },
+				SetOpacity(v) { inst.opacity = v; },
+				SetOriginX(v) { /* v2: origin managed differently */ },
+				SetOriginY(v) { /* v2: origin managed differently */ },
+				SetBboxChanged() { /* v2: automatic when properties change */ },
+				SetCollisionEnabled(v) { /* v2: not applicable via WorldInfo */ },
+				ZOrderMoveAdjacentToInstance(other, isAfter) {
+					if (typeof inst.moveAdjacentToInstance === "function")
+						inst.moveAdjacentToInstance(other, isAfter);
+				}
+			};
+		}
+
+		console.warn("[Spriter] _getWorldInfoOf: could not resolve worldInfo for", inst);
+		return null;
+	}
+
+	_getIID()
+	{
+		// SDK v2 (ISDKWorldInstanceBase) may expose GetIID() directly,
+		// or the internal _inst property may have it.
+		if (typeof this.GetIID === "function")
+			return this.GetIID();
+		if (this._inst && typeof this._inst.GetIID === "function")
+			return this._inst.GetIID();
+		// Fallback: match WorldInfo against our object type's instances
+		try
+		{
+			const wi = this._getWorldInfoOf(this);
+			const allInsts = this._getInstancesOf(this.objectType);
+			for (let i = 0; i < allInsts.length; i++)
+			{
+				if (this._getWorldInfoOf(allInsts[i]) === wi)
+					return i;
+			}
+		}
+		catch (e) { /* ignore */ }
+		return 0;
+	}
+
+	_getInstancesOf(objType)
+	{
+		// SDK v1: GetInstances() returns an array.
+		if (typeof objType.GetInstances === "function")
+			return Array.from(objType.GetInstances());
+		// SDK v2: getAllInstances() returns an array.
+		if (typeof objType.getAllInstances === "function")
+			return Array.from(objType.getAllInstances());
+		// SDK v2: instances() may return an iterator.
+		if (typeof objType.instances === "function")
+			return Array.from(objType.instances());
+		if (Array.isArray(objType._instances))
+			return objType._instances;
+		return [];
+	}
+
+	_getObjectTypeName(objType)
+	{
+		if (typeof objType.GetName === "function")
+			return objType.GetName();
+		if (typeof objType.name === "string")
+			return objType.name;
+		return "?";
+	}
+
+	_associateTypeWithName(objectType, spriterName)
+	{
+		const myIID = this._getIID();
+		const instances = this._getInstancesOf(objectType);
+		const pairedInst = instances[myIID] || null;
+
+		const apis = [
+			typeof objectType.GetInstances === "function" ? "GetInstances" : null,
+			typeof objectType.getAllInstances === "function" ? "getAllInstances" : null,
+			typeof objectType.instances === "function" ? "instances" : null,
+			Array.isArray(objectType._instances) ? "_instances" : null
+		].filter(Boolean).join(",");
+		console.log(`[Spriter] _associateTypeWithName: spriterName='${spriterName}', typeName='${this._getObjectTypeName(objectType)}', myIID=${myIID}, instanceCount=${instances.length}, pairedInst=${pairedInst ? "found" : "NULL"}, apis=[${apis}]`);
+
+		this._c2ObjectMap.set(spriterName, {
+			type: objectType,
+			inst: pairedInst,
+			spriterType: "sprite"
+		});
+	}
+
+	_resolveC2Instances(c2Object)
+	{
+		const sol = c2Object.GetSolStack()._current;
+		let instances = sol._instances;
+		if (instances.length === 0 && sol._selectAll === true)
+		{
+			instances = c2Object._instances;
+		}
+		return Array.from(instances);
+	}
+
+	_setC2ObjectToSpriterObject(c2Object, setType, spriterName)
+	{
+		const c2Instances = this._resolveC2Instances(c2Object);
+		this._objectsToSet.push({ c2Instances, objectName: spriterName, setType, pin: false });
+	}
+
+	_pinC2ObjectToSpriterObject(c2Object, setType, spriterName)
+	{
+		const c2Instances = this._resolveC2Instances(c2Object);
+		this._objectsToSet.push({ c2Instances, objectName: spriterName, setType, pin: true });
+	}
+
+	_unpinC2ObjectFromSpriterObject(c2Object, spriterName)
+	{
+		const allObjs = spriterName === "";
+		for (let i = this._objectsToSet.length - 1; i >= 0; i--)
+		{
+			const instr = this._objectsToSet[i];
+			if (instr.c2Instances.length > 0 &&
+				instr.c2Instances[0].GetObjectClass() === c2Object &&
+				(allObjs || instr.objectName === spriterName))
+			{
+				this._objectsToSet.splice(i, 1);
+			}
+		}
+	}
+
+	_unpinAllFromSpriterObject(spriterName)
+	{
+		if (spriterName === "")
+		{
+			this._objectsToSet.length = 0;
+		}
+		else
+		{
+			for (let i = this._objectsToSet.length - 1; i >= 0; i--)
+			{
+				if (this._objectsToSet[i].objectName === spriterName)
+				{
+					this._objectsToSet.splice(i, 1);
+				}
+			}
+		}
+	}
+
+	_applyPoseToInstances()
+	{
+		if (this.drawSelf) return;
+
+		if (!this._nonSelfDrawDiagDone)
+		{
+			this._nonSelfDrawDiagDone = true;
+			const mapKeys = Array.from(this._c2ObjectMap.keys());
+			const poseNames = this._poseObjectStates.map(s => s.timelineName);
+			const mapEntries = Array.from(this._c2ObjectMap.entries()).map(([k, v]) =>
+				`${k} => inst=${v.inst ? "OK" : "NULL"}, type=${this._getObjectTypeName(v.type)}`
+			);
+			console.log(`[Spriter] NON-SELF-DRAW DIAG: drawSelf=${this.drawSelf}, mapSize=${this._c2ObjectMap.size}, poseCount=${this._poseObjectStates.length}`);
+			console.log(`[Spriter]   map keys: [${mapKeys.join(", ")}]`);
+			console.log(`[Spriter]   map entries: [${mapEntries.join(" | ")}]`);
+			console.log(`[Spriter]   pose timelineNames: [${poseNames.join(", ")}]`);
+
+			for (const name of poseNames)
+			{
+				if (!this._c2ObjectMap.has(name))
+				{
+					console.warn(`[Spriter]   MISMATCH: pose timelineName '${name}' not found in c2ObjectMap`);
+				}
+			}
+		}
+
+		if (!this._c2ObjectMap.size) return;
+
+		const poseObjects = this._poseObjectStates;
+		if (!poseObjects.length) return;
+
+		const worldInfo = this._getWorldInfoOf(this);
+		if (!worldInfo)
+		{
+			if (!this._diagWiWarnDone) { this._diagWiWarnDone = true; console.warn("[Spriter] _applyPoseToInstances: worldInfo for self is NULL, bailing"); }
+			return;
+		}
+
+		const myX = worldInfo.GetX();
+		const myY = worldInfo.GetY();
+		const myAngle = worldInfo.GetAngle();
+		const myVisible = worldInfo.IsVisible();
+
+		// Per-tick diagnostic (every 60 frames)
+		this._diagTickCount = (this._diagTickCount || 0) + 1;
+		const doTickLog = (this._diagTickCount % 60 === 1);
+
+		if (doTickLog)
+		{
+			const s0 = poseObjects[0];
+			const sx = s0 && s0.x != null ? s0.x.toFixed(1) : "?";
+			const sy = s0 && s0.y != null ? s0.y.toFixed(1) : "?";
+			const sa = s0 && s0.angle != null ? s0.angle.toFixed(3) : "?";
+			const t = this.localTimeMs != null ? this.localTimeMs.toFixed(1) : "?";
+			console.log(`[Spriter] tick#${this._diagTickCount}: myPos=(${myX},${myY}), poseCount=${poseObjects.length}, sample[0]: name=${s0 ? s0.timelineName : "?"}, x=${sx}, y=${sy}, angle=${sa}, time=${t}ms`);
+		}
+
+		let previousZInst = null; // null = skip first z-order (can't pass SDK inst to moveAdjacentToInstance)
+		let appliedCount = 0;
+		let skippedNoEntry = 0;
+		let skippedNoWi = 0;
+
+		for (const state of poseObjects)
+		{
+			const c2Entry = this._c2ObjectMap.get(state.timelineName);
+			if (!c2Entry || !c2Entry.inst) { skippedNoEntry++; continue; }
+
+			const inst = c2Entry.inst;
+			const wi = this._getWorldInfoOf(inst);
+			if (!wi) { skippedNoWi++; continue; }
+
+			appliedCount++;
+
+			// Visibility
+			if (this.setVisibilityForObjects)
+				wi.SetVisible(myVisible);
+
+			// Collision
+			if (this.setCollisionsForObjects)
+				wi.SetCollisionEnabled(true);
+
+			// Angle (state.angle is already in radians from degreesToRadians)
+			wi.SetAngle(state.angle);
+
+			// Opacity
+			wi.SetOpacity(state.alpha);
+
+			// Position: state.x/y are world-space offsets from the Spriter origin
+			const cosA = Math.cos(myAngle);
+			const sinA = Math.sin(myAngle);
+			const finalX = myX + state.x * cosA - state.y * sinA;
+			const finalY = myY + state.x * sinA + state.y * cosA;
+
+			wi.SetOriginX(0);
+			wi.SetOriginY(0);
+			wi.SetX(finalX);
+			wi.SetY(finalY);
+
+			if (doTickLog && appliedCount === 1)
+			{
+				console.log(`[Spriter]   applied[0]: ${state.timelineName} -> finalPos=(${finalX.toFixed(1)},${finalY.toFixed(1)}), wiMethods=[SetX=${typeof wi.SetX},SetAngle=${typeof wi.SetAngle},SetBboxChanged=${typeof wi.SetBboxChanged}]`);
+			}
+
+			// Size (apply scale to original image dimensions)
+			const trueW = state.width || 1;
+			const trueH = state.height || 1;
+			const newW = trueW * state.scaleX;
+			const newH = trueH * state.scaleY;
+			wi.SetWidth(newW);
+			wi.SetHeight(newH);
+
+			// Pivot offset
+			this._applyPivotToInst(wi, state.pivotX, state.pivotY, newW, newH);
+
+			// Z-ordering
+			if (this.setLayersForSprites && previousZInst)
+			{
+				wi.ZOrderMoveAdjacentToInstance(previousZInst, true);
+			}
+			previousZInst = inst;
+
+			wi.SetBboxChanged();
+		}
+
+		if (doTickLog)
+		{
+			console.log(`[Spriter]   tick#${this._diagTickCount} summary: applied=${appliedCount}, skippedNoEntry=${skippedNoEntry}, skippedNoWi=${skippedNoWi}`);
+		}
+	}
+
+	_applyPivotToInst(wi, pivotX, pivotY, objWidth, objHeight)
+	{
+		const x = -pivotX * objWidth;
+		const y = -pivotY * objHeight;
+		const angle = wi.GetAngle();
+		let s = 0, c = 1;
+		if (angle !== 0)
+		{
+			s = Math.sin(angle);
+			c = Math.cos(angle);
+		}
+		wi.SetX(wi.GetX() + x * c - y * s);
+		wi.SetY(wi.GetY() + x * s + y * c);
+	}
+
+	_applyObjectsToSet()
+	{
+		for (let i = this._objectsToSet.length - 1; i >= 0; i--)
+		{
+			const instr = this._objectsToSet[i];
+			const state = this._findPoseStateByTimelineName(instr.objectName);
+			if (!state) continue;
+
+			for (const c2Inst of instr.c2Instances)
+			{
+				if (!c2Inst) continue;
+				const wi = this._getWorldInfoOf(c2Inst);
+				if (!wi) continue;
+
+				// setType: 0=angle+position, 1=angle, 2=position
+				if (instr.setType === 0 || instr.setType === 1)
+					wi.SetAngle(state.angle);
+				if (instr.setType === 0 || instr.setType === 2)
+				{
+					wi.SetX(state.x);
+					wi.SetY(state.y);
+				}
+				wi.SetBboxChanged();
+			}
+
+			if (!instr.pin)
+			{
+				this._objectsToSet.splice(i, 1);
+			}
+		}
+	}
+
+	_findPoseStateByTimelineName(name)
+	{
+		for (const state of this._poseObjectStates)
+		{
+			if (state.timelineName === name) return state;
+		}
+		return null;
+	}
+
+	// ───── End non-self-draw infrastructure ─────
+
 	_saveToJson()
 	{
 		return {

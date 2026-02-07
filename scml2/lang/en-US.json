@@ -56,7 +56,9 @@
 					}
 				},
 				"aceCategories": {
-					"custom": "Custom"
+					"initialisation": "Initialisation",
+					"custom": "Custom",
+					"attach_c2_object": "Attach C3 Object"
 				},
 				"conditions": {
 					"on-ready": {
@@ -75,7 +77,97 @@
 						"description": "Check if the Spriter project file has finished loading successfully."
 					}
 				},
-				"actions": {},
+				"actions": {
+					"associate-type-with-name": {
+						"list-name": "Associate type with name",
+						"display-text": "Associate {0} with Spriter object [i]{1}[/i]",
+						"description": "Associate a Construct object type with a named Spriter object (use in On Ready).",
+						"params": {
+							"object-type": {
+								"name": "Object type",
+								"desc": "The Construct object type to associate."
+							},
+							"spriter-name": {
+								"name": "Spriter object name",
+								"desc": "The name of the Spriter object (as named in the Spriter project)."
+							}
+						}
+					},
+					"pin-c3-object-to-spriter-object": {
+						"list-name": "Pin C3 object to Spriter object",
+						"display-text": "Pin {0} to Spriter object [i]{2}[/i] ({1})",
+						"description": "Persistently attach a Construct instance to a Spriter object each tick.",
+						"params": {
+							"c3-object": {
+								"name": "C3 object",
+								"desc": "The Construct object to pin."
+							},
+							"set-which-properties": {
+								"name": "Set properties",
+								"desc": "Which properties to apply.",
+								"items": {
+									"angle and position": "Angle and position",
+									"angle": "Angle",
+									"position": "Position"
+								}
+							},
+							"spriter-object-name": {
+								"name": "Spriter object name",
+								"desc": "The name of the Spriter object to pin to."
+							}
+						}
+					},
+					"set-c3-object-to-spriter-object": {
+						"list-name": "Set C3 object to Spriter object",
+						"display-text": "Set {0} to Spriter object [i]{2}[/i] ({1})",
+						"description": "One-shot: set a Construct instance to a Spriter object's position/angle this tick only.",
+						"params": {
+							"c3-object": {
+								"name": "C3 object",
+								"desc": "The Construct object to set."
+							},
+							"set-which-properties": {
+								"name": "Set properties",
+								"desc": "Which properties to apply.",
+								"items": {
+									"angle and position": "Angle and position",
+									"angle": "Angle",
+									"position": "Position"
+								}
+							},
+							"spriter-object-name": {
+								"name": "Spriter object name",
+								"desc": "The name of the Spriter object to match."
+							}
+						}
+					},
+					"unpin-c3-object-from-spriter-object": {
+						"list-name": "Unpin C3 object from Spriter object",
+						"display-text": "Unpin {0} from Spriter object [i]{1}[/i]",
+						"description": "Remove a pinned Construct object from a Spriter object.",
+						"params": {
+							"c3-object": {
+								"name": "C3 object",
+								"desc": "The Construct object to unpin."
+							},
+							"spriter-object-name": {
+								"name": "Spriter object name",
+								"desc": "The Spriter object name to unpin from (empty to unpin from all)."
+							}
+						}
+					},
+					"unpin-all-from-spriter-object": {
+						"list-name": "Unpin all from Spriter object",
+						"display-text": "Unpin all from Spriter object [i]{0}[/i]",
+						"description": "Remove all pinned objects from a Spriter object.",
+						"params": {
+							"spriter-object-name": {
+								"name": "Spriter object name",
+								"desc": "The Spriter object name to unpin from (empty to unpin all)."
+							}
+						}
+					}
+				},
 				"expressions": {
 					"last-error": {
 						"description": "Get the last Spriter load error message (empty string if none).",

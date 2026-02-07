@@ -1,14 +1,31 @@
 {
 	"$schema": "../aces.schema.json",
 
-	"custom": {
+	"initialisation": {
 		"conditions": [
 			{
 				"id": "on-ready",
 				"scriptName": "OnReady",
 				"isTrigger": true,
 				"highlight": true
-			},
+			}
+		],
+		"actions": [
+			{
+				"id": "associate-type-with-name",
+				"scriptName": "AssociateTypeWithName",
+				"highlight": true,
+				"params": [
+					{"id": "object-type", "type": "object"},
+					{"id": "spriter-name", "type": "string"}
+				]
+			}
+		],
+		"expressions": []
+	},
+
+	"custom": {
+		"conditions": [
 			{
 				"id": "on-load-failed",
 				"scriptName": "OnLoadFailed",
@@ -54,5 +71,49 @@
 				"returnType": "string"
 			}
 		]
+	},
+
+	"attach_c2_object": {
+		"conditions": [],
+		"actions": [
+			{
+				"id": "pin-c3-object-to-spriter-object",
+				"scriptName": "PinC3ObjectToSpriterObject",
+				"highlight": false,
+				"params": [
+					{"id": "c3-object", "type": "object"},
+					{"id": "set-which-properties", "type": "combo", "items": ["angle and position", "angle", "position"]},
+					{"id": "spriter-object-name", "type": "string"}
+				]
+			},
+			{
+				"id": "set-c3-object-to-spriter-object",
+				"scriptName": "SetC3ObjectToSpriterObject",
+				"highlight": false,
+				"params": [
+					{"id": "c3-object", "type": "object"},
+					{"id": "set-which-properties", "type": "combo", "items": ["angle and position", "angle", "position"]},
+					{"id": "spriter-object-name", "type": "string"}
+				]
+			},
+			{
+				"id": "unpin-c3-object-from-spriter-object",
+				"scriptName": "UnpinC3ObjectFromSpriterObject",
+				"highlight": false,
+				"params": [
+					{"id": "c3-object", "type": "object"},
+					{"id": "spriter-object-name", "type": "string"}
+				]
+			},
+			{
+				"id": "unpin-all-from-spriter-object",
+				"scriptName": "UnpinAllFromSpriterObject",
+				"highlight": false,
+				"params": [
+					{"id": "spriter-object-name", "type": "string"}
+				]
+			}
+		],
+		"expressions": []
 	}
 }
