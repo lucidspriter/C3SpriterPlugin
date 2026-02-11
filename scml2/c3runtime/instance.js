@@ -358,6 +358,27 @@ function toNumberOrDefault(value, defaultValue)
 	return Number.isFinite(numberValue) ? numberValue : defaultValue;
 }
 
+function stripEntityPrefix(name, entityName)
+{
+	const text = toStringOrEmpty(name);
+	const entityText = toStringOrEmpty(entityName);
+	const prefix = entityText ? `${entityText}_` : "";
+	return prefix && text.startsWith(prefix) ? text.slice(prefix.length) : text;
+}
+
+function normaliseSpriterObjectName(name)
+{
+	const text = toStringOrEmpty(name).trim();
+	const hasSingleQuotes = text.length >= 2 && text.startsWith("'") && text.endsWith("'");
+	const hasDoubleQuotes = text.length >= 2 && text.startsWith("\"") && text.endsWith("\"");
+	return (hasSingleQuotes || hasDoubleQuotes) ? text.slice(1, -1).trim() : text;
+}
+
+function makeFolderFileKey(folder, file)
+{
+	return `${folder}:${file}`;
+}
+
 function normaliseComboValue(value, options, defaultIndex = 0)
 {
 	if (typeof value === "number" && Number.isInteger(value))
@@ -474,6 +495,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._objectsToSet = [];
 		this._timelineNameById = new Map();
 		this._nonSelfDrawDiagDone = false;
+		this._didWarnSpriteFrameApiUnavailable = false;
 		this.setLayersForSprites = true;
 		this.setVisibilityForObjects = true;
 		this.setCollisionsForObjects = true;
@@ -2030,6 +2052,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._lastTickTimeSec = null;
 
 		this._buildObjectArray();
+		this._refreshAssociatedFrameLookups();
 
 		this._fileLookup.clear();
 		this._atlasImagePathByIndex.clear();
@@ -2404,11 +2427,377 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		return "?";
 	}
 
+	_buildFrameLookupForSpriterName(spriterName)
+	{
+		const name = normaliseSpriterObjectName(spriterName);
+		if (!name)
+		{
+			return null;
+		}
+
+		const entity = this.entity;
+		const objInfos = entity && Array.isArray(entity.obj_info) ? entity.obj_info : [];
+		if (!objInfos.length)
+		{
+			return null;
+		}
+
+		for (const objInfo of objInfos)
+		{
+			if (!objInfo || typeof objInfo !== "object")
+			{
+				continue;
+			}
+
+			const objType = typeof objInfo.type === "string"
+				? objInfo.type.trim().toLowerCase()
+				: "sprite";
+
+			if (objType && objType !== "sprite")
+			{
+				continue;
+			}
+
+			const rawName = typeof objInfo.name === "string" ? objInfo.name : "";
+			const strippedName = stripEntityPrefix(rawName, entity && entity.name ? entity.name : "");
+			if (strippedName !== name)
+			{
+				continue;
+			}
+
+			const frames = Array.isArray(objInfo.frames) ? objInfo.frames : [];
+			const frameLookup = new Map();
+			for (let i = 0; i < frames.length; i++)
+			{
+				const frame = frames[i];
+				if (!frame || typeof frame !== "object")
+				{
+					continue;
+				}
+
+				const folder = toFiniteNumber(frame.folder, NaN);
+				const file = toFiniteNumber(frame.file, NaN);
+				if (!Number.isFinite(folder) || !Number.isFinite(file))
+				{
+					continue;
+				}
+
+				const key = makeFolderFileKey(folder, file);
+				if (!frameLookup.has(key))
+				{
+					frameLookup.set(key, i);
+				}
+			}
+
+			return frameLookup;
+		}
+
+		return null;
+	}
+
+	_refreshAssociatedFrameLookups()
+	{
+		for (const [name, entry] of this._c2ObjectMap)
+		{
+			if (!entry)
+			{
+				continue;
+			}
+
+			entry.frameLookup = this._buildFrameLookupForSpriterName(name);
+			entry.missingFrameKeys = new Set();
+			entry.lastAppliedFrame = -1;
+		}
+	}
+
+	_resolveFrameIndexForState(c2Entry, state)
+	{
+		if (!c2Entry || !state)
+		{
+			return -1;
+		}
+
+		if (!(c2Entry.frameLookup instanceof Map) || !c2Entry.frameLookup.size)
+		{
+			c2Entry.frameLookup = this._buildFrameLookupForSpriterName(state.timelineName);
+			c2Entry.missingFrameKeys = new Set();
+		}
+
+		const frameLookup = c2Entry.frameLookup;
+		if (!(frameLookup instanceof Map) || !frameLookup.size)
+		{
+			return -1;
+		}
+
+		const folder = toFiniteNumber(state.folder, NaN);
+		const file = toFiniteNumber(state.file, NaN);
+		if (!Number.isFinite(folder) || !Number.isFinite(file))
+		{
+			return -1;
+		}
+
+		const key = makeFolderFileKey(folder, file);
+		if (frameLookup.has(key))
+		{
+			return toFiniteNumber(frameLookup.get(key), -1);
+		}
+
+		if (!(c2Entry.missingFrameKeys instanceof Set))
+		{
+			c2Entry.missingFrameKeys = new Set();
+		}
+
+		if (!c2Entry.missingFrameKeys.has(key))
+		{
+			c2Entry.missingFrameKeys.add(key);
+			console.warn(`[Spriter] Non-self-draw frame missing for '${state.timelineName}' at folder=${folder}, file=${file}.`);
+		}
+
+		return -1;
+	}
+
+	_getSdkInstanceOf(inst)
+	{
+		if (!inst)
+		{
+			return null;
+		}
+
+		if (typeof inst.GetSdkInstance === "function")
+		{
+			const sdkInst = inst.GetSdkInstance();
+			if (sdkInst)
+			{
+				return sdkInst;
+			}
+		}
+
+		if (typeof inst.getSdkInstance === "function")
+		{
+			const sdkInst = inst.getSdkInstance();
+			if (sdkInst)
+			{
+				return sdkInst;
+			}
+		}
+
+		if (inst._sdkInstance)
+		{
+			return inst._sdkInstance;
+		}
+
+		if (inst._sdkInst)
+		{
+			return inst._sdkInst;
+		}
+
+		if (inst._inst && inst._inst !== inst)
+		{
+			return this._getSdkInstanceOf(inst._inst);
+		}
+
+		return null;
+	}
+
+	_getCurrentSpriteFrameIndex(inst, sdkInst)
+	{
+		const candidates = [sdkInst, inst];
+		const getters = ["_GetAnimFrame", "_getAnimFrame", "GetAnimFrame", "getAnimFrame", "GetAnimationFrame", "getAnimationFrame"];
+		const properties = ["animationFrame", "_currentFrameIndex", "currentFrameIndex", "_animFrame", "animFrame"];
+
+		for (const target of candidates)
+		{
+			if (!target)
+			{
+				continue;
+			}
+
+			for (const fnName of getters)
+			{
+				if (typeof target[fnName] !== "function")
+				{
+					continue;
+				}
+
+				const value = Number(target[fnName]());
+				if (Number.isFinite(value))
+				{
+					return Math.floor(value);
+				}
+			}
+
+			for (const propName of properties)
+			{
+				const value = Number(target[propName]);
+				if (Number.isFinite(value))
+				{
+					return Math.floor(value);
+				}
+			}
+		}
+
+		return -1;
+	}
+
+	_setSpriteFrameByIndex(inst, frameIndex)
+	{
+		if (!inst || !Number.isInteger(frameIndex) || frameIndex < 0)
+		{
+			return false;
+		}
+
+		const sdkInst = this._getSdkInstanceOf(inst);
+		const candidateTargets = [inst, sdkInst, inst ? inst._inst : null, sdkInst ? sdkInst._inst : null]
+			.filter((v, i, arr) => !!v && arr.indexOf(v) === i);
+		const currentFrame = this._getCurrentSpriteFrameIndex(inst, sdkInst);
+		if (currentFrame === frameIndex)
+		{
+			return true;
+		}
+
+		// Scripting API path (ISpriteInstance): `animationFrame` is the current frame index.
+		for (const target of candidateTargets)
+		{
+			if (!target || !("animationFrame" in target))
+			{
+				continue;
+			}
+
+			try
+			{
+				target.animationFrame = frameIndex;
+				if (Number(target.animationFrame) === frameIndex)
+				{
+					return true;
+				}
+			}
+			catch (err)
+			{
+				// Continue with other fallbacks.
+			}
+		}
+
+		const directSetters = ["SetAnimFrame", "setAnimFrame", "SetAnimationFrame", "setAnimationFrame"];
+		for (const target of candidateTargets)
+		{
+			if (!target)
+			{
+				continue;
+			}
+
+			for (const fnName of directSetters)
+			{
+				if (typeof target[fnName] === "function")
+				{
+					target[fnName](frameIndex);
+					return true;
+				}
+			}
+		}
+
+		if (sdkInst)
+		{
+			sdkInst._changeAnimFrameIndex = frameIndex;
+
+			const isTicking = typeof sdkInst.IsTicking === "function"
+				? sdkInst.IsTicking.bind(sdkInst)
+				: typeof sdkInst.isTicking === "function"
+					? sdkInst.isTicking.bind(sdkInst)
+					: null;
+
+			const startTicking = typeof sdkInst._StartTicking === "function"
+				? sdkInst._StartTicking.bind(sdkInst)
+				: typeof sdkInst.startTicking === "function"
+					? sdkInst.startTicking.bind(sdkInst)
+					: null;
+
+			if (isTicking && startTicking && !isTicking())
+			{
+				startTicking();
+			}
+
+			const doChange = typeof sdkInst._DoChangeAnimFrame === "function"
+				? sdkInst._DoChangeAnimFrame.bind(sdkInst)
+				: typeof sdkInst.doChangeAnimFrame === "function"
+					? sdkInst.doChangeAnimFrame.bind(sdkInst)
+					: null;
+
+			if (doChange && !sdkInst._isInAnimTrigger)
+			{
+				doChange();
+				return true;
+			}
+
+			const frameProps = ["_currentFrameIndex", "currentFrameIndex"];
+			for (const propName of frameProps)
+			{
+				if (propName in sdkInst)
+				{
+					sdkInst[propName] = frameIndex;
+					const updateTexture = typeof sdkInst._UpdateCurrentTexture === "function"
+						? sdkInst._UpdateCurrentTexture.bind(sdkInst)
+						: typeof sdkInst.updateCurrentTexture === "function"
+							? sdkInst.updateCurrentTexture.bind(sdkInst)
+							: null;
+					if (updateTexture)
+					{
+						updateTexture();
+					}
+					return true;
+				}
+			}
+		}
+
+		if (!this._didWarnSpriteFrameApiUnavailable)
+		{
+			this._didWarnSpriteFrameApiUnavailable = true;
+			const gatherAnimKeys = (obj) =>
+			{
+				if (!obj || (typeof obj !== "object" && typeof obj !== "function"))
+				{
+					return [];
+				}
+
+				const names = new Set();
+				let proto = obj;
+				let depth = 0;
+				while (proto && depth < 3)
+				{
+					for (const key of Object.getOwnPropertyNames(proto))
+					{
+						if (/anim|frame/i.test(key))
+						{
+							names.add(key);
+						}
+					}
+					proto = Object.getPrototypeOf(proto);
+					depth++;
+				}
+
+				return Array.from(names).sort();
+			};
+
+			const instKeys = gatherAnimKeys(inst).join(", ");
+			const sdkKeys = gatherAnimKeys(sdkInst).join(", ");
+			console.warn("[Spriter] Non-self-draw sprite frame API unavailable; image swaps may not work in this runtime.");
+			console.warn(`[Spriter] Frame API probe keys: inst=[${instKeys}], sdkInst=[${sdkKeys}]`);
+		}
+
+		return false;
+	}
+
 	_associateTypeWithName(objectType, spriterName)
 	{
+		const resolvedName = normaliseSpriterObjectName(spriterName);
+		if (!resolvedName || !objectType)
+		{
+			return;
+		}
+
 		const myIID = this._getIID();
 		const instances = this._getInstancesOf(objectType);
 		const pairedInst = instances[myIID] || null;
+		const frameLookup = this._buildFrameLookupForSpriterName(resolvedName);
 
 		const apis = [
 			typeof objectType.GetInstances === "function" ? "GetInstances" : null,
@@ -2416,12 +2805,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			typeof objectType.instances === "function" ? "instances" : null,
 			Array.isArray(objectType._instances) ? "_instances" : null
 		].filter(Boolean).join(",");
-		console.log(`[Spriter] _associateTypeWithName: spriterName='${spriterName}', typeName='${this._getObjectTypeName(objectType)}', myIID=${myIID}, instanceCount=${instances.length}, pairedInst=${pairedInst ? "found" : "NULL"}, apis=[${apis}]`);
+		const frameCount = frameLookup instanceof Map ? frameLookup.size : 0;
+		console.log(`[Spriter] _associateTypeWithName: spriterName='${resolvedName}', typeName='${this._getObjectTypeName(objectType)}', myIID=${myIID}, instanceCount=${instances.length}, pairedInst=${pairedInst ? "found" : "NULL"}, frameMap=${frameCount}, apis=[${apis}]`);
 
-		this._c2ObjectMap.set(spriterName, {
+		this._c2ObjectMap.set(resolvedName, {
 			type: objectType,
 			inst: pairedInst,
-			spriterType: "sprite"
+			spriterType: "sprite",
+			frameLookup,
+			lastAppliedFrame: -1,
+			missingFrameKeys: new Set()
 		});
 	}
 
@@ -2553,6 +2946,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			if (!wi) { skippedNoWi++; continue; }
 
 			appliedCount++;
+
+			// Non-self-draw sprite swapping: map Spriter (folder,file) to child sprite frame index.
+			const targetFrame = this._resolveFrameIndexForState(c2Entry, state);
+			if (targetFrame >= 0 && c2Entry.lastAppliedFrame !== targetFrame)
+			{
+				if (this._setSpriteFrameByIndex(inst, targetFrame))
+				{
+					c2Entry.lastAppliedFrame = targetFrame;
+				}
+			}
 
 			// Visibility
 			if (this.setVisibilityForObjects)
