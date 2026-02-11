@@ -2,6 +2,8 @@
 
 This document captures the high-level phases required to port the Spriter plugin to Construct's Addon SDK v2 and provides entry points to more detailed checklists for each phase. Use it alongside `AGENTS.md` to understand the current focus and what remains.
 
+Status note: this roadmap now tracks the active `scml2/` restart effort. Legacy/abandoned iterations are kept only for reference (e.g. `scml2 - backup/`).
+
 ## How to use this roadmap
 
 1. Review the phase list below to see the overall progression toward the MVP and beyond. Each phase links to its own checklist.
@@ -13,10 +15,10 @@ This document captures the high-level phases required to port the Spriter plugin
 ## Phase overview
 
 - [x] [Phase 1 — Define the MVP contract](phases/phase-01-define-mvp-contract.md)
-- [ ] [Phase 2 — Recreate the SDK v2 runtime skeleton](phases/phase-02-runtime-skeleton.md) — Start by reviewing the
+- [x] [Phase 2 — Recreate the SDK v2 runtime skeleton](phases/phase-02-runtime-skeleton.md) — Start by reviewing the
   [Phase 01a legacy runtime survey](phases/phase-01a-legacy-runtime-survey.md) for the subsystems that need to be
   reconstructed in SDK v2.
-- [ ] [Phase 3 — Implement ticking and playback control](phases/phase-03-ticking-and-playback.md)
+- [x] [Phase 3 — Implement ticking and playback control](phases/phase-03-ticking-and-playback.md)
 - [ ] [Phase 4 — Render to the screen](phases/phase-04-rendering.md)
 - [ ] [Phase 5 — Harden the MVP](phases/phase-05-mvp-hardening.md)
 - [ ] [Phase 6 — Parity and polish](phases/phase-06-parity-and-polish.md)

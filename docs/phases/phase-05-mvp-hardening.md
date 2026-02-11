@@ -3,6 +3,10 @@
 ## Goal
 Stabilize the MVP by supporting persistence, debugging, and essential scripting hooks so teams can rely on the addon in real projects.
 
+## Current snapshot (scml2 restart)
+- Self-draw import + runtime playback is working in C3 manual tests.
+- Remaining hardening focus is state persistence, debugger visibility, and API/documentation cleanup.
+
 ## Checklist
 - [ ] Implement `_saveToJson` and `_loadFromJson` for critical runtime state (current entity, animation, playback time, etc.).
 - [ ] Populate `_getDebuggerProperties` with useful inspection data (e.g., selected animation, paused/playing state).
