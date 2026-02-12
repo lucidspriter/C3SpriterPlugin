@@ -29,5 +29,31 @@ C3.Plugins.Spriter.Exps =
 	{
 		const animation = this.animation;
 		return animation && typeof animation.name === "string" ? animation.name : "";
+	},
+
+	TriggeredSound()
+	{
+		return this._triggeredSoundName || "";
+	},
+
+	TriggeredSoundTag()
+	{
+		return this._triggeredSoundTag || "";
+	},
+
+	SoundVolume(soundTag)
+	{
+		const key = typeof soundTag === "string" ? soundTag : String(soundTag ?? "");
+		const state = this._soundStateByName && this._soundStateByName.get(key);
+		const volume = state ? Number(state.volume) : NaN;
+		return Number.isFinite(volume) ? volume : 0;
+	},
+
+	SoundPanning(soundTag)
+	{
+		const key = typeof soundTag === "string" ? soundTag : String(soundTag ?? "");
+		const state = this._soundStateByName && this._soundStateByName.get(key);
+		const panning = state ? Number(state.panning) : NaN;
+		return Number.isFinite(panning) ? panning : 0;
 	}
 };

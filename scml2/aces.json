@@ -73,6 +73,68 @@
 		]
 	},
 
+	"sounds": {
+		"conditions": [
+			{
+				"id": "on-sound-triggered",
+				"scriptName": "OnSoundTriggered",
+				"isTrigger": true,
+				"highlight": true
+			},
+			{
+				"id": "on-sound-volume-change-triggered",
+				"scriptName": "OnSoundVolumeChangeTriggered",
+				"isTrigger": true,
+				"highlight": false
+			},
+			{
+				"id": "on-sound-panning-change-triggered",
+				"scriptName": "OnSoundPanningChangeTriggered",
+				"isTrigger": true,
+				"highlight": false
+			}
+		],
+		"actions": [],
+		"expressions": [
+			{
+				"id": "triggered-sound",
+				"expressionName": "TriggeredSound",
+				"highlight": false,
+				"returnType": "string"
+			},
+			{
+				"id": "triggered-sound-tag",
+				"expressionName": "TriggeredSoundTag",
+				"highlight": false,
+				"returnType": "string"
+			},
+			{
+				"id": "sound-volume",
+				"expressionName": "SoundVolume",
+				"highlight": false,
+				"returnType": "number",
+				"params": [
+					{
+						"id": "sound-tag",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"id": "sound-panning",
+				"expressionName": "SoundPanning",
+				"highlight": false,
+				"returnType": "number",
+				"params": [
+					{
+						"id": "sound-tag",
+						"type": "string"
+					}
+				]
+			}
+		]
+	},
+
 	"attach_c2_object": {
 		"conditions": [],
 		"actions": [

@@ -58,6 +58,7 @@
 				"aceCategories": {
 					"initialisation": "Initialisation",
 					"custom": "Custom",
+					"sounds": "Sounds",
 					"attach_c2_object": "Attach C3 Object"
 				},
 				"conditions": {
@@ -75,6 +76,21 @@
 						"list-name": "Is ready",
 						"display-text": "Is ready",
 						"description": "Check if the Spriter project file has finished loading successfully."
+					},
+					"on-sound-triggered": {
+						"list-name": "On sound triggered",
+						"display-text": "On sound triggered",
+						"description": "Triggered when the current animation triggers a sound key."
+					},
+					"on-sound-volume-change-triggered": {
+						"list-name": "On sound volume change",
+						"display-text": "On sound volume change",
+						"description": "Triggered when a soundline's volume changes."
+					},
+					"on-sound-panning-change-triggered": {
+						"list-name": "On sound panning change",
+						"display-text": "On sound panning change",
+						"description": "Triggered when a soundline's panning changes."
 					}
 				},
 				"actions": {
@@ -188,6 +204,34 @@
 					"animation-name": {
 						"description": "Get the name of the currently selected animation.",
 						"translated-name": "AnimationName"
+					},
+					"triggered-sound": {
+						"description": "Get the most recently triggered sound name.",
+						"translated-name": "TriggeredSound"
+					},
+					"triggered-sound-tag": {
+						"description": "Get the soundline tag/name associated with the latest sound trigger or change.",
+						"translated-name": "TriggeredSoundTag"
+					},
+					"sound-volume": {
+						"description": "Get the current volume value for a soundline tag.",
+						"translated-name": "SoundVolume",
+						"params": {
+							"sound-tag": {
+								"name": "Sound tag",
+								"desc": "The soundline name to query."
+							}
+						}
+					},
+					"sound-panning": {
+						"description": "Get the current panning value for a soundline tag.",
+						"translated-name": "SoundPanning",
+						"params": {
+							"sound-tag": {
+								"name": "Sound tag",
+								"desc": "The soundline name to query."
+							}
+						}
 					}
 				}
 			}

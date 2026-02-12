@@ -53,6 +53,26 @@ function joinPaths(dir, file)
 	return `${base.replace(/\/+$/, "")}/${leaf.replace(/^\/+/, "")}`;
 }
 
+function getPathLeaf(path)
+{
+	const normalised = normaliseAssetPath(path);
+	const lastSlash = normalised.lastIndexOf("/");
+	return lastSlash >= 0 ? normalised.slice(lastSlash + 1) : normalised;
+}
+
+function stripFileExtension(fileName)
+{
+	const name = typeof fileName === "string" ? fileName : "";
+	const dot = name.lastIndexOf(".");
+	return dot > 0 ? name.slice(0, dot) : name;
+}
+
+function soundNameFromAssetPath(path)
+{
+	const leaf = getPathLeaf(path);
+	return stripFileExtension(leaf);
+}
+
 function toAtlasImagePath(atlasName)
 {
 	const normalised = normaliseAssetPath(atlasName);
@@ -470,12 +490,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.playing = true;
 		this.playbackSpeed = 1;
 		this.localTimeMs = 0;
+		this._currentAdjustedTimeMs = 0;
 		this._lastTickTimeSec = null;
 
 		this._fileLookup = new Map();
 		this._timelineById = new Map();
 		this._poseObjectStates = [];
 		this._poseBoneStates = [];
+		this._soundLines = [];
+		this._soundStateByName = new Map();
+		this._triggeredSoundName = "";
+		this._triggeredSoundTag = "";
 		this._atlasFrameCache = new Map();
 		this._atlasTextureLoadState = new Map();
 		this._atlasImagePathByIndex = new Map();
@@ -535,6 +560,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		this._evaluatePose();
+		this._evaluateSoundLines(this._currentAdjustedTimeMs);
 
 		if (!this.drawSelf)
 		{
@@ -1566,6 +1592,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const projectData = this.projectData;
 		if (!animation || !projectData)
 		{
+			this._currentAdjustedTimeMs = toFiniteNumber(this.localTimeMs, 0);
 			this._poseObjectStates.length = 0;
 			this._poseBoneStates.length = 0;
 			return;
@@ -1575,6 +1602,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const keys = mainline && Array.isArray(mainline.key) ? mainline.key : [];
 		if (!keys.length)
 		{
+			this._currentAdjustedTimeMs = toFiniteNumber(this.localTimeMs, 0);
 			this._poseObjectStates.length = 0;
 			this._poseBoneStates.length = 0;
 			return;
@@ -1585,12 +1613,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const mainKey = keys[mainKeyIndex];
 		if (!mainKey)
 		{
+			this._currentAdjustedTimeMs = toFiniteNumber(this.localTimeMs, 0);
 			this._poseObjectStates.length = 0;
 			this._poseBoneStates.length = 0;
 			return;
 		}
 
 		const poseTimeMs = this._getMainlineAdjustedTime(keys, mainKeyIndex, timeMs);
+		this._currentAdjustedTimeMs = poseTimeMs;
 
 		const boneRefs = Array.isArray(mainKey.bone_ref) ? mainKey.bone_ref : [];
 		const objectRefs = Array.isArray(mainKey.object_ref) ? mainKey.object_ref : [];
@@ -1654,6 +1684,337 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		poseObjects.sort((a, b) => a.zIndex - b.zIndex);
+	}
+
+	_getSoundlinesForAnimation(animation)
+	{
+		if (!animation || typeof animation !== "object")
+		{
+			return [];
+		}
+
+		if (Array.isArray(animation.soundline))
+		{
+			return animation.soundline;
+		}
+
+		if (Array.isArray(animation.soundlines))
+		{
+			return animation.soundlines;
+		}
+
+		return [];
+	}
+
+	_extractSoundKeyObject(key)
+	{
+		if (!key || typeof key !== "object")
+		{
+			return null;
+		}
+
+		const direct = key.object;
+		if (direct && typeof direct === "object" && !Array.isArray(direct))
+		{
+			return direct;
+		}
+
+		const objectList = Array.isArray(key.object) ? key.object : Array.isArray(key.objects) ? key.objects : null;
+		if (objectList && objectList.length)
+		{
+			return objectList[0] || null;
+		}
+
+		return null;
+	}
+
+	_resolveSoundNameForFolderFile(folderId, fileId)
+	{
+		const fileInfo = this._getFileInfo(folderId, fileId);
+		if (!fileInfo || typeof fileInfo.name !== "string")
+		{
+			return "";
+		}
+
+		return soundNameFromAssetPath(fileInfo.name);
+	}
+
+	_buildSoundLineCache()
+	{
+		this._soundLines.length = 0;
+		this._soundStateByName.clear();
+		this._triggeredSoundName = "";
+		this._triggeredSoundTag = "";
+
+		const soundlines = this._getSoundlinesForAnimation(this.animation);
+		for (const soundline of soundlines)
+		{
+			if (!soundline || typeof soundline !== "object")
+			{
+				continue;
+			}
+
+			const lineName = typeof soundline.name === "string" ? soundline.name : "";
+			const sourceKeys = Array.isArray(soundline.key) ? soundline.key : [];
+			if (!sourceKeys.length)
+			{
+				continue;
+			}
+
+			const keys = [];
+			for (const key of sourceKeys)
+			{
+				if (!key || typeof key !== "object")
+				{
+					continue;
+				}
+
+				const keyObj = this._extractSoundKeyObject(key);
+				if (!keyObj)
+				{
+					continue;
+				}
+
+				const folder = toFiniteNumber(keyObj.folder, NaN);
+				const file = toFiniteNumber(keyObj.file, NaN);
+				let soundName = "";
+				if (Number.isFinite(folder) && Number.isFinite(file))
+				{
+					soundName = this._resolveSoundNameForFolderFile(folder, file);
+				}
+
+				if (!soundName && typeof keyObj.name === "string")
+				{
+					soundName = soundNameFromAssetPath(keyObj.name);
+				}
+
+				keys.push({
+					time: toFiniteNumber(key.time, 0),
+					soundName,
+					volume: toFiniteNumber(keyObj.volume, 1),
+					panning: toFiniteNumber(keyObj.panning, 0),
+					keyRef: key
+				});
+			}
+
+			if (!keys.length)
+			{
+				continue;
+			}
+
+			keys.sort((a, b) => a.time - b.time);
+			this._soundLines.push({
+				name: lineName,
+				keys,
+				lastTimeMs: 0,
+				hasTime: false
+			});
+			this._soundStateByName.set(lineName, {
+				soundName: keys[0].soundName || "",
+				volume: toFiniteNumber(keys[0].volume, 1),
+				panning: toFiniteNumber(keys[0].panning, 0)
+			});
+		}
+	}
+
+	_testSoundTriggerTime(lastTime, time, triggerTime)
+	{
+		if (time === triggerTime)
+		{
+			return true;
+		}
+		else if (triggerTime === lastTime || lastTime === time)
+		{
+			return false;
+		}
+		else if (toFiniteNumber(this.playbackSpeed, 1) >= 0)
+		{
+			if (lastTime < time)
+			{
+				if (triggerTime > lastTime && triggerTime < time)
+				{
+					return true;
+				}
+			}
+			else
+			{
+				if (triggerTime > lastTime || triggerTime < time)
+				{
+					return true;
+				}
+			}
+		}
+		else
+		{
+			if (lastTime > time)
+			{
+				if (triggerTime > time && triggerTime < lastTime)
+				{
+					return true;
+				}
+			}
+			else
+			{
+				if (triggerTime > time || triggerTime < lastTime)
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	_getInterpolatedSoundState(soundLine, currentTimeMs)
+	{
+		const keys = soundLine && Array.isArray(soundLine.keys) ? soundLine.keys : [];
+		if (!keys.length)
+		{
+			return null;
+		}
+
+		const clampedTime = toFiniteNumber(currentTimeMs, 0);
+		const currentIndex = this._findKeyIndexForTime(keys, clampedTime);
+		const currentKey = keys[currentIndex] || keys[0];
+		if (!currentKey)
+		{
+			return null;
+		}
+
+		const nextIndex = (currentIndex + 1) % keys.length;
+		const nextKey = keys[nextIndex] || currentKey;
+		const isLooping = this._isAnimationLooping(this.animation);
+
+		if (nextKey === currentKey || (nextIndex === 0 && !isLooping))
+		{
+			return {
+				soundName: currentKey.soundName || "",
+				volume: toFiniteNumber(currentKey.volume, 1),
+				panning: toFiniteNumber(currentKey.panning, 0)
+			};
+		}
+
+		const lengthMs = this.animationLengthMs;
+		const startTime = toFiniteNumber(currentKey.time, 0);
+		let endTime = toFiniteNumber(nextKey.time, startTime);
+		let sampleTime = clampedTime;
+
+		if (nextIndex === 0 && isLooping)
+		{
+			endTime += lengthMs;
+			if (sampleTime < startTime)
+			{
+				sampleTime += lengthMs;
+			}
+		}
+
+		const denom = endTime - startTime;
+		const linearT = denom > 0 ? clamp01((sampleTime - startTime) / denom) : 0;
+		const curvedT = evaluateCurveT(currentKey.keyRef, linearT);
+
+		return {
+			soundName: currentKey.soundName || "",
+			volume: lerp(toFiniteNumber(currentKey.volume, 1), toFiniteNumber(nextKey.volume, toFiniteNumber(currentKey.volume, 1)), curvedT),
+			panning: lerp(toFiniteNumber(currentKey.panning, 0), toFiniteNumber(nextKey.panning, toFiniteNumber(currentKey.panning, 0)), curvedT)
+		};
+	}
+
+	_triggerSound(soundName, soundTag)
+	{
+		this._triggeredSoundName = soundName || "";
+		this._triggeredSoundTag = soundTag || "";
+
+		const cnds = C3.Plugins.Spriter.Cnds;
+		if (typeof this._trigger === "function" && cnds && typeof cnds.OnSoundTriggered === "function")
+		{
+			this._trigger(cnds.OnSoundTriggered);
+		}
+	}
+
+	_triggerSoundVolumeChange(soundTag)
+	{
+		this._triggeredSoundName = "";
+		this._triggeredSoundTag = soundTag || "";
+
+		const cnds = C3.Plugins.Spriter.Cnds;
+		if (typeof this._trigger === "function" && cnds && typeof cnds.OnSoundVolumeChangeTriggered === "function")
+		{
+			this._trigger(cnds.OnSoundVolumeChangeTriggered);
+		}
+	}
+
+	_triggerSoundPanningChange(soundTag)
+	{
+		this._triggeredSoundName = "";
+		this._triggeredSoundTag = soundTag || "";
+
+		const cnds = C3.Plugins.Spriter.Cnds;
+		if (typeof this._trigger === "function" && cnds && typeof cnds.OnSoundPanningChangeTriggered === "function")
+		{
+			this._trigger(cnds.OnSoundPanningChangeTriggered);
+		}
+	}
+
+	_evaluateSoundLines(currentTimeMs, suppressTriggers = false)
+	{
+		const soundLines = this._soundLines;
+		if (!Array.isArray(soundLines) || !soundLines.length)
+		{
+			return;
+		}
+
+		const now = toFiniteNumber(currentTimeMs, 0);
+
+		for (const soundLine of soundLines)
+		{
+			const keys = Array.isArray(soundLine.keys) ? soundLine.keys : [];
+			if (!keys.length)
+			{
+				continue;
+			}
+
+			const hasTime = !!soundLine.hasTime;
+			const lastTime = hasTime ? toFiniteNumber(soundLine.lastTimeMs, now) : now;
+
+			if (hasTime && !suppressTriggers && now !== lastTime)
+			{
+				for (const key of keys)
+				{
+					if (!key || !key.soundName)
+					{
+						continue;
+					}
+
+					if (this._testSoundTriggerTime(lastTime, now, toFiniteNumber(key.time, 0)))
+					{
+						this._triggerSound(key.soundName, soundLine.name);
+					}
+				}
+			}
+
+			const nextState = this._getInterpolatedSoundState(soundLine, now);
+			if (nextState)
+			{
+				const stateName = soundLine.name || "";
+				const priorState = this._soundStateByName.get(stateName);
+				const hadPriorState = !!priorState;
+
+				if (!suppressTriggers && hadPriorState && toFiniteNumber(priorState.volume, 0) !== toFiniteNumber(nextState.volume, 0))
+				{
+					this._triggerSoundVolumeChange(stateName);
+				}
+
+				if (!suppressTriggers && hadPriorState && toFiniteNumber(priorState.panning, 0) !== toFiniteNumber(nextState.panning, 0))
+				{
+					this._triggerSoundPanningChange(stateName);
+				}
+
+				this._soundStateByName.set(stateName, nextState);
+			}
+
+			soundLine.lastTimeMs = now;
+			soundLine.hasTime = true;
+		}
 	}
 
 	_getMainlineAdjustedTime(mainKeys, mainKeyIndex, timeMs)
@@ -2150,8 +2511,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			this._timelineNameById.set(id, tlName);
 		}
 
+		this._buildSoundLineCache();
+
 		// Ensure we have an evaluated pose ready for the first draw.
 		this._evaluatePose();
+		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
 	}
 
 	_loadProjectDataIfNeeded()

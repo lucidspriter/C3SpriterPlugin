@@ -12,6 +12,21 @@ C3.Plugins.Spriter.Cnds =
 		return true;
 	},
 
+	OnSoundTriggered()
+	{
+		return true;
+	},
+
+	OnSoundVolumeChangeTriggered()
+	{
+		return true;
+	},
+
+	OnSoundPanningChangeTriggered()
+	{
+		return true;
+	},
+
 	IsReady()
 	{
 		return !!this.isReady;

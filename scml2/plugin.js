@@ -116,6 +116,17 @@ function getPathLeafRaw(path)
 	return lastSlash >= 0 ? normalised.slice(lastSlash + 1) : normalised;
 }
 
+function stripFileExtension(fileName)
+{
+	if (typeof fileName !== "string")
+	{
+		return "";
+	}
+
+	const dot = fileName.lastIndexOf(".");
+	return dot > 0 ? fileName.slice(0, dot) : fileName;
+}
+
 function atlasNameToPngPath(atlasName)
 {
 	if (typeof atlasName !== "string")
@@ -153,6 +164,143 @@ function findAtlasPngEntry(zipFile, atlasPngPath)
 	}
 
 	return entry || null;
+}
+
+function findZipEntryByPathOrLeaf(zipFile, rawPath)
+{
+	if (!zipFile || typeof zipFile.GetEntry !== "function")
+	{
+		return null;
+	}
+
+	const direct = typeof rawPath === "string" ? zipFile.GetEntry(rawPath) : null;
+	if (direct)
+	{
+		return direct;
+	}
+
+	const leaf = getPathLeafRaw(rawPath);
+	if (leaf && leaf !== rawPath)
+	{
+		return zipFile.GetEntry(leaf);
+	}
+
+	return null;
+}
+
+function getFolderFiles(folder)
+{
+	if (!folder || typeof folder !== "object")
+	{
+		return [];
+	}
+
+	if (Array.isArray(folder.file))
+	{
+		return folder.file;
+	}
+
+	if (Array.isArray(folder.files))
+	{
+		return folder.files;
+	}
+
+	return [];
+}
+
+async function loadSoundsFromFolders(folders, zipFile, project)
+{
+	if (!Array.isArray(folders) || !zipFile || !project)
+	{
+		return [];
+	}
+
+	const sounds = [];
+	const seenFileNames = new Set();
+
+	for (const folder of folders)
+	{
+		const files = getFolderFiles(folder);
+		for (const file of files)
+		{
+			if (!file || typeof file !== "object")
+			{
+				continue;
+			}
+
+			const type = typeof file.type === "string" ? file.type.trim().toLowerCase() : "";
+			if (type !== "sound")
+			{
+				continue;
+			}
+
+			const filePath = typeof file.name === "string" ? file.name : "";
+			if (!filePath)
+			{
+				continue;
+			}
+
+			const entry = findZipEntryByPathOrLeaf(zipFile, filePath);
+			if (!entry)
+			{
+				console.warn(`[Spriter] Missing sound in zip: '${filePath}'`);
+				continue;
+			}
+
+			const soundBlob = await zipFile.ReadBlob(entry);
+			const fileName = getPathLeafRaw(filePath);
+			if (!fileName)
+			{
+				continue;
+			}
+
+			// Legacy behaviour keeps only the leaf name in project audio files.
+			try
+			{
+				project.AddOrReplaceProjectFile(soundBlob, fileName, "sound");
+			}
+			catch (error)
+			{
+				console.warn(`[Spriter] Failed to save sound '${fileName}' to Project Files.`, error);
+			}
+
+			if (!seenFileNames.has(fileName))
+			{
+				seenFileNames.add(fileName);
+				sounds.push(soundBlob);
+			}
+		}
+	}
+
+	return sounds;
+}
+
+async function addSoundEvents(eventSheet, spriterObjectType, project, baseObjectTypeName)
+{
+	if (!eventSheet || !spriterObjectType || !project)
+	{
+		return;
+	}
+
+	const audioEventBlock = await eventSheet.GetRoot().AddEventBlock();
+	audioEventBlock.AddCondition(spriterObjectType, null, "on-sound-triggered");
+
+	let audioObject = project.GetSingleGlobalObjectType("Audio");
+	if (!audioObject)
+	{
+		audioObject = await project.CreateObjectType("Audio", "Audio");
+	}
+
+	const exprPrefix = stripFileExtension(String(baseObjectTypeName || spriterObjectType.GetName() || "")).replace(/\s+/g, "");
+	const objectExprPrefix = exprPrefix || "Spriter";
+	audioEventBlock.AddAction(audioObject, null, "play-by-name", [
+		"sounds",
+		`${objectExprPrefix}.TriggeredSound`,
+		"not-looping",
+		0,
+		0,
+		`"${objectExprPrefix}Sound"`
+	]);
 }
 
 function applyAtlasFrameInfoToFile(file, atlasFrame)
@@ -747,6 +895,8 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 		const entityCount = Array.isArray(projectJson.entity) ? projectJson.entity.length : 0;
 		const atlasCount = Array.isArray(projectJson.atlas) ? projectJson.atlas.length : 0;
 		console.log(`[Spriter] Parsed '${sconFileName}': entities=${entityCount}, atlases=${atlasCount}`);
+		const folders = Array.isArray(projectJson.folder) ? projectJson.folder : [];
+		const eventSheet = layoutView.GetLayout().GetEventSheet();
 
 		let objectType = project.GetObjectTypeByName(detectedSconName);
 		const isReimport = !!objectType;
@@ -904,8 +1054,6 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			}
 
 			const entities = Array.isArray(projectJson.entity) ? projectJson.entity : [];
-			const folders = Array.isArray(projectJson.folder) ? projectJson.folder : [];
-			const eventSheet = layoutView.GetLayout().GetEventSheet();
 
 			const c2ObjectTypes = [];
 			const objectTypeNamePairs = [];
@@ -1070,6 +1218,27 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 				{
 					console.warn(`[Spriter] Container creation failed.`, e);
 				}
+			}
+		}
+
+		const importedSounds = await loadSoundsFromFolders(folders, zipFile, project);
+		if (importedSounds.length > 0)
+		{
+			console.log(`[Spriter] Imported ${importedSounds.length} sound file(s).`);
+
+			if (eventSheet && !isReimport)
+			{
+				await addSoundEvents(eventSheet, objectType, project, detectedSconName);
+				console.log("[Spriter] Added default sound trigger event block.");
+			}
+			else if (eventSheet && isReimport)
+			{
+				console.log("[Spriter] Reimport detected; skipped auto-adding default sound event block.");
+			}
+
+			if (typeof project.ShowImportAudioDialog === "function")
+			{
+				project.ShowImportAudioDialog(importedSounds);
 			}
 		}
 
