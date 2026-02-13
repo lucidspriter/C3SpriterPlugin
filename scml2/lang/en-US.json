@@ -57,6 +57,7 @@
 				},
 				"aceCategories": {
 					"initialisation": "Initialisation",
+					"animations": "Animations",
 					"custom": "Custom",
 					"sounds": "Sounds",
 					"attach_c2_object": "Attach C3 Object"
@@ -66,6 +67,11 @@
 						"list-name": "On ready",
 						"display-text": "On ready",
 						"description": "Triggered when the Spriter project file has finished loading."
+					},
+					"readyforsetup666": {
+						"list-name": "On ready (legacy)",
+						"display-text": "On ready (legacy)",
+						"description": "Legacy alias for On ready."
 					},
 					"on-load-failed": {
 						"list-name": "On load failed",
@@ -77,23 +83,390 @@
 						"display-text": "Is ready",
 						"description": "Check if the Spriter project file has finished loading successfully."
 					},
+					"on-anim-finished": {
+						"list-name": "On animation finished",
+						"display-text": "On animation [i]{0}[/i] finished",
+						"description": "Triggered when the named animation finishes.",
+						"params": {
+							"animation-name": {
+								"name": "Animation name",
+								"desc": "The animation name to match."
+							}
+						}
+					},
+					"onanimfinished0": {
+						"list-name": "On animation finished (legacy)",
+						"display-text": "On animation [i]{0}[/i] finished (legacy)",
+						"description": "Legacy alias for On animation finished.",
+						"params": {
+							"animation0": {
+								"name": "Animation name",
+								"desc": "The animation name to match."
+							}
+						}
+					},
+					"on-any-anim-finished": {
+						"list-name": "On any animation finished",
+						"display-text": "On any animation finished",
+						"description": "Triggered when any animation finishes."
+					},
+					"onanyanimfinished1": {
+						"list-name": "On any animation finished (legacy)",
+						"display-text": "On any animation finished (legacy)",
+						"description": "Legacy alias for On any animation finished."
+					},
+					"compare-current-key": {
+						"list-name": "Compare current key",
+						"display-text": "Current key is {0} {1}",
+						"description": "Compare the current mainline key index.",
+						"params": {
+							"current-key-frame-is": {
+								"name": "Comparison",
+								"desc": "How to compare the current key."
+							},
+							"frame": {
+								"name": "Frame",
+								"desc": "The key index to compare against."
+							}
+						}
+					},
+					"comparecurrentkey2": {
+						"list-name": "Compare current key (legacy)",
+						"display-text": "Current key is {0} {1} (legacy)",
+						"description": "Legacy alias for Compare current key.",
+						"params": {
+							"current_key_frame_is0": {
+								"name": "Comparison",
+								"desc": "How to compare the current key."
+							},
+							"frame1": {
+								"name": "Frame",
+								"desc": "The key index to compare against."
+							}
+						}
+					},
+					"compare-current-time": {
+						"list-name": "Compare current time",
+						"display-text": "Current time is {0} {1} ({2})",
+						"description": "Compare the current animation time.",
+						"params": {
+							"current-animation-time-is": {
+								"name": "Comparison",
+								"desc": "How to compare the current time."
+							},
+							"time": {
+								"name": "Time",
+								"desc": "The value to compare against."
+							},
+							"time-format": {
+								"name": "Time format",
+								"desc": "Whether the time value is milliseconds or a ratio.",
+								"items": {
+									"milliseconds": "Milliseconds",
+									"ratio of the animation length": "Ratio of the animation length"
+								}
+							}
+						}
+					},
+					"comparecurrenttime3": {
+						"list-name": "Compare current time (legacy)",
+						"display-text": "Current time is {0} {1} ({2}) (legacy)",
+						"description": "Legacy alias for Compare current time.",
+						"params": {
+							"current_animation_time_is0": {
+								"name": "Comparison",
+								"desc": "How to compare the current time."
+							},
+							"time1": {
+								"name": "Time",
+								"desc": "The value to compare against."
+							},
+							"time_format4": {
+								"name": "Time format",
+								"desc": "Whether the time value is milliseconds or a ratio.",
+								"items": {
+									"milliseconds": "Milliseconds",
+									"ratio of the animation length": "Ratio of the animation length"
+								}
+							}
+						}
+					},
+					"compare-animation": {
+						"list-name": "Compare animation",
+						"display-text": "Current animation is [i]{0}[/i]",
+						"description": "Check if the current animation matches the given name.",
+						"params": {
+							"animation-name": {
+								"name": "Animation name",
+								"desc": "The animation name to compare."
+							}
+						}
+					},
+					"compareanimation4": {
+						"list-name": "Compare animation (legacy)",
+						"display-text": "Current animation is [i]{0}[/i] (legacy)",
+						"description": "Legacy alias for Compare animation.",
+						"params": {
+							"animation0": {
+								"name": "Animation name",
+								"desc": "The animation name to compare."
+							}
+						}
+					},
+					"animation-paused": {
+						"list-name": "Animation paused",
+						"display-text": "Animation is paused",
+						"description": "Check if playback is currently paused."
+					},
+					"animationpaused5": {
+						"list-name": "Animation paused (legacy)",
+						"display-text": "Animation is paused (legacy)",
+						"description": "Legacy alias for Animation paused."
+					},
+					"animation-looping": {
+						"list-name": "Animation looping",
+						"display-text": "Animation is looping",
+						"description": "Check if the current animation is set to loop."
+					},
+					"animationlooping6": {
+						"list-name": "Animation looping (legacy)",
+						"display-text": "Animation is looping (legacy)",
+						"description": "Legacy alias for Animation looping."
+					},
 					"on-sound-triggered": {
 						"list-name": "On sound triggered",
 						"display-text": "On sound triggered",
 						"description": "Triggered when the current animation triggers a sound key."
+					},
+					"onsoundtriggered7": {
+						"list-name": "On sound triggered (legacy)",
+						"display-text": "On sound triggered (legacy)",
+						"description": "Legacy alias for On sound triggered."
 					},
 					"on-sound-volume-change-triggered": {
 						"list-name": "On sound volume change",
 						"display-text": "On sound volume change",
 						"description": "Triggered when a soundline's volume changes."
 					},
+					"onsoundvolumechangetriggered8": {
+						"list-name": "On sound volume change (legacy)",
+						"display-text": "On sound volume change (legacy)",
+						"description": "Legacy alias for On sound volume change."
+					},
 					"on-sound-panning-change-triggered": {
 						"list-name": "On sound panning change",
 						"display-text": "On sound panning change",
 						"description": "Triggered when a soundline's panning changes."
+					},
+					"onsoundpanningchangetriggered9": {
+						"list-name": "On sound panning change (legacy)",
+						"display-text": "On sound panning change (legacy)",
+						"description": "Legacy alias for On sound panning change."
 					}
 				},
 				"actions": {
+					"set-animation": {
+						"list-name": "Set animation",
+						"display-text": "Set animation to [i]{0}[/i] ({1}, blend {2})",
+						"description": "Switch to a different animation.",
+						"params": {
+							"animation-name": {
+								"name": "Animation name",
+								"desc": "The animation to switch to."
+							},
+							"where-to-start": {
+								"name": "Start from",
+								"desc": "How to choose the starting playback time.",
+								"items": {
+									"play from start": "Play from start",
+									"play from current time": "Play from current time",
+									"play from current time ratio": "Play from current time ratio",
+									"blend to start": "Blend to start",
+									"blend at current time ratio": "Blend at current time ratio"
+								}
+							},
+							"blend-duration": {
+								"name": "Blend duration",
+								"desc": "Blend duration in milliseconds (legacy field; blending is currently ignored)."
+							}
+						}
+					},
+					"setanimation0": {
+						"list-name": "Set animation (legacy)",
+						"display-text": "Set animation to [i]{0}[/i] ({1}, blend {2}) (legacy)",
+						"description": "Legacy alias for Set animation.",
+						"params": {
+							"animation0": {
+								"name": "Animation name",
+								"desc": "The animation to switch to."
+							},
+							"where_to_start_playing_this_animation6": {
+								"name": "Start from",
+								"desc": "How to choose the starting playback time.",
+								"items": {
+									"play from start": "Play from start",
+									"play from current time": "Play from current time",
+									"play from current time ratio": "Play from current time ratio",
+									"blend to start": "Blend to start",
+									"blend at current time ratio": "Blend at current time ratio"
+								}
+							},
+							"blend_duration7": {
+								"name": "Blend duration",
+								"desc": "Blend duration in milliseconds."
+							}
+						}
+					},
+					"set-playback-speed-ratio": {
+						"list-name": "Set playback speed ratio",
+						"display-text": "Set playback speed ratio to {0}",
+						"description": "Set the playback speed multiplier.",
+						"params": {
+							"speed-ratio": {
+								"name": "Speed ratio",
+								"desc": "Playback speed multiplier (1 is normal speed)."
+							}
+						}
+					},
+					"setplaybackspeedratio1": {
+						"list-name": "Set playback speed ratio (legacy)",
+						"display-text": "Set playback speed ratio to {0} (legacy)",
+						"description": "Legacy alias for Set playback speed ratio.",
+						"params": {
+							"speed_ratio0": {
+								"name": "Speed ratio",
+								"desc": "Playback speed multiplier."
+							}
+						}
+					},
+					"set-animation-loop": {
+						"list-name": "Set animation loop",
+						"display-text": "Set animation loop to {0}",
+						"description": "Set whether the current animation loops.",
+						"params": {
+							"loop-animation": {
+								"name": "Loop mode",
+								"desc": "Play once or loop the animation.",
+								"items": {
+									"play once": "Play once",
+									"loop": "Loop"
+								}
+							}
+						}
+					},
+					"setanimationloop3": {
+						"list-name": "Set animation loop (legacy)",
+						"display-text": "Set animation loop to {0} (legacy)",
+						"description": "Legacy alias for Set animation loop.",
+						"params": {
+							"loop_animation2": {
+								"name": "Loop mode",
+								"desc": "Play once or loop the animation.",
+								"items": {
+									"play once": "Play once",
+									"loop": "Loop"
+								}
+							}
+						}
+					},
+					"set-animation-time": {
+						"list-name": "Set animation time",
+						"display-text": "Set animation time ({0}) to {1}",
+						"description": "Set playback time for the current animation.",
+						"params": {
+							"time-units": {
+								"name": "Time units",
+								"desc": "How to interpret the time value.",
+								"items": {
+									"milliseconds": "Milliseconds",
+									"ratio of total length": "Ratio of total length"
+								}
+							},
+							"new-position": {
+								"name": "New position",
+								"desc": "The new playback time."
+							}
+						}
+					},
+					"setanimationtime4": {
+						"list-name": "Set animation time (legacy)",
+						"display-text": "Set animation time ({0}) to {1} (legacy)",
+						"description": "Legacy alias for Set animation time.",
+						"params": {
+							"time_units2": {
+								"name": "Time units",
+								"desc": "How to interpret the time value.",
+								"items": {
+									"milliseconds": "Milliseconds",
+									"ratio of total length": "Ratio of total length"
+								}
+							},
+							"new_position3": {
+								"name": "New position",
+								"desc": "The new playback time."
+							}
+						}
+					},
+					"pause-animation": {
+						"list-name": "Pause animation",
+						"display-text": "Pause animation",
+						"description": "Pause animation playback."
+					},
+					"pauseanimation5": {
+						"list-name": "Pause animation (legacy)",
+						"display-text": "Pause animation (legacy)",
+						"description": "Legacy alias for Pause animation."
+					},
+					"resume-animation": {
+						"list-name": "Resume animation",
+						"display-text": "Resume animation",
+						"description": "Resume animation playback."
+					},
+					"resumeanimation6": {
+						"list-name": "Resume animation (legacy)",
+						"display-text": "Resume animation (legacy)",
+						"description": "Legacy alias for Resume animation."
+					},
+					"play-anim-to": {
+						"list-name": "Play animation to",
+						"display-text": "Play animation {0} {1}",
+						"description": "Play towards a target key/time/ratio and stop there.",
+						"params": {
+							"units": {
+								"name": "Target units",
+								"desc": "Whether the target is keyframe index, time, or time ratio.",
+								"items": {
+									"to keyframe": "To keyframe",
+									"to time": "To time",
+									"to time ratio": "To time ratio"
+								}
+							},
+							"target": {
+								"name": "Target",
+								"desc": "The target value in the selected units."
+							}
+						}
+					},
+					"playanimto7": {
+						"list-name": "Play animation to (legacy)",
+						"display-text": "Play animation {0} {1} (legacy)",
+						"description": "Legacy alias for Play animation to.",
+						"params": {
+							"3": {
+								"name": "Target units",
+								"desc": "Whether the target is keyframe index, time, or time ratio.",
+								"items": {
+									"to keyframe": "To keyframe",
+									"to time": "To time",
+									"to time ratio": "To time ratio"
+								}
+							},
+							"target4": {
+								"name": "Target",
+								"desc": "The target value in the selected units."
+							}
+						}
+					},
 					"associate-type-with-name": {
 						"list-name": "Associate type with name",
 						"display-text": "Associate {0} with Spriter object [i]{1}[/i]",
@@ -106,6 +479,21 @@
 							"spriter-name": {
 								"name": "Spriter object name",
 								"desc": "The name of the Spriter object (as named in the Spriter project)."
+							}
+						}
+					},
+					"associatetypewithname666": {
+						"list-name": "Associate type with name (legacy)",
+						"display-text": "Associate {0} with Spriter object [i]{1}[/i] (legacy)",
+						"description": "Legacy alias for Associate type with name.",
+						"params": {
+							"object0": {
+								"name": "Object type",
+								"desc": "The Construct object type to associate."
+							},
+							"name1": {
+								"name": "Spriter object name",
+								"desc": "The name of the Spriter object."
 							}
 						}
 					},
@@ -128,6 +516,30 @@
 								}
 							},
 							"spriter-object-name": {
+								"name": "Spriter object name",
+								"desc": "The name of the Spriter object to pin to."
+							}
+						}
+					},
+					"pinC2ObjectToSpriterObject27": {
+						"list-name": "Pin object to Spriter object (legacy)",
+						"display-text": "Pin {0} to Spriter object [i]{2}[/i] ({1}) (legacy)",
+						"description": "Legacy alias for pinning an object to a Spriter object.",
+						"params": {
+							"c2_object0": {
+								"name": "Object",
+								"desc": "The Construct object to pin."
+							},
+							"set_which_properties4": {
+								"name": "Set properties",
+								"desc": "Which properties to apply.",
+								"items": {
+									"angle and position": "Angle and position",
+									"angle": "Angle",
+									"position": "Position"
+								}
+							},
+							"spriter_object5": {
 								"name": "Spriter object name",
 								"desc": "The name of the Spriter object to pin to."
 							}
@@ -157,6 +569,30 @@
 							}
 						}
 					},
+					"setc2objecttospriterobject21": {
+						"list-name": "Set object to Spriter object (legacy)",
+						"display-text": "Set {0} to Spriter object [i]{2}[/i] ({1}) (legacy)",
+						"description": "Legacy alias for one-shot object sync.",
+						"params": {
+							"c2_object0": {
+								"name": "Object",
+								"desc": "The Construct object to set."
+							},
+							"set_which_properties4": {
+								"name": "Set properties",
+								"desc": "Which properties to apply.",
+								"items": {
+									"angle and position": "Angle and position",
+									"angle": "Angle",
+									"position": "Position"
+								}
+							},
+							"spriter_object5": {
+								"name": "Spriter object name",
+								"desc": "The name of the Spriter object to match."
+							}
+						}
+					},
 					"unpin-c3-object-from-spriter-object": {
 						"list-name": "Unpin C3 object from Spriter object",
 						"display-text": "Unpin {0} from Spriter object [i]{1}[/i]",
@@ -172,12 +608,38 @@
 							}
 						}
 					},
+					"unpinC2ObjectFromSpriterObject25": {
+						"list-name": "Unpin object from Spriter object (legacy)",
+						"display-text": "Unpin {0} from Spriter object [i]{1}[/i] (legacy)",
+						"description": "Legacy alias for unpinning an object.",
+						"params": {
+							"c2_object0": {
+								"name": "Object",
+								"desc": "The Construct object to unpin."
+							},
+							"spriter_object5": {
+								"name": "Spriter object name",
+								"desc": "The Spriter object name to unpin from."
+							}
+						}
+					},
 					"unpin-all-from-spriter-object": {
 						"list-name": "Unpin all from Spriter object",
 						"display-text": "Unpin all from Spriter object [i]{0}[/i]",
 						"description": "Remove all pinned objects from a Spriter object.",
 						"params": {
 							"spriter-object-name": {
+								"name": "Spriter object name",
+								"desc": "The Spriter object name to unpin from (empty to unpin all)."
+							}
+						}
+					},
+					"unpinAllFromSpriterObject26": {
+						"list-name": "Unpin all from Spriter object (legacy)",
+						"display-text": "Unpin all from Spriter object [i]{0}[/i] (legacy)",
+						"description": "Legacy alias for unpin all.",
+						"params": {
+							"spriter_object5": {
 								"name": "Spriter object name",
 								"desc": "The Spriter object name to unpin from (empty to unpin all)."
 							}
@@ -193,6 +655,50 @@
 						"description": "Get the current playback time (in seconds) for the selected animation.",
 						"translated-name": "Time"
 					},
+					"time-legacy": {
+						"description": "Legacy time expression (milliseconds).",
+						"translated-name": "time"
+					},
+					"key": {
+						"description": "Get the current mainline key index.",
+						"translated-name": "Key"
+					},
+					"key-legacy": {
+						"description": "Legacy alias for Key.",
+						"translated-name": "key"
+					},
+					"time-ratio": {
+						"description": "Get the current playback time as a ratio of animation length.",
+						"translated-name": "TimeRatio"
+					},
+					"timeratio-legacy": {
+						"description": "Legacy alias for TimeRatio.",
+						"translated-name": "timeRatio"
+					},
+					"play-to": {
+						"description": "Get the active play-to target time in milliseconds, or -1 if none.",
+						"translated-name": "PlayTo"
+					},
+					"play-to-time-left": {
+						"description": "Get milliseconds remaining until the play-to target is reached.",
+						"translated-name": "PlayToTimeLeft"
+					},
+					"animation-length": {
+						"description": "Get the current animation length in milliseconds.",
+						"translated-name": "AnimationLength"
+					},
+					"animationlength-legacy": {
+						"description": "Legacy alias for AnimationLength.",
+						"translated-name": "animationLength"
+					},
+					"speed-ratio": {
+						"description": "Get the current playback speed ratio.",
+						"translated-name": "SpeedRatio"
+					},
+					"speedratio-legacy": {
+						"description": "Legacy alias for SpeedRatio.",
+						"translated-name": "speedRatio"
+					},
 					"object-count": {
 						"description": "Get the number of sprite objects in the currently evaluated pose.",
 						"translated-name": "ObjectCount"
@@ -201,17 +707,33 @@
 						"description": "Get the name of the currently selected entity.",
 						"translated-name": "EntityName"
 					},
+					"entityname-legacy": {
+						"description": "Legacy alias for EntityName.",
+						"translated-name": "entityName"
+					},
 					"animation-name": {
 						"description": "Get the name of the currently selected animation.",
 						"translated-name": "AnimationName"
+					},
+					"animationname-legacy": {
+						"description": "Legacy alias for AnimationName.",
+						"translated-name": "animationName"
 					},
 					"triggered-sound": {
 						"description": "Get the most recently triggered sound name.",
 						"translated-name": "TriggeredSound"
 					},
+					"triggeredsound-legacy": {
+						"description": "Legacy alias for TriggeredSound.",
+						"translated-name": "triggeredSound"
+					},
 					"triggered-sound-tag": {
 						"description": "Get the soundline tag/name associated with the latest sound trigger or change.",
 						"translated-name": "TriggeredSoundTag"
+					},
+					"triggeredsoundtag-legacy": {
+						"description": "Legacy alias for TriggeredSoundTag.",
+						"translated-name": "triggeredSoundTag"
 					},
 					"sound-volume": {
 						"description": "Get the current volume value for a soundline tag.",
@@ -223,11 +745,31 @@
 							}
 						}
 					},
+					"soundvolume-legacy": {
+						"description": "Legacy alias for SoundVolume.",
+						"translated-name": "soundVolume",
+						"params": {
+							"name0": {
+								"name": "Sound tag",
+								"desc": "The soundline name to query."
+							}
+						}
+					},
 					"sound-panning": {
 						"description": "Get the current panning value for a soundline tag.",
 						"translated-name": "SoundPanning",
 						"params": {
 							"sound-tag": {
+								"name": "Sound tag",
+								"desc": "The soundline name to query."
+							}
+						}
+					},
+					"soundpanning-legacy": {
+						"description": "Legacy alias for SoundPanning.",
+						"translated-name": "soundPanning",
+						"params": {
+							"name0": {
 								"name": "Sound tag",
 								"desc": "The soundline name to query."
 							}

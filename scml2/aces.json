@@ -8,6 +8,14 @@
 				"scriptName": "OnReady",
 				"isTrigger": true,
 				"highlight": true
+			},
+			{
+				"c2id": 666,
+				"id": "readyforsetup666",
+				"scriptName": "readyForSetup",
+				"isTrigger": true,
+				"isDeprecated": true,
+				"highlight": false
 			}
 		],
 		"actions": [
@@ -19,9 +27,311 @@
 					{"id": "object-type", "type": "object"},
 					{"id": "spriter-name", "type": "string"}
 				]
+			},
+			{
+				"c2id": 666,
+				"id": "associatetypewithname666",
+				"scriptName": "associateTypeWithName",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "object0", "type": "object"},
+					{"id": "name1", "type": "string"}
+				]
 			}
 		],
 		"expressions": []
+	},
+
+	"animations": {
+		"conditions": [
+			{
+				"id": "on-anim-finished",
+				"scriptName": "OnAnimFinished",
+				"isTrigger": true,
+				"highlight": true,
+				"params": [
+					{"id": "animation-name", "type": "string"}
+				]
+			},
+			{
+				"c2id": 0,
+				"id": "onanimfinished0",
+				"scriptName": "OnAnimFinished",
+				"isTrigger": true,
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "animation0", "type": "string"}
+				]
+			},
+			{
+				"id": "on-any-anim-finished",
+				"scriptName": "OnAnyAnimFinished",
+				"isTrigger": true,
+				"highlight": true
+			},
+			{
+				"c2id": 1,
+				"id": "onanyanimfinished1",
+				"scriptName": "OnAnyAnimFinished",
+				"isTrigger": true,
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
+				"id": "compare-current-key",
+				"scriptName": "CompareCurrentKey",
+				"highlight": false,
+				"params": [
+					{"id": "current-key-frame-is", "type": "cmp"},
+					{"id": "frame", "type": "number", "initialValue": "0"}
+				]
+			},
+			{
+				"c2id": 2,
+				"id": "comparecurrentkey2",
+				"scriptName": "CompareCurrentKey",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "current_key_frame_is0", "type": "cmp"},
+					{"id": "frame1", "type": "number", "initialValue": "0"}
+				]
+			},
+			{
+				"id": "compare-current-time",
+				"scriptName": "CompareCurrentTime",
+				"highlight": false,
+				"params": [
+					{"id": "current-animation-time-is", "type": "cmp"},
+					{"id": "time", "type": "number", "initialValue": "0"},
+					{"id": "time-format", "type": "combo", "items": ["milliseconds", "ratio of the animation length"]}
+				]
+			},
+			{
+				"c2id": 3,
+				"id": "comparecurrenttime3",
+				"scriptName": "CompareCurrentTime",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "current_animation_time_is0", "type": "cmp"},
+					{"id": "time1", "type": "number", "initialValue": "0"},
+					{"id": "time_format4", "type": "combo", "items": ["milliseconds", "ratio of the animation length"]}
+				]
+			},
+			{
+				"id": "compare-animation",
+				"scriptName": "CompareAnimation",
+				"highlight": false,
+				"params": [
+					{"id": "animation-name", "type": "string"}
+				]
+			},
+			{
+				"c2id": 4,
+				"id": "compareanimation4",
+				"scriptName": "CompareAnimation",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "animation0", "type": "string"}
+				]
+			},
+			{
+				"id": "animation-paused",
+				"scriptName": "AnimationPaused",
+				"highlight": false
+			},
+			{
+				"c2id": 5,
+				"id": "animationpaused5",
+				"scriptName": "AnimationPaused",
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
+				"id": "animation-looping",
+				"scriptName": "AnimationLooping",
+				"highlight": false
+			},
+			{
+				"c2id": 6,
+				"id": "animationlooping6",
+				"scriptName": "AnimationLooping",
+				"isDeprecated": true,
+				"highlight": false
+			}
+		],
+		"actions": [
+			{
+				"id": "set-animation",
+				"scriptName": "SetAnimation",
+				"highlight": true,
+				"params": [
+					{"id": "animation-name", "type": "string"},
+					{"id": "where-to-start", "type": "combo", "items": ["play from start", "play from current time", "play from current time ratio", "blend to start", "blend at current time ratio"]},
+					{"id": "blend-duration", "type": "number", "initialValue": "0"}
+				]
+			},
+			{
+				"c2id": 0,
+				"id": "setanimation0",
+				"scriptName": "setAnimation",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "animation0", "type": "string"},
+					{"id": "where_to_start_playing_this_animation6", "type": "combo", "items": ["play from start", "play from current time", "play from current time ratio", "blend to start", "blend at current time ratio"]},
+					{"id": "blend_duration7", "type": "number", "initialValue": "0"}
+				]
+			},
+			{
+				"id": "set-playback-speed-ratio",
+				"scriptName": "SetPlaybackSpeedRatio",
+				"highlight": false,
+				"params": [
+					{"id": "speed-ratio", "type": "number", "initialValue": "1.0"}
+				]
+			},
+			{
+				"c2id": 1,
+				"id": "setplaybackspeedratio1",
+				"scriptName": "setPlaybackSpeedRatio",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "speed_ratio0", "type": "number", "initialValue": "1.0"}
+				]
+			},
+			{
+				"id": "set-animation-loop",
+				"scriptName": "SetAnimationLoop",
+				"highlight": false,
+				"params": [
+					{"id": "loop-animation", "type": "combo", "items": ["play once", "loop"]}
+				]
+			},
+			{
+				"c2id": 3,
+				"id": "setanimationloop3",
+				"scriptName": "setAnimationLoop",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "loop_animation2", "type": "combo", "items": ["play once", "loop"]}
+				]
+			},
+			{
+				"id": "set-animation-time",
+				"scriptName": "SetAnimationTime",
+				"highlight": false,
+				"params": [
+					{"id": "time-units", "type": "combo", "items": ["milliseconds", "ratio of total length"]},
+					{"id": "new-position", "type": "number", "initialValue": "0"}
+				]
+			},
+			{
+				"c2id": 4,
+				"id": "setanimationtime4",
+				"scriptName": "setAnimationTime",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "time_units2", "type": "combo", "items": ["milliseconds", "ratio of total length"]},
+					{"id": "new_position3", "type": "number", "initialValue": "0"}
+				]
+			},
+			{
+				"id": "pause-animation",
+				"scriptName": "PauseAnimation",
+				"highlight": false
+			},
+			{
+				"c2id": 5,
+				"id": "pauseanimation5",
+				"scriptName": "pauseAnimation",
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
+				"id": "resume-animation",
+				"scriptName": "ResumeAnimation",
+				"highlight": false
+			},
+			{
+				"c2id": 6,
+				"id": "resumeanimation6",
+				"scriptName": "resumeAnimation",
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
+				"id": "play-anim-to",
+				"scriptName": "PlayAnimTo",
+				"highlight": false,
+				"params": [
+					{"id": "units", "type": "combo", "items": ["to keyframe", "to time", "to time ratio"]},
+					{"id": "target", "type": "number", "initialValue": "0"}
+				]
+			},
+			{
+				"c2id": 7,
+				"id": "playanimto7",
+				"scriptName": "playAnimTo",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "3", "type": "combo", "items": ["to keyframe", "to time", "to time ratio"]},
+					{"id": "target4", "type": "number", "initialValue": "0"}
+				]
+			}
+		],
+		"expressions": [
+			{
+				"c2id": 1,
+				"id": "key",
+				"expressionName": "Key",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"c2id": 7,
+				"id": "time-ratio",
+				"expressionName": "TimeRatio",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"c2id": 3,
+				"id": "play-to",
+				"expressionName": "PlayTo",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"c2id": 4,
+				"id": "play-to-time-left",
+				"expressionName": "PlayToTimeLeft",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"c2id": 22,
+				"id": "animation-length",
+				"expressionName": "AnimationLength",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"c2id": 23,
+				"id": "speed-ratio",
+				"expressionName": "SpeedRatio",
+				"highlight": false,
+				"returnType": "number"
+			}
+		]
 	},
 
 	"custom": {
@@ -47,6 +357,7 @@
 				"returnType": "string"
 			},
 			{
+				"c2id": 0,
 				"id": "time",
 				"expressionName": "Time",
 				"highlight": false,
@@ -59,12 +370,14 @@
 				"returnType": "number"
 			},
 			{
+				"c2id": 6,
 				"id": "entity-name",
 				"expressionName": "EntityName",
 				"highlight": false,
 				"returnType": "string"
 			},
 			{
+				"c2id": 5,
 				"id": "animation-name",
 				"expressionName": "AnimationName",
 				"highlight": false,
@@ -82,9 +395,25 @@
 				"highlight": true
 			},
 			{
+				"c2id": 7,
+				"id": "onsoundtriggered7",
+				"scriptName": "OnSoundTriggered",
+				"isTrigger": true,
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
 				"id": "on-sound-volume-change-triggered",
 				"scriptName": "OnSoundVolumeChangeTriggered",
 				"isTrigger": true,
+				"highlight": false
+			},
+			{
+				"c2id": 8,
+				"id": "onsoundvolumechangetriggered8",
+				"scriptName": "OnSoundVolumeChangeTriggered",
+				"isTrigger": true,
+				"isDeprecated": true,
 				"highlight": false
 			},
 			{
@@ -92,23 +421,34 @@
 				"scriptName": "OnSoundPanningChangeTriggered",
 				"isTrigger": true,
 				"highlight": false
+			},
+			{
+				"c2id": 9,
+				"id": "onsoundpanningchangetriggered9",
+				"scriptName": "OnSoundPanningChangeTriggered",
+				"isTrigger": true,
+				"isDeprecated": true,
+				"highlight": false
 			}
 		],
 		"actions": [],
 		"expressions": [
 			{
+				"c2id": 11,
 				"id": "triggered-sound",
 				"expressionName": "TriggeredSound",
 				"highlight": false,
 				"returnType": "string"
 			},
 			{
+				"c2id": 12,
 				"id": "triggered-sound-tag",
 				"expressionName": "TriggeredSoundTag",
 				"highlight": false,
 				"returnType": "string"
 			},
 			{
+				"c2id": 13,
 				"id": "sound-volume",
 				"expressionName": "SoundVolume",
 				"highlight": false,
@@ -121,6 +461,7 @@
 				]
 			},
 			{
+				"c2id": 14,
 				"id": "sound-panning",
 				"expressionName": "SoundPanning",
 				"highlight": false,
@@ -149,6 +490,18 @@
 				]
 			},
 			{
+				"c2id": 27,
+				"id": "pinC2ObjectToSpriterObject27",
+				"scriptName": "pinC2ObjectToSpriterObject",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "c2_object0", "type": "object"},
+					{"id": "set_which_properties4", "type": "combo", "items": ["angle and position", "angle", "position"]},
+					{"id": "spriter_object5", "type": "string"}
+				]
+			},
+			{
 				"id": "set-c3-object-to-spriter-object",
 				"scriptName": "SetC3ObjectToSpriterObject",
 				"highlight": false,
@@ -156,6 +509,18 @@
 					{"id": "c3-object", "type": "object"},
 					{"id": "set-which-properties", "type": "combo", "items": ["angle and position", "angle", "position"]},
 					{"id": "spriter-object-name", "type": "string"}
+				]
+			},
+			{
+				"c2id": 21,
+				"id": "setc2objecttospriterobject21",
+				"scriptName": "setC2ObjectToSpriterObject",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "c2_object0", "type": "object"},
+					{"id": "set_which_properties4", "type": "combo", "items": ["angle and position", "angle", "position"]},
+					{"id": "spriter_object5", "type": "string"}
 				]
 			},
 			{
@@ -168,11 +533,32 @@
 				]
 			},
 			{
+				"c2id": 25,
+				"id": "unpinC2ObjectFromSpriterObject25",
+				"scriptName": "unpinC2ObjectFromSpriterObject",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "c2_object0", "type": "object"},
+					{"id": "spriter_object5", "type": "string"}
+				]
+			},
+			{
 				"id": "unpin-all-from-spriter-object",
 				"scriptName": "UnpinAllFromSpriterObject",
 				"highlight": false,
 				"params": [
 					{"id": "spriter-object-name", "type": "string"}
+				]
+			},
+			{
+				"c2id": 26,
+				"id": "unpinAllFromSpriterObject26",
+				"scriptName": "unpinAllFromSpriterObject",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "spriter_object5", "type": "string"}
 				]
 			}
 		],

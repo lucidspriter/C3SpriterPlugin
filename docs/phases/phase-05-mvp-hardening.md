@@ -10,7 +10,7 @@ Stabilize the MVP by supporting persistence, debugging, and essential scripting 
 ## Checklist
 - [ ] Implement `_saveToJson` and `_loadFromJson` for critical runtime state (current entity, animation, playback time, etc.).
 - [ ] Populate `_getDebuggerProperties` with useful inspection data (e.g., selected animation, paused/playing state).
-- [ ] Port high-value conditions and expressions such as "Current animation" and playback time queries.
+- [x] Port high-value conditions and expressions such as "Current animation" and playback time queries. _(Added animation-finish/current-time/key comparisons plus key/time-ratio/play-to/speed/length expressions, including legacy ACE IDs.)_
 
 ## Using this file
 - When adding serialization or debugger fields, document any SDK constraints or design decisions inline.

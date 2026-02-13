@@ -378,6 +378,45 @@ function toNumberOrDefault(value, defaultValue)
 	return Number.isFinite(numberValue) ? numberValue : defaultValue;
 }
 
+function toLowerCaseSafe(value)
+{
+	return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function doCmp(left, cmp, right)
+{
+	const a = Number(left);
+	const b = Number(right);
+	const hasNumbers = Number.isFinite(a) && Number.isFinite(b);
+
+	if (hasNumbers)
+	{
+		switch (cmp)
+		{
+			case 0: return a === b;
+			case 1: return a !== b;
+			case 2: return a < b;
+			case 3: return a <= b;
+			case 4: return a > b;
+			case 5: return a >= b;
+			default: break;
+		}
+	}
+
+	const leftText = String(left ?? "");
+	const rightText = String(right ?? "");
+	switch (cmp)
+	{
+		case 0: return leftText === rightText;
+		case 1: return leftText !== rightText;
+		case 2: return leftText < rightText;
+		case 3: return leftText <= rightText;
+		case 4: return leftText > rightText;
+		case 5: return leftText >= rightText;
+		default: return leftText === rightText;
+	}
+}
+
 function stripEntityPrefix(name, entityName)
 {
 	const text = toStringOrEmpty(name);
@@ -471,6 +510,23 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.noPremultiply = this.properties[PROPERTY_INDEX.BLEND_MODE] === 0;
 		this.drawDebug = this.properties[PROPERTY_INDEX.DRAW_DEBUG] === 1;
 
+		const startupWorldInfo = (typeof this.GetWorldInfo === "function")
+			? this.GetWorldInfo()
+			: (typeof this.getWorldInfo === "function")
+				? this.getWorldInfo()
+				: null;
+		const startupGetWidth = startupWorldInfo
+			? (typeof startupWorldInfo.GetWidth === "function")
+				? startupWorldInfo.GetWidth.bind(startupWorldInfo)
+				: (typeof startupWorldInfo.getWidth === "function")
+					? startupWorldInfo.getWidth.bind(startupWorldInfo)
+					: null
+			: null;
+		const startupWidth = startupGetWidth ? startupGetWidth() : toFiniteNumber(this.width, 50);
+		const startupScaleRatio = toFiniteNumber(startupWidth, 50) / 50;
+		// Legacy behaviour: startup object width defines the global Spriter scale ratio.
+		this._globalScaleRatio = (Number.isFinite(startupScaleRatio) && startupScaleRatio !== 0) ? startupScaleRatio : 1;
+
 		this.isReady = false;
 		this.loadError = null;
 		this.loadErrorMessage = "";
@@ -491,7 +547,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.playbackSpeed = 1;
 		this.localTimeMs = 0;
 		this._currentAdjustedTimeMs = 0;
+		this._currentMainlineKeyIndex = 0;
+		this._playToTimeMs = -1;
+		this._loopOverrideByAnimationIndex = new Map();
+		this._pendingLoopOverride = null;
 		this._lastTickTimeSec = null;
+		this._didWarnBlendUnsupported = false;
 
 		this._fileLookup = new Map();
 		this._timelineById = new Map();
@@ -556,7 +617,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const dtSeconds = this._getDtSeconds();
 		if (this.playing && dtSeconds > 0)
 		{
-			this._advanceTime(dtSeconds);
+			if (this._advanceTime(dtSeconds))
+			{
+				this._triggerAnimationFinished();
+			}
 		}
 
 		this._evaluatePose();
@@ -679,8 +743,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			x: instX,
 			y: instY,
 			angle: Number.isFinite(instAngle) ? instAngle : 0,
-			scaleX: 1,
-			scaleY: 1,
+			scaleX: toFiniteNumber(this._globalScaleRatio, 1),
+			scaleY: toFiniteNumber(this._globalScaleRatio, 1),
 			alpha: 1
 		};
 
@@ -1523,40 +1587,510 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const lengthMs = this.animationLengthMs;
 		if (!Number.isFinite(lengthMs) || lengthMs <= 0)
 		{
-			return;
+			return false;
 		}
 
 		const speed = Number.isFinite(this.playbackSpeed) ? this.playbackSpeed : 1;
+		if (speed === 0)
+		{
+			return false;
+		}
+
+		const previousTime = this.localTimeMs;
 		const deltaMs = dtSeconds * 1000 * speed;
-		this.localTimeMs += deltaMs;
+		let nextTime = previousTime + deltaMs;
+
+		const isLooping = this._isAnimationLooping(this.animation);
+		let finished = false;
+
+		if (this._playToTimeMs >= 0)
+		{
+			const targetTime = this._playToTimeMs;
+			if (this._didCrossPlayToTarget(previousTime, nextTime, targetTime, lengthMs, isLooping, speed))
+			{
+				nextTime = targetTime;
+				this._playToTimeMs = -1;
+				this.playing = false;
+				finished = true;
+			}
+		}
+
+		if (!finished)
+		{
+			if (isLooping)
+			{
+				if (speed >= 0)
+				{
+					if (previousTime < lengthMs && nextTime >= lengthMs)
+					{
+						finished = true;
+					}
+				}
+				else if (previousTime > 0 && nextTime <= 0)
+				{
+					finished = true;
+				}
+			}
+			else
+			{
+				if (speed >= 0 && nextTime >= lengthMs)
+				{
+					if (previousTime < lengthMs)
+					{
+						finished = true;
+					}
+
+					nextTime = lengthMs;
+					this.playing = false;
+					this._playToTimeMs = -1;
+				}
+				else if (speed < 0 && nextTime <= 0)
+				{
+					if (previousTime > 0)
+					{
+						finished = true;
+					}
+
+					nextTime = 0;
+					this.playing = false;
+					this._playToTimeMs = -1;
+				}
+			}
+		}
+
+		this.localTimeMs = this._normaliseSampleTime(nextTime, lengthMs, isLooping);
+		return finished;
+	}
+
+	_normaliseLoopTime(timeMs, lengthMs)
+	{
+		const length = toFiniteNumber(lengthMs, 0);
+		if (!(length > 0))
+		{
+			return 0;
+		}
+
+		let t = toFiniteNumber(timeMs, 0);
+		while (t < 0)
+		{
+			t += length;
+		}
+		if (t !== length)
+		{
+			t %= length;
+		}
+		if (t < 0)
+		{
+			t += length;
+		}
+
+		return t;
+	}
+
+	_normaliseSampleTime(timeMs, lengthMs, isLooping)
+	{
+		if (!isLooping)
+		{
+			return clamp(toFiniteNumber(timeMs, 0), 0, toFiniteNumber(lengthMs, 0));
+		}
+
+		return this._normaliseLoopTime(timeMs, lengthMs);
+	}
+
+	_didCrossPlayToTarget(previousTime, nextTime, targetTime, lengthMs, isLooping, speed)
+	{
+		const target = toFiniteNumber(targetTime, 0);
+		if (!Number.isFinite(target))
+		{
+			return false;
+		}
+
+		if (!isLooping)
+		{
+			if (speed >= 0)
+			{
+				return target > previousTime && target <= nextTime;
+			}
+			return target < previousTime && target >= nextTime;
+		}
+
+		const from = this._normaliseLoopTime(previousTime, lengthMs);
+		const to = this._normaliseLoopTime(nextTime, lengthMs);
+		const targetNorm = this._normaliseLoopTime(target, lengthMs);
+
+		if (to === targetNorm)
+		{
+			return true;
+		}
+
+		if (from === targetNorm || from === to)
+		{
+			return false;
+		}
+
+		if (speed >= 0)
+		{
+			if (from < to)
+			{
+				return targetNorm > from && targetNorm < to;
+			}
+			return targetNorm > from || targetNorm < to;
+		}
+
+		if (to < from)
+		{
+			return targetNorm < from && targetNorm > to;
+		}
+		return targetNorm < from || targetNorm > to;
+	}
+
+	_triggerAnimationFinished()
+	{
+		const cnds = C3.Plugins.Spriter.Cnds;
+		if (typeof this._trigger === "function" && cnds && typeof cnds.OnAnyAnimFinished === "function")
+		{
+			this._trigger(cnds.OnAnyAnimFinished);
+		}
+		if (typeof this._trigger === "function" && cnds && typeof cnds.OnAnimFinished === "function")
+		{
+			this._trigger(cnds.OnAnimFinished);
+		}
+	}
+
+	_findAnimationByIdentifier(identifier)
+	{
+		const entity = this.entity;
+		const animations = entity && Array.isArray(entity.animation) ? entity.animation : [];
+		if (!animations.length)
+		{
+			return -1;
+		}
+
+		if (identifier == null || identifier === "")
+		{
+			return 0;
+		}
+
+		const asNumber = Number(identifier);
+		if (Number.isInteger(asNumber))
+		{
+			for (let i = 0, len = animations.length; i < len; i++)
+			{
+				const animation = animations[i];
+				if (animation && Number.isInteger(animation.id) && animation.id === asNumber)
+				{
+					return i;
+				}
+			}
+
+			if (asNumber >= 0 && asNumber < animations.length)
+			{
+				return asNumber;
+			}
+		}
+
+		const asText = toLowerCaseSafe(identifier);
+		if (!asText)
+		{
+			return 0;
+		}
+
+		for (let i = 0, len = animations.length; i < len; i++)
+		{
+			const animation = animations[i];
+			const name = animation && typeof animation.name === "string"
+				? animation.name.trim().toLowerCase()
+				: "";
+			if (name && name === asText)
+			{
+				return i;
+			}
+		}
+
+		return -1;
+	}
+
+	_rebuildAnimationTimelineCache(animation)
+	{
+		this._timelineById.clear();
+		this._timelineNameById.clear();
+
+		const entityNamePrefix = this.entity && this.entity.name ? `${this.entity.name}_` : "";
+		const timelines = animation && Array.isArray(animation.timeline) ? animation.timeline : [];
+		for (let i = 0, len = timelines.length; i < len; i++)
+		{
+			const timeline = timelines[i];
+			const id = toFiniteNumber(timeline && timeline.id, i);
+			this._timelineById.set(id, timeline);
+
+			let timelineName = timeline && typeof timeline.name === "string" ? timeline.name : "";
+			if (entityNamePrefix && timelineName.startsWith(entityNamePrefix))
+			{
+				timelineName = timelineName.slice(entityNamePrefix.length);
+			}
+			this._timelineNameById.set(id, timelineName);
+		}
+	}
+
+	_setAnimation(animationIdentifier, startFrom = 0, blendDuration = 0)
+	{
+		if (!this.entity)
+		{
+			if (typeof animationIdentifier === "string" && animationIdentifier.trim())
+			{
+				this.startingAnimationName = animationIdentifier.trim();
+			}
+			return false;
+		}
+
+		const animationIndex = this._findAnimationByIdentifier(animationIdentifier);
+		if (animationIndex < 0)
+		{
+			return false;
+		}
+
+		if ((startFrom === 3 || startFrom === 4) && blendDuration > 0 && !this._didWarnBlendUnsupported)
+		{
+			this._didWarnBlendUnsupported = true;
+			console.warn("[Spriter] Animation blending is not implemented yet; switching without blend.");
+		}
+
+		const animations = this.entity && Array.isArray(this.entity.animation) ? this.entity.animation : [];
+		const nextAnimation = animations[animationIndex] || null;
+		if (!nextAnimation)
+		{
+			return false;
+		}
+
+		const previousLength = toFiniteNumber(this.animationLengthMs, 0);
+		const previousRatio = previousLength > 0 ? clamp01(this.localTimeMs / previousLength) : 0;
+		const nextLength = Math.max(0, toFiniteNumber(nextAnimation.length, 0));
+
+		let nextTimeMs = this.localTimeMs;
+		switch (startFrom)
+		{
+			case 0: // play from start
+			case 3: // blend to start (legacy; unsupported blend)
+				nextTimeMs = this.playbackSpeed >= 0 ? 0 : nextLength;
+				break;
+			case 2: // play from current time ratio
+			case 4: // blend at current time ratio (legacy; unsupported blend)
+				nextTimeMs = previousRatio * nextLength;
+				break;
+			case 1: // play from current time
+			default:
+				nextTimeMs = this.localTimeMs;
+				break;
+		}
+
+		this.animationIndex = animationIndex;
+		this.animation = nextAnimation;
+		this.animationLengthMs = nextLength;
+		this.startingAnimationName = typeof nextAnimation.name === "string" ? nextAnimation.name : this.startingAnimationName;
+		this.localTimeMs = this._normaliseSampleTime(nextTimeMs, nextLength, this._isAnimationLooping(nextAnimation));
+		this._playToTimeMs = -1;
+		this.playing = true;
+
+		this._rebuildAnimationTimelineCache(nextAnimation);
+		this._buildSoundLineCache();
+		this._evaluatePose();
+		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
+		return true;
+	}
+
+	_setPlaybackSpeedRatio(newSpeed)
+	{
+		this.playbackSpeed = toFiniteNumber(newSpeed, 1);
+	}
+
+	_setAnimationLoop(loopOn)
+	{
+		const shouldLoop = Number(loopOn) !== 0;
+		if (!this.animation || this.animationIndex < 0)
+		{
+			this._pendingLoopOverride = shouldLoop;
+			return;
+		}
+
+		const key = `${this.entityIndex}:${this.animationIndex}`;
+		this._loopOverrideByAnimationIndex.set(key, shouldLoop);
+	}
+
+	_setAnimationTime(units, timeValue)
+	{
+		const lengthMs = this.animationLengthMs;
+		if (!Number.isFinite(lengthMs) || lengthMs <= 0)
+		{
+			return;
+		}
+
+		let targetMs = toFiniteNumber(timeValue, 0);
+		if (Number(units) === 1)
+		{
+			targetMs *= lengthMs;
+		}
+
+		this.localTimeMs = this._normaliseSampleTime(targetMs, lengthMs, this._isAnimationLooping(this.animation));
+		this._playToTimeMs = -1;
+		this._evaluatePose();
+		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
+	}
+
+	_pauseAnimation()
+	{
+		this.playing = false;
+	}
+
+	_resumeAnimation()
+	{
+		const lengthMs = this.animationLengthMs;
+		if (!Number.isFinite(lengthMs) || lengthMs <= 0)
+		{
+			this.playing = true;
+			return;
+		}
+
+		if (this.playbackSpeed >= 0 && this.localTimeMs === lengthMs)
+		{
+			this.localTimeMs = 0;
+		}
+		else if (this.playbackSpeed < 0 && this.localTimeMs === 0)
+		{
+			this.localTimeMs = lengthMs;
+		}
+
+		this.playing = true;
+	}
+
+	_resolvePlayToTarget(units, targetValue)
+	{
+		const lengthMs = this.animationLengthMs;
+		if (!Number.isFinite(lengthMs) || lengthMs <= 0)
+		{
+			return NaN;
+		}
+
+		const unitMode = Number(units);
+		let targetMs = NaN;
+		if (unitMode === 0)
+		{
+			const animation = this.animation;
+			const mainline = animation && animation.mainline;
+			const keys = mainline && Array.isArray(mainline.key) ? mainline.key : [];
+			const keyIndex = Math.trunc(toFiniteNumber(targetValue, 0));
+			const key = keyIndex >= 0 ? keys[keyIndex] : null;
+			targetMs = toFiniteNumber(key && key.time, NaN);
+		}
+		else if (unitMode === 2)
+		{
+			targetMs = toFiniteNumber(targetValue, 0) * lengthMs;
+		}
+		else
+		{
+			targetMs = toFiniteNumber(targetValue, NaN);
+		}
+
+		if (!Number.isFinite(targetMs))
+		{
+			return NaN;
+		}
+
+		return this._normaliseSampleTime(targetMs, lengthMs, this._isAnimationLooping(this.animation));
+	}
+
+	_playAnimTo(units, targetValue)
+	{
+		const lengthMs = this.animationLengthMs;
+		if (!Number.isFinite(lengthMs) || lengthMs <= 0)
+		{
+			return;
+		}
+
+		const targetMs = this._resolvePlayToTarget(units, targetValue);
+		if (!Number.isFinite(targetMs))
+		{
+			this._playToTimeMs = -1;
+			return;
+		}
+
+		if (targetMs === this.localTimeMs)
+		{
+			this._playToTimeMs = -1;
+			return;
+		}
+
+		this._playToTimeMs = targetMs;
+
+		let direction = 1;
+		if (this._isAnimationLooping(this.animation))
+		{
+			let forwardDistance = 0;
+			let backwardDistance = 0;
+			if (targetMs > this.localTimeMs)
+			{
+				forwardDistance = targetMs - this.localTimeMs;
+				backwardDistance = (lengthMs - targetMs) + this.localTimeMs;
+			}
+			else
+			{
+				forwardDistance = targetMs + (lengthMs - this.localTimeMs);
+				backwardDistance = this.localTimeMs - targetMs;
+			}
+
+			if (backwardDistance < forwardDistance)
+			{
+				direction = -1;
+			}
+		}
+		else if (targetMs < this.localTimeMs)
+		{
+			direction = -1;
+		}
+
+		this.playbackSpeed = Math.abs(toFiniteNumber(this.playbackSpeed, 1)) * direction;
+		this.playing = true;
+	}
+
+	_getCurrentTimeRatio()
+	{
+		const lengthMs = this.animationLengthMs;
+		if (!Number.isFinite(lengthMs) || lengthMs <= 0)
+		{
+			return 0;
+		}
+
+		return clamp01(this.localTimeMs / lengthMs);
+	}
+
+	_getPlayToTimeLeftMs()
+	{
+		const playTo = this._playToTimeMs;
+		const lengthMs = this.animationLengthMs;
+		if (!(playTo >= 0) || !(lengthMs > 0))
+		{
+			return 0;
+		}
 
 		const isLooping = this._isAnimationLooping(this.animation);
 		if (isLooping)
 		{
-			while (this.localTimeMs < 0)
+			if (this.playbackSpeed >= 0)
 			{
-				this.localTimeMs += lengthMs;
+				if (playTo > this.localTimeMs)
+				{
+					return playTo - this.localTimeMs;
+				}
+				return playTo + (lengthMs - this.localTimeMs);
 			}
 
-			// Preserve the legacy edge case where an exact endpoint time can be sampled.
-			if (this.localTimeMs !== lengthMs)
+			if (playTo > this.localTimeMs)
 			{
-				this.localTimeMs %= lengthMs;
+				return (lengthMs - playTo) + this.localTimeMs;
 			}
+			return this.localTimeMs - playTo;
+		}
 
-			if (this.localTimeMs < 0)
-			{
-				this.localTimeMs += lengthMs;
-			}
-		}
-		else
-		{
-			this.localTimeMs = clamp(this.localTimeMs, 0, lengthMs);
-			if (this.localTimeMs >= lengthMs)
-			{
-				this.playing = false;
-			}
-		}
+		return Math.abs(playTo - this.localTimeMs);
 	}
 
 	_isAnimationLooping(animation)
@@ -1564,6 +2098,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!animation || typeof animation !== "object")
 		{
 			return true;
+		}
+
+		const key = `${this.entityIndex}:${this.animationIndex}`;
+		if (this._loopOverrideByAnimationIndex.has(key))
+		{
+			return !!this._loopOverrideByAnimationIndex.get(key);
 		}
 
 		const looping = animation.looping;
@@ -1593,6 +2133,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!animation || !projectData)
 		{
 			this._currentAdjustedTimeMs = toFiniteNumber(this.localTimeMs, 0);
+			this._currentMainlineKeyIndex = 0;
 			this._poseObjectStates.length = 0;
 			this._poseBoneStates.length = 0;
 			return;
@@ -1603,6 +2144,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!keys.length)
 		{
 			this._currentAdjustedTimeMs = toFiniteNumber(this.localTimeMs, 0);
+			this._currentMainlineKeyIndex = 0;
 			this._poseObjectStates.length = 0;
 			this._poseBoneStates.length = 0;
 			return;
@@ -1614,11 +2156,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!mainKey)
 		{
 			this._currentAdjustedTimeMs = toFiniteNumber(this.localTimeMs, 0);
+			this._currentMainlineKeyIndex = 0;
 			this._poseObjectStates.length = 0;
 			this._poseBoneStates.length = 0;
 			return;
 		}
 
+		this._currentMainlineKeyIndex = mainKeyIndex;
 		const poseTimeMs = this._getMainlineAdjustedTime(keys, mainKeyIndex, timeMs);
 		this._currentAdjustedTimeMs = poseTimeMs;
 
@@ -2407,6 +2951,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.entity = entity;
 		this.animation = animation;
 		this.animationLengthMs = lengthMs;
+		this._playToTimeMs = -1;
+		this._currentMainlineKeyIndex = 0;
+
+		if (this._pendingLoopOverride != null)
+		{
+			const key = `${entityIndex}:${animationIndex}`;
+			this._loopOverrideByAnimationIndex.set(key, !!this._pendingLoopOverride);
+			this._pendingLoopOverride = null;
+		}
 
 		this.localTimeMs = 0;
 		this.playing = true;
@@ -2494,22 +3047,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
-		this._timelineById.clear();
-		this._timelineNameById.clear();
-		const entityNamePrefix = entity.name ? entity.name + "_" : "";
-		const timelines = Array.isArray(animation.timeline) ? animation.timeline : [];
-		for (let i = 0; i < timelines.length; i++)
-		{
-			const timeline = timelines[i];
-			const id = toFiniteNumber(timeline && timeline.id, i);
-			this._timelineById.set(id, timeline);
-			let tlName = timeline && timeline.name ? timeline.name : "";
-			if (entityNamePrefix && tlName.startsWith(entityNamePrefix))
-			{
-				tlName = tlName.slice(entityNamePrefix.length);
-			}
-			this._timelineNameById.set(id, tlName);
-		}
+		this._rebuildAnimationTimelineCache(animation);
 
 		this._buildSoundLineCache();
 
@@ -2612,6 +3150,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (typeof this._trigger === "function" && cnds && typeof cnds.OnReady === "function")
 		{
 			this._trigger(cnds.OnReady);
+		}
+		if (typeof this._trigger === "function" && cnds && typeof cnds.readyForSetup === "function")
+		{
+			this._trigger(cnds.readyForSetup);
 		}
 	}
 
@@ -3280,6 +3822,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const myY = worldInfo.GetY();
 		const myAngle = worldInfo.GetAngle();
 		const myVisible = worldInfo.IsVisible();
+		const globalScale = toFiniteNumber(this._globalScaleRatio, 1);
 
 		// Per-tick diagnostic (every 60 frames)
 		this._diagTickCount = (this._diagTickCount || 0) + 1;
@@ -3329,8 +3872,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			if (this.setCollisionsForObjects)
 				wi.SetCollisionEnabled(true);
 
-			// Angle (state.angle is already in radians from degreesToRadians)
-			wi.SetAngle(state.angle);
+			// Apply parent/root angle in non-self-draw mode (legacy behaviour).
+			wi.SetAngle(state.angle + myAngle);
 
 			// Opacity
 			wi.SetOpacity(state.alpha);
@@ -3338,8 +3881,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			// Position: state.x/y are world-space offsets from the Spriter origin
 			const cosA = Math.cos(myAngle);
 			const sinA = Math.sin(myAngle);
-			const finalX = myX + state.x * cosA - state.y * sinA;
-			const finalY = myY + state.x * sinA + state.y * cosA;
+			const localX = state.x * globalScale;
+			const localY = state.y * globalScale;
+			const finalX = myX + localX * cosA - localY * sinA;
+			const finalY = myY + localX * sinA + localY * cosA;
 
 			wi.SetOriginX(0);
 			wi.SetOriginY(0);
@@ -3354,8 +3899,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			// Size (apply scale to original image dimensions)
 			const trueW = state.width || 1;
 			const trueH = state.height || 1;
-			const newW = trueW * state.scaleX;
-			const newH = trueH * state.scaleY;
+			const newW = trueW * state.scaleX * globalScale;
+			const newH = trueH * state.scaleY * globalScale;
 			wi.SetWidth(newW);
 			wi.SetHeight(newH);
 
@@ -3395,6 +3940,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_applyObjectsToSet()
 	{
+		const worldInfo = this._getWorldInfoOf(this);
+		if (!worldInfo)
+		{
+			return;
+		}
+
+		const myX = worldInfo.GetX();
+		const myY = worldInfo.GetY();
+		const myAngle = worldInfo.GetAngle();
+		const cosA = Math.cos(myAngle);
+		const sinA = Math.sin(myAngle);
+		const globalScale = toFiniteNumber(this._globalScaleRatio, 1);
+
 		for (let i = this._objectsToSet.length - 1; i >= 0; i--)
 		{
 			const instr = this._objectsToSet[i];
@@ -3409,11 +3967,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 				// setType: 0=angle+position, 1=angle, 2=position
 				if (instr.setType === 0 || instr.setType === 1)
-					wi.SetAngle(state.angle);
+					wi.SetAngle(state.angle + myAngle);
 				if (instr.setType === 0 || instr.setType === 2)
 				{
-					wi.SetX(state.x);
-					wi.SetY(state.y);
+					const localX = state.x * globalScale;
+					const localY = state.y * globalScale;
+					wi.SetX(myX + localX * cosA - localY * sinA);
+					wi.SetY(myY + localX * sinA + localY * cosA);
 				}
 				wi.SetBboxChanged();
 			}
