@@ -96,6 +96,14 @@ C3.Plugins.Spriter.Cnds =
 		return lower(currentAnimationName) === lower(name);
 	},
 
+	CompareEntity(name)
+	{
+		const currentEntityName = this.entity && typeof this.entity.name === "string"
+			? this.entity.name
+			: "";
+		return lower(currentEntityName) === lower(name);
+	},
+
 	AnimationPaused()
 	{
 		return !this.playing;
@@ -106,6 +114,28 @@ C3.Plugins.Spriter.Cnds =
 		return typeof this._isAnimationLooping === "function"
 			? !!this._isAnimationLooping(this.animation)
 			: true;
+	},
+
+	IsMirrored()
+	{
+		return !!this._xFlip;
+	},
+
+	// Legacy ACE alias used by older projects.
+	isMirrored()
+	{
+		return this.IsMirrored();
+	},
+
+	IsFlipped()
+	{
+		return !!this._yFlip;
+	},
+
+	// Legacy ACE alias used by older projects.
+	isFlipped()
+	{
+		return this.IsFlipped();
 	},
 
 	OnSoundTriggered()

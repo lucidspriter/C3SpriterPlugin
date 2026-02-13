@@ -82,6 +82,12 @@ C3.Plugins.Spriter.Exps =
 		return this.SpeedRatio();
 	},
 
+	ScaleRatio()
+	{
+		const scale = Number(this._globalScaleRatio);
+		return Number.isFinite(scale) ? scale : 1;
+	},
+
 	ObjectCount()
 	{
 		const states = this._poseObjectStates;

@@ -58,6 +58,8 @@
 				"aceCategories": {
 					"initialisation": "Initialisation",
 					"animations": "Animations",
+					"entities": "Entities",
+					"size_position": "Size & Position",
 					"custom": "Custom",
 					"sounds": "Sounds",
 					"attach_c2_object": "Attach C3 Object"
@@ -213,6 +215,28 @@
 							}
 						}
 					},
+					"compare-entity": {
+						"list-name": "Compare entity",
+						"display-text": "Current entity is [i]{0}[/i]",
+						"description": "Check if the current entity matches the given name.",
+						"params": {
+							"entity-name": {
+								"name": "Entity name",
+								"desc": "The entity name to compare."
+							}
+						}
+					},
+					"compareentity16": {
+						"list-name": "Compare entity (legacy)",
+						"display-text": "Current entity is [i]{0}[/i] (legacy)",
+						"description": "Legacy alias for Compare entity.",
+						"params": {
+							"entity0": {
+								"name": "Entity name",
+								"desc": "The entity name to compare."
+							}
+						}
+					},
 					"animation-paused": {
 						"list-name": "Animation paused",
 						"display-text": "Animation is paused",
@@ -232,6 +256,26 @@
 						"list-name": "Animation looping (legacy)",
 						"display-text": "Animation is looping (legacy)",
 						"description": "Legacy alias for Animation looping."
+					},
+					"is-mirrored": {
+						"list-name": "Is mirrored",
+						"display-text": "Object is mirrored on X axis",
+						"description": "Check if the object is currently mirrored on the X axis."
+					},
+					"ismirrored10": {
+						"list-name": "Is mirrored (legacy)",
+						"display-text": "Object is mirrored on X axis (legacy)",
+						"description": "Legacy alias for Is mirrored."
+					},
+					"is-flipped": {
+						"list-name": "Is flipped",
+						"display-text": "Object is flipped on Y axis",
+						"description": "Check if the object is currently flipped on the Y axis."
+					},
+					"isflipped11": {
+						"list-name": "Is flipped (legacy)",
+						"display-text": "Object is flipped on Y axis (legacy)",
+						"description": "Legacy alias for Is flipped."
 					},
 					"on-sound-triggered": {
 						"list-name": "On sound triggered",
@@ -467,6 +511,150 @@
 							}
 						}
 					},
+					"set-entity": {
+						"list-name": "Set entity",
+						"display-text": "Set entity to [i]{0}[/i], animation [i]{1}[/i]",
+						"description": "Switch to a different entity and optionally an animation.",
+						"params": {
+							"entity-name": {
+								"name": "Entity name",
+								"desc": "The entity to switch to."
+							},
+							"animation-name": {
+								"name": "Animation name",
+								"desc": "Animation to play (leave empty to keep current animation name when possible)."
+							}
+						}
+					},
+					"setent8": {
+						"list-name": "Set entity (legacy)",
+						"display-text": "Set entity to [i]{0}[/i], animation [i]{1}[/i] (legacy)",
+						"description": "Legacy alias for Set entity.",
+						"params": {
+							"entity0": {
+								"name": "Entity name",
+								"desc": "The entity to switch to."
+							},
+							"animation1": {
+								"name": "Animation name",
+								"desc": "Animation to play."
+							}
+						}
+					},
+					"set-object-scale-ratio": {
+						"list-name": "Set object scale ratio",
+						"display-text": "Set scale ratio to {0}, X: {1}, Y: {2}",
+						"description": "Set global Spriter scale and optional X/Y flip state.",
+						"params": {
+							"scale-ratio": {
+								"name": "Scale ratio",
+								"desc": "Global scale ratio applied to Spriter playback."
+							},
+							"flip-x-axis": {
+								"name": "X axis",
+								"desc": "Whether to flip on X axis.",
+								"items": {
+									"don't flip x axis": "Don't flip X axis",
+									"flip x axis": "Flip X axis"
+								}
+							},
+							"flip-y-axis": {
+								"name": "Y axis",
+								"desc": "Whether to flip on Y axis.",
+								"items": {
+									"don't flip y axis": "Don't flip Y axis",
+									"flip y axis": "Flip Y axis"
+								}
+							}
+						}
+					},
+					"setobjectscaleratio2": {
+						"list-name": "Set object scale ratio (legacy)",
+						"display-text": "Set scale ratio to {0}, X: {1}, Y: {2} (legacy)",
+						"description": "Legacy alias for Set object scale ratio.",
+						"params": {
+							"scale_ratio0": {
+								"name": "Scale ratio",
+								"desc": "Global scale ratio applied to Spriter playback."
+							},
+							"flip_x_axis3": {
+								"name": "X axis",
+								"desc": "Whether to flip on X axis.",
+								"items": {
+									"don't flip x axis": "Don't flip X axis",
+									"flip x axis": "Flip X axis"
+								}
+							},
+							"flip_y_axis6": {
+								"name": "Y axis",
+								"desc": "Whether to flip on Y axis.",
+								"items": {
+									"don't flip y axis": "Don't flip Y axis",
+									"flip y axis": "Flip Y axis"
+								}
+							}
+						}
+					},
+					"set-object-x-flip": {
+						"list-name": "Set object X flip",
+						"display-text": "Set X mirror to {0}",
+						"description": "Set X-axis mirror state.",
+						"params": {
+							"mirror-x-axis": {
+								"name": "X axis",
+								"desc": "Whether to mirror the X axis.",
+								"items": {
+									"don't mirror x axis": "Don't mirror X axis",
+									"mirror x axis": "Mirror X axis"
+								}
+							}
+						}
+					},
+					"setobjectxflip11": {
+						"list-name": "Set object X flip (legacy)",
+						"display-text": "Set X mirror to {0} (legacy)",
+						"description": "Legacy alias for Set object X flip.",
+						"params": {
+							"mirror_x_axis2": {
+								"name": "X axis",
+								"desc": "Whether to mirror the X axis.",
+								"items": {
+									"don't mirror x axis": "Don't mirror X axis",
+									"mirror x axis": "Mirror X axis"
+								}
+							}
+						}
+					},
+					"set-object-y-flip": {
+						"list-name": "Set object Y flip",
+						"display-text": "Set Y flip to {0}",
+						"description": "Set Y-axis flip state.",
+						"params": {
+							"flip-y-axis": {
+								"name": "Y axis",
+								"desc": "Whether to flip the Y axis.",
+								"items": {
+									"don't flip y axis": "Don't flip Y axis",
+									"flip y axis": "Flip Y axis"
+								}
+							}
+						}
+					},
+					"setobjectyflip12": {
+						"list-name": "Set object Y flip (legacy)",
+						"display-text": "Set Y flip to {0} (legacy)",
+						"description": "Legacy alias for Set object Y flip.",
+						"params": {
+							"flip_y_axis2": {
+								"name": "Y axis",
+								"desc": "Whether to flip the Y axis.",
+								"items": {
+									"don't flip y axis": "Don't flip Y axis",
+									"flip y axis": "Flip Y axis"
+								}
+							}
+						}
+					},
 					"associate-type-with-name": {
 						"list-name": "Associate type with name",
 						"display-text": "Associate {0} with Spriter object [i]{1}[/i]",
@@ -698,6 +886,10 @@
 					"speedratio-legacy": {
 						"description": "Legacy alias for SpeedRatio.",
 						"translated-name": "speedRatio"
+					},
+					"scale-ratio": {
+						"description": "Get the global Spriter scale ratio.",
+						"translated-name": "ScaleRatio"
 					},
 					"object-count": {
 						"description": "Get the number of sprite objects in the currently evaluated pose.",

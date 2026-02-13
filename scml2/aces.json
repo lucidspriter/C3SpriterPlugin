@@ -334,6 +334,150 @@
 		]
 	},
 
+	"entities": {
+		"conditions": [
+			{
+				"id": "compare-entity",
+				"scriptName": "CompareEntity",
+				"highlight": false,
+				"params": [
+					{"id": "entity-name", "type": "string"}
+				]
+			},
+			{
+				"c2id": 16,
+				"id": "compareentity16",
+				"scriptName": "CompareEntity",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "entity0", "type": "string"}
+				]
+			}
+		],
+		"actions": [
+			{
+				"id": "set-entity",
+				"scriptName": "SetEntity",
+				"highlight": false,
+				"params": [
+					{"id": "entity-name", "type": "string"},
+					{"id": "animation-name", "type": "string"}
+				]
+			},
+			{
+				"c2id": 8,
+				"id": "setent8",
+				"scriptName": "setEnt",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "entity0", "type": "string"},
+					{"id": "animation1", "type": "string"}
+				]
+			}
+		],
+		"expressions": []
+	},
+
+	"size_position": {
+		"conditions": [
+			{
+				"id": "is-mirrored",
+				"scriptName": "IsMirrored",
+				"highlight": false
+			},
+			{
+				"c2id": 10,
+				"id": "ismirrored10",
+				"scriptName": "isMirrored",
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
+				"id": "is-flipped",
+				"scriptName": "IsFlipped",
+				"highlight": false
+			},
+			{
+				"c2id": 11,
+				"id": "isflipped11",
+				"scriptName": "isFlipped",
+				"isDeprecated": true,
+				"highlight": false
+			}
+		],
+		"actions": [
+			{
+				"id": "set-object-scale-ratio",
+				"scriptName": "SetObjectScaleRatio",
+				"highlight": false,
+				"params": [
+					{"id": "scale-ratio", "type": "number", "initialValue": "1.0"},
+					{"id": "flip-x-axis", "type": "combo", "items": ["don't flip x axis", "flip x axis"]},
+					{"id": "flip-y-axis", "type": "combo", "items": ["don't flip y axis", "flip y axis"]}
+				]
+			},
+			{
+				"c2id": 2,
+				"id": "setobjectscaleratio2",
+				"scriptName": "setObjectScaleRatio",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "scale_ratio0", "type": "number", "initialValue": "1.0"},
+					{"id": "flip_x_axis3", "type": "combo", "items": ["don't flip x axis", "flip x axis"]},
+					{"id": "flip_y_axis6", "type": "combo", "items": ["don't flip y axis", "flip y axis"]}
+				]
+			},
+			{
+				"id": "set-object-x-flip",
+				"scriptName": "SetObjectXFlip",
+				"highlight": false,
+				"params": [
+					{"id": "mirror-x-axis", "type": "combo", "items": ["don't mirror x axis", "mirror x axis"]}
+				]
+			},
+			{
+				"c2id": 11,
+				"id": "setobjectxflip11",
+				"scriptName": "setObjectXFlip",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "mirror_x_axis2", "type": "combo", "items": ["don't mirror x axis", "mirror x axis"]}
+				]
+			},
+			{
+				"id": "set-object-y-flip",
+				"scriptName": "SetObjectYFlip",
+				"highlight": false,
+				"params": [
+					{"id": "flip-y-axis", "type": "combo", "items": ["don't flip y axis", "flip y axis"]}
+				]
+			},
+			{
+				"c2id": 12,
+				"id": "setobjectyflip12",
+				"scriptName": "setObjectYFlip",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{"id": "flip_y_axis2", "type": "combo", "items": ["don't flip y axis", "flip y axis"]}
+				]
+			}
+		],
+		"expressions": [
+			{
+				"c2id": 2,
+				"id": "scale-ratio",
+				"expressionName": "ScaleRatio",
+				"highlight": false,
+				"returnType": "number"
+			}
+		]
+	},
+
 	"custom": {
 		"conditions": [
 			{

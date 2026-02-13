@@ -100,6 +100,62 @@ C3.Plugins.Spriter.Acts =
 		this.PlayAnimTo(units, targetValue);
 	},
 
+	SetEntity(entityName, animationName)
+	{
+		if (typeof this._setEnt === "function")
+		{
+			this._setEnt(entityName, animationName);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setEnt(entityName, animationName)
+	{
+		this.SetEntity(entityName, animationName);
+	},
+
+	SetObjectScaleRatio(scaleRatio, xFlip, yFlip)
+	{
+		if (typeof this._setObjectScaleRatio === "function")
+		{
+			this._setObjectScaleRatio(scaleRatio, xFlip, yFlip);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setObjectScaleRatio(scaleRatio, xFlip, yFlip)
+	{
+		this.SetObjectScaleRatio(scaleRatio, xFlip, yFlip);
+	},
+
+	SetObjectXFlip(xFlip)
+	{
+		if (typeof this._setObjectXFlip === "function")
+		{
+			this._setObjectXFlip(xFlip);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setObjectXFlip(xFlip)
+	{
+		this.SetObjectXFlip(xFlip);
+	},
+
+	SetObjectYFlip(yFlip)
+	{
+		if (typeof this._setObjectYFlip === "function")
+		{
+			this._setObjectYFlip(yFlip);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setObjectYFlip(yFlip)
+	{
+		this.SetObjectYFlip(yFlip);
+	},
+
 	AssociateTypeWithName(objectType, name)
 	{
 		this._associateTypeWithName(objectType, name);

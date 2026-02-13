@@ -325,7 +325,10 @@ function degreesToRadians(degrees)
 
 function combineTransforms(parent, child)
 {
-	const angle = parent.angle + child.angle;
+	const flipSign = parent.scaleX * parent.scaleY;
+	const angle = (flipSign < 0)
+		? ((Math.PI * 2) - child.angle) + parent.angle
+		: parent.angle + child.angle;
 	const cos = Math.cos(parent.angle);
 	const sin = Math.sin(parent.angle);
 
@@ -526,6 +529,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const startupScaleRatio = toFiniteNumber(startupWidth, 50) / 50;
 		// Legacy behaviour: startup object width defines the global Spriter scale ratio.
 		this._globalScaleRatio = (Number.isFinite(startupScaleRatio) && startupScaleRatio !== 0) ? startupScaleRatio : 1;
+		this._xFlip = false;
+		this._yFlip = false;
 
 		this.isReady = false;
 		this.loadError = null;
@@ -739,12 +744,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const instY = getY ? getY() : toFiniteNumber(this.y, 0);
 		const instAngle = getAngle ? getAngle() : toFiniteNumber(this.angle, 0);
 
+		const mirrorFactor = this._xFlip ? -1 : 1;
+		const flipFactor = this._yFlip ? -1 : 1;
 		const rootTransform = {
 			x: instX,
 			y: instY,
 			angle: Number.isFinite(instAngle) ? instAngle : 0,
-			scaleX: toFiniteNumber(this._globalScaleRatio, 1),
-			scaleY: toFiniteNumber(this._globalScaleRatio, 1),
+			scaleX: toFiniteNumber(this._globalScaleRatio, 1) * mirrorFactor,
+			scaleY: toFiniteNumber(this._globalScaleRatio, 1) * flipFactor,
 			alpha: 1
 		};
 
@@ -1901,6 +1908,159 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_setPlaybackSpeedRatio(newSpeed)
 	{
 		this.playbackSpeed = toFiniteNumber(newSpeed, 1);
+	}
+
+	_findEntityIndexByName(entityName)
+	{
+		const entities = this.projectData && Array.isArray(this.projectData.entity) ? this.projectData.entity : [];
+		if (!entities.length)
+		{
+			return -1;
+		}
+
+		const query = toLowerCaseSafe(entityName);
+		if (!query)
+		{
+			return this.entityIndex >= 0 ? this.entityIndex : 0;
+		}
+
+		for (let i = 0, len = entities.length; i < len; i++)
+		{
+			const entity = entities[i];
+			const name = entity && typeof entity.name === "string" ? entity.name : "";
+			if (toLowerCaseSafe(name) === query)
+			{
+				return i;
+			}
+		}
+
+		return -1;
+	}
+
+	_setEnt(entityName, animationName)
+	{
+		const requestedEntityName = toStringOrEmpty(entityName).trim();
+		const requestedAnimationName = toStringOrEmpty(animationName).trim();
+
+		if (!this.projectData || !this.isReady)
+		{
+			if (requestedEntityName)
+			{
+				this.startingEntityName = requestedEntityName;
+			}
+			if (requestedAnimationName)
+			{
+				this.startingAnimationName = requestedAnimationName;
+			}
+			return;
+		}
+
+		let nextEntityIndex = this.entityIndex;
+		if (requestedEntityName)
+		{
+			const matchedEntityIndex = this._findEntityIndexByName(requestedEntityName);
+			if (matchedEntityIndex < 0)
+			{
+				this.startingEntityName = requestedEntityName;
+				return;
+			}
+
+			nextEntityIndex = matchedEntityIndex;
+		}
+
+		const entities = Array.isArray(this.projectData.entity) ? this.projectData.entity : [];
+		const nextEntity = entities[nextEntityIndex] || null;
+		if (!nextEntity)
+		{
+			return;
+		}
+
+		const entityChanged = nextEntityIndex !== this.entityIndex;
+		if (entityChanged)
+		{
+			this.entityIndex = nextEntityIndex;
+			this.entity = nextEntity;
+			this.startingEntityName = typeof nextEntity.name === "string" ? nextEntity.name : this.startingEntityName;
+			this._buildObjectArray();
+			this._refreshAssociatedFrameLookups();
+		}
+
+		let targetAnimationName = requestedAnimationName;
+		if (!targetAnimationName && this.animation && typeof this.animation.name === "string")
+		{
+			targetAnimationName = this.animation.name;
+		}
+
+		if (entityChanged || targetAnimationName)
+		{
+			const didSet = this._setAnimation(targetAnimationName || "", 1, 0);
+			if (!didSet)
+			{
+				this._setAnimation("", 0, 0);
+			}
+		}
+	}
+
+	_parseFlipValue(value)
+	{
+		if (typeof value === "boolean")
+		{
+			return value;
+		}
+
+		if (typeof value === "number")
+		{
+			return value !== 0;
+		}
+
+		if (typeof value === "string")
+		{
+			const lower = value.trim().toLowerCase();
+			if (!lower)
+			{
+				return false;
+			}
+
+			if (lower.includes("don't") || lower.includes("do not") || lower === "false")
+			{
+				return false;
+			}
+
+			if (lower.includes("flip") || lower.includes("mirror") || lower === "true")
+			{
+				return true;
+			}
+
+			const numeric = Number(lower);
+			if (Number.isFinite(numeric))
+			{
+				return numeric !== 0;
+			}
+		}
+
+		return false;
+	}
+
+	_setObjectScaleRatio(newScale, xFlip, yFlip)
+	{
+		const scale = Math.abs(toFiniteNumber(newScale, this._globalScaleRatio));
+		if (Number.isFinite(scale) && scale !== 0)
+		{
+			this._globalScaleRatio = scale;
+		}
+
+		this._xFlip = this._parseFlipValue(xFlip);
+		this._yFlip = this._parseFlipValue(yFlip);
+	}
+
+	_setObjectXFlip(xFlip)
+	{
+		this._xFlip = this._parseFlipValue(xFlip);
+	}
+
+	_setObjectYFlip(yFlip)
+	{
+		this._yFlip = this._parseFlipValue(yFlip);
 	}
 
 	_setAnimationLoop(loopOn)
@@ -3823,6 +3983,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const myAngle = worldInfo.GetAngle();
 		const myVisible = worldInfo.IsVisible();
 		const globalScale = toFiniteNumber(this._globalScaleRatio, 1);
+		const mirrorFactor = this._xFlip ? -1 : 1;
+		const flipFactor = this._yFlip ? -1 : 1;
+		const rootFlipSign = mirrorFactor * flipFactor;
 
 		// Per-tick diagnostic (every 60 frames)
 		this._diagTickCount = (this._diagTickCount || 0) + 1;
@@ -3873,7 +4036,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				wi.SetCollisionEnabled(true);
 
 			// Apply parent/root angle in non-self-draw mode (legacy behaviour).
-			wi.SetAngle(state.angle + myAngle);
+			const finalAngle = (rootFlipSign < 0)
+				? ((Math.PI * 2) - state.angle) + myAngle
+				: state.angle + myAngle;
+			wi.SetAngle(finalAngle);
 
 			// Opacity
 			wi.SetOpacity(state.alpha);
@@ -3881,8 +4047,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			// Position: state.x/y are world-space offsets from the Spriter origin
 			const cosA = Math.cos(myAngle);
 			const sinA = Math.sin(myAngle);
-			const localX = state.x * globalScale;
-			const localY = state.y * globalScale;
+			const localX = state.x * globalScale * mirrorFactor;
+			const localY = state.y * globalScale * flipFactor;
 			const finalX = myX + localX * cosA - localY * sinA;
 			const finalY = myY + localX * sinA + localY * cosA;
 
@@ -3899,8 +4065,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			// Size (apply scale to original image dimensions)
 			const trueW = state.width || 1;
 			const trueH = state.height || 1;
-			const newW = trueW * state.scaleX * globalScale;
-			const newH = trueH * state.scaleY * globalScale;
+			const newW = trueW * state.scaleX * globalScale * mirrorFactor;
+			const newH = trueH * state.scaleY * globalScale * flipFactor;
 			wi.SetWidth(newW);
 			wi.SetHeight(newH);
 
@@ -3952,6 +4118,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const cosA = Math.cos(myAngle);
 		const sinA = Math.sin(myAngle);
 		const globalScale = toFiniteNumber(this._globalScaleRatio, 1);
+		const mirrorFactor = this._xFlip ? -1 : 1;
+		const flipFactor = this._yFlip ? -1 : 1;
+		const rootFlipSign = mirrorFactor * flipFactor;
 
 		for (let i = this._objectsToSet.length - 1; i >= 0; i--)
 		{
@@ -3967,11 +4136,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 				// setType: 0=angle+position, 1=angle, 2=position
 				if (instr.setType === 0 || instr.setType === 1)
-					wi.SetAngle(state.angle + myAngle);
+				{
+					const finalAngle = (rootFlipSign < 0)
+						? ((Math.PI * 2) - state.angle) + myAngle
+						: state.angle + myAngle;
+					wi.SetAngle(finalAngle);
+				}
 				if (instr.setType === 0 || instr.setType === 2)
 				{
-					const localX = state.x * globalScale;
-					const localY = state.y * globalScale;
+					const localX = state.x * globalScale * mirrorFactor;
+					const localY = state.y * globalScale * flipFactor;
 					wi.SetX(myX + localX * cosA - localY * sinA);
 					wi.SetY(myY + localX * sinA + localY * cosA);
 				}
