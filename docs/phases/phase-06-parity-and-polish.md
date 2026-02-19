@@ -5,6 +5,8 @@ Achieve feature parity with the legacy addon, optimize performance, and finalize
 
 ## Checklist
 - [ ] Port the remaining actions, conditions, and expressions from the README roadmap, validating against legacy behaviour. _(Sound import + sound trigger ACEs are now present in `scml2`; legacy ACE alias IDs have been started for migration compatibility, broader parity remains.)_
+  - Added this pass: animation blending ACEs (`SetSecondAnim`, `SetAnimBlendRatio`, `StopSecondAnim`, `CompareSecondAnimation`, blend/second-animation expressions), object/action-point query ACEs, legacy visibility/opacity actions, misc time-scale/layer/visibility/collision toggles, and Z-elevation/bounding-box expressions.
+  - Remaining high-value ACE groups: char maps (`append/remove/removeAll`), object/bone overrides + IK, URL/event/tag/variable ACEs, and `SetZElevation`.
 - [ ] Optimize rendering and ticking paths (batching, caching, Construct feature compatibility).
 - [ ] Refresh README/docs with SDK v2 instructions and updated example projects.
 

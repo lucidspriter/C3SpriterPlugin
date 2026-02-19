@@ -323,6 +323,26 @@ function degreesToRadians(degrees)
 	return -degrees * (Math.PI / 180);
 }
 
+function radiansToDegrees(radians)
+{
+	return toFiniteNumber(radians, 0) * (180 / Math.PI);
+}
+
+function lerpAngleRadiansShortest(a, b, t)
+{
+	let start = toFiniteNumber(a, 0);
+	let end = toFiniteNumber(b, start);
+	while (end - start > Math.PI)
+	{
+		end -= Math.PI * 2;
+	}
+	while (end - start < -Math.PI)
+	{
+		end += Math.PI * 2;
+	}
+	return start + (end - start) * clamp01(toFiniteNumber(t, 0));
+}
+
 function combineTransforms(parent, child)
 {
 	const flipSign = parent.scaleX * parent.scaleY;
@@ -379,6 +399,25 @@ function toNumberOrDefault(value, defaultValue)
 {
 	const numberValue = Number(value);
 	return Number.isFinite(numberValue) ? numberValue : defaultValue;
+}
+
+function callFirstMethod(target, methodNames, ...args)
+{
+	if (!target)
+	{
+		return undefined;
+	}
+
+	for (const methodName of methodNames)
+	{
+		const fn = target[methodName];
+		if (typeof fn === "function")
+		{
+			return fn.call(target, ...args);
+		}
+	}
+
+	return undefined;
 }
 
 function toLowerCaseSafe(value)
@@ -531,6 +570,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._globalScaleRatio = (Number.isFinite(startupScaleRatio) && startupScaleRatio !== 0) ? startupScaleRatio : 1;
 		this._xFlip = false;
 		this._yFlip = false;
+		this.ignoreGlobalTimeScale = false;
 
 		this.isReady = false;
 		this.loadError = null;
@@ -547,6 +587,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.entity = null;
 		this.animation = null;
 		this.animationLengthMs = 0;
+		this.secondAnimation = null;
+		this.animBlend = 0;
+		this._autoBlendActive = false;
+		this._autoBlendStartFrom = 0;
+		this._autoBlendDurationMs = 0;
+		this._autoBlendElapsedMs = 0;
+		this._autoBlendPrimaryPoseTimeMs = 0;
+		this._autoBlendTargetAnimationIndex = -1;
+		this.lastFoundObject = "";
 
 		this.playing = true;
 		this.playbackSpeed = 1;
@@ -557,7 +606,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._loopOverrideByAnimationIndex = new Map();
 		this._pendingLoopOverride = null;
 		this._lastTickTimeSec = null;
-		this._didWarnBlendUnsupported = false;
 
 		this._fileLookup = new Map();
 		this._timelineById = new Map();
@@ -626,6 +674,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			{
 				this._triggerAnimationFinished();
 			}
+			this._advanceAutoBlend(dtSeconds);
 		}
 
 		this._evaluatePose();
@@ -1569,7 +1618,24 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const runtime = this.runtime;
 		if (runtime && Number.isFinite(runtime.dt))
 		{
-			return runtime.dt;
+			let dt = runtime.dt;
+			if (this.ignoreGlobalTimeScale)
+			{
+				const getTimeScale = typeof runtime.GetTimeScale === "function"
+					? runtime.GetTimeScale.bind(runtime)
+					: typeof runtime.getTimeScale === "function"
+						? runtime.getTimeScale.bind(runtime)
+						: null;
+				if (getTimeScale)
+				{
+					const timeScale = toFiniteNumber(getTimeScale(), 1);
+					if (timeScale > 0)
+					{
+						dt /= timeScale;
+					}
+				}
+			}
+			return dt;
 		}
 
 		const now = (typeof performance !== "undefined" && performance && typeof performance.now === "function")
@@ -1667,6 +1733,104 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		this.localTimeMs = this._normaliseSampleTime(nextTime, lengthMs, isLooping);
 		return finished;
+	}
+
+	_resetAutoBlendState()
+	{
+		this._autoBlendActive = false;
+		this._autoBlendStartFrom = 0;
+		this._autoBlendDurationMs = 0;
+		this._autoBlendElapsedMs = 0;
+		this._autoBlendPrimaryPoseTimeMs = 0;
+		this._autoBlendTargetAnimationIndex = -1;
+	}
+
+	_startAutoBlend(nextAnimation, nextAnimationIndex, startFrom, blendDurationMs)
+	{
+		const durationMs = Math.max(1, toFiniteNumber(blendDurationMs, 0));
+		this.secondAnimation = nextAnimation;
+		this.animBlend = 0;
+		this._autoBlendActive = true;
+		this._autoBlendStartFrom = startFrom === 3 ? 3 : 4;
+		this._autoBlendDurationMs = durationMs;
+		this._autoBlendElapsedMs = 0;
+		this._autoBlendPrimaryPoseTimeMs = this.localTimeMs;
+		this._autoBlendTargetAnimationIndex = toFiniteNumber(nextAnimationIndex, -1);
+	}
+
+	_advanceAutoBlend(dtSeconds)
+	{
+		if (!this._autoBlendActive || !this.secondAnimation)
+		{
+			return;
+		}
+
+		const durationMs = toFiniteNumber(this._autoBlendDurationMs, 0);
+		if (!(durationMs > 0))
+		{
+			this._completeAutoBlend();
+			return;
+		}
+
+		const deltaMs = Math.max(0, toFiniteNumber(dtSeconds, 0) * 1000);
+		this._autoBlendElapsedMs += deltaMs;
+		this.animBlend = clamp01(this._autoBlendElapsedMs / durationMs);
+		if (this.animBlend >= 1)
+		{
+			this._completeAutoBlend();
+		}
+	}
+
+	_completeAutoBlend()
+	{
+		const nextAnimation = this.secondAnimation;
+		if (!nextAnimation)
+		{
+			this._resetAutoBlendState();
+			this.animBlend = 0;
+			return;
+		}
+
+		const currentLengthMs = Math.max(0, toFiniteNumber(this.animationLengthMs, 0));
+		const nextLengthMs = Math.max(0, toFiniteNumber(nextAnimation.length, 0));
+		if (!(nextLengthMs > 0))
+		{
+			this.secondAnimation = null;
+			this.animBlend = 0;
+			this._resetAutoBlendState();
+			return;
+		}
+
+		let nextTimeMs = 0;
+		if (this._autoBlendStartFrom === 4 && currentLengthMs > 0)
+		{
+			const ratio = clamp01(this.localTimeMs / currentLengthMs);
+			nextTimeMs = ratio * nextLengthMs;
+		}
+
+		const entityAnimations = this.entity && Array.isArray(this.entity.animation) ? this.entity.animation : [];
+		const fallbackIndex = entityAnimations.indexOf(nextAnimation);
+		const nextAnimationIndex = this._autoBlendTargetAnimationIndex >= 0
+			? this._autoBlendTargetAnimationIndex
+			: fallbackIndex;
+
+		this.animationIndex = nextAnimationIndex >= 0 ? nextAnimationIndex : this.animationIndex;
+		this.animation = nextAnimation;
+		this.animationLengthMs = nextLengthMs;
+		this.startingAnimationName = typeof nextAnimation.name === "string"
+			? nextAnimation.name
+			: this.startingAnimationName;
+		this.localTimeMs = this._normaliseSampleTime(nextTimeMs, nextLengthMs, this._isAnimationLooping(nextAnimation));
+		this._playToTimeMs = -1;
+
+		this.secondAnimation = null;
+		this.animBlend = 0;
+		this._resetAutoBlendState();
+
+		this._rebuildAnimationTimelineCache(nextAnimation);
+		this._buildSoundLineCache();
+		this._evaluatePose();
+		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
 	}
 
 	_normaliseLoopTime(timeMs, lengthMs)
@@ -1856,17 +2020,36 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return false;
 		}
 
-		if ((startFrom === 3 || startFrom === 4) && blendDuration > 0 && !this._didWarnBlendUnsupported)
-		{
-			this._didWarnBlendUnsupported = true;
-			console.warn("[Spriter] Animation blending is not implemented yet; switching without blend.");
-		}
-
 		const animations = this.entity && Array.isArray(this.entity.animation) ? this.entity.animation : [];
 		const nextAnimation = animations[animationIndex] || null;
 		if (!nextAnimation)
 		{
 			return false;
+		}
+
+		const blendStartMode = Number(startFrom);
+		const blendMs = toFiniteNumber(blendDuration, 0);
+		const shouldAutoBlend = (blendStartMode === 3 || blendStartMode === 4) && blendMs > 0 && !!this.animation;
+		if (shouldAutoBlend)
+		{
+			if (nextAnimation === this.animation && !this.secondAnimation)
+			{
+				this._resetAutoBlendState();
+				this.animBlend = 0;
+				return true;
+			}
+
+			if (this._autoBlendActive && this.secondAnimation === nextAnimation && this._autoBlendStartFrom === blendStartMode)
+			{
+				return true;
+			}
+
+			this._startAutoBlend(nextAnimation, animationIndex, blendStartMode, blendMs);
+			this._playToTimeMs = -1;
+			this.playing = true;
+			this._evaluatePose();
+			this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
+			return true;
 		}
 
 		const previousLength = toFiniteNumber(this.animationLengthMs, 0);
@@ -1893,6 +2076,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.animationIndex = animationIndex;
 		this.animation = nextAnimation;
 		this.animationLengthMs = nextLength;
+		this.secondAnimation = null;
+		this.animBlend = 0;
+		this._resetAutoBlendState();
 		this.startingAnimationName = typeof nextAnimation.name === "string" ? nextAnimation.name : this.startingAnimationName;
 		this.localTimeMs = this._normaliseSampleTime(nextTimeMs, nextLength, this._isAnimationLooping(nextAnimation));
 		this._playToTimeMs = -1;
@@ -2061,6 +2247,153 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_setObjectYFlip(yFlip)
 	{
 		this._yFlip = this._parseFlipValue(yFlip);
+	}
+
+	_setIgnoreGlobalTimeScale(ignore)
+	{
+		if (typeof ignore === "string")
+		{
+			const lower = ignore.trim().toLowerCase();
+			if (!lower || lower.includes("don't") || lower.includes("do not"))
+			{
+				this.ignoreGlobalTimeScale = false;
+				return;
+			}
+
+			if (lower.includes("ignore"))
+			{
+				this.ignoreGlobalTimeScale = true;
+				return;
+			}
+		}
+
+		this.ignoreGlobalTimeScale = Number(ignore) !== 0;
+	}
+
+	_stopResumeSettingLayer(resume)
+	{
+		this.setLayersForSprites = Number(resume) !== 0;
+	}
+
+	_stopResumeSettingVisibilityForObjects(resume)
+	{
+		this.setVisibilityForObjects = Number(resume) !== 0;
+	}
+
+	_stopResumeSettingCollisionsForObjects(resume)
+	{
+		this.setCollisionsForObjects = Number(resume) !== 0;
+	}
+
+	_setVisible(visible)
+	{
+		const worldInfo = this._getWorldInfoOf(this);
+		if (!worldInfo || typeof worldInfo.SetVisible !== "function")
+		{
+			return;
+		}
+
+		worldInfo.SetVisible(Number(visible) !== 0);
+		if (typeof worldInfo.SetBboxChanged === "function")
+		{
+			worldInfo.SetBboxChanged();
+		}
+	}
+
+	_setOpacity(opacityPercent)
+	{
+		const percent = clamp(toFiniteNumber(opacityPercent, this.startingOpacity), 0, 100);
+		this.startingOpacity = percent;
+
+		const worldInfo = this._getWorldInfoOf(this);
+		if (!worldInfo || typeof worldInfo.SetOpacity !== "function")
+		{
+			return;
+		}
+
+		worldInfo.SetOpacity(percent / 100);
+		if (typeof worldInfo.SetBboxChanged === "function")
+		{
+			worldInfo.SetBboxChanged();
+		}
+	}
+
+	_setSecondAnim(animName)
+	{
+		this._resetAutoBlendState();
+		const index = this._findAnimationByIdentifier(animName);
+		const animations = this.entity && Array.isArray(this.entity.animation) ? this.entity.animation : [];
+		const candidate = index >= 0 ? (animations[index] || null) : null;
+		if (!candidate || index === this.animationIndex)
+		{
+			this.secondAnimation = null;
+			return;
+		}
+
+		this.secondAnimation = candidate;
+	}
+
+	_stopSecondAnim()
+	{
+		this._resetAutoBlendState();
+		this.secondAnimation = null;
+		this.animBlend = 0;
+	}
+
+	_setAnimBlendRatio(newBlend)
+	{
+		this.animBlend = clamp01(toFiniteNumber(newBlend, 0));
+	}
+
+	_areInstancesEquivalent(a, b)
+	{
+		if (!a || !b)
+		{
+			return false;
+		}
+
+		if (a === b)
+		{
+			return true;
+		}
+
+		const ai = a._inst || null;
+		const bi = b._inst || null;
+		return (ai && (ai === b || ai === bi)) || (bi && bi === a);
+	}
+
+	_findSpriterObject(c2Object)
+	{
+		this.lastFoundObject = "";
+		if (!c2Object)
+		{
+			return;
+		}
+
+		let picked = null;
+		if (typeof c2Object.GetFirstPicked === "function")
+		{
+			picked = c2Object.GetFirstPicked();
+		}
+		if (!picked && typeof this._resolveC2Instances === "function")
+		{
+			const instances = this._resolveC2Instances(c2Object);
+			picked = Array.isArray(instances) && instances.length ? instances[0] : null;
+		}
+		if (!picked)
+		{
+			return;
+		}
+
+		for (const [name, entry] of this._c2ObjectMap)
+		{
+			const mapped = entry && entry.inst ? entry.inst : null;
+			if (this._areInstancesEquivalent(mapped, picked))
+			{
+				this.lastFoundObject = name;
+				return;
+			}
+		}
 	}
 
 	_setAnimationLoop(loopOn)
@@ -2299,33 +2632,110 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		const mainline = animation.mainline;
+		const useFrozenPrimaryPose = this._autoBlendActive && this._autoBlendStartFrom === 3;
+		const primarySampleTimeMs = useFrozenPrimaryPose ? this._autoBlendPrimaryPoseTimeMs : this.localTimeMs;
+		const primaryPose = this._evaluatePoseForCurrentAnimation(primarySampleTimeMs);
+		this._currentMainlineKeyIndex = primaryPose.mainKeyIndex;
+		this._currentAdjustedTimeMs = primaryPose.adjustedTimeMs;
+
+		const blend = clamp01(toFiniteNumber(this.animBlend, 0));
+		const secondAnimation = this.secondAnimation;
+		if (blend > 0 && secondAnimation && secondAnimation !== animation)
+		{
+			const savedAnimation = this.animation;
+			const savedAnimationIndex = this.animationIndex;
+			const savedAnimationLengthMs = this.animationLengthMs;
+			const savedTimelineEntries = Array.from(this._timelineById.entries());
+			const savedTimelineNameEntries = Array.from(this._timelineNameById.entries());
+
+			let secondaryPose = null;
+			try
+			{
+				const secondLengthMs = Math.max(0, toFiniteNumber(secondAnimation.length, 0));
+				const entityAnimations = this.entity && Array.isArray(this.entity.animation) ? this.entity.animation : [];
+				const secondIndex = entityAnimations.indexOf(secondAnimation);
+				let secondSampleTimeMs = 0;
+				if (secondLengthMs > 0)
+				{
+					if (this._autoBlendActive && this._autoBlendStartFrom === 3)
+					{
+						secondSampleTimeMs = 0;
+					}
+					else
+					{
+						const timeRatio = savedAnimationLengthMs > 0
+							? clamp01(this.localTimeMs / savedAnimationLengthMs)
+							: 0;
+						secondSampleTimeMs = this._normaliseSampleTime(
+							timeRatio * secondLengthMs,
+							secondLengthMs,
+							this._isAnimationLooping(secondAnimation)
+						);
+					}
+				}
+
+				this.animation = secondAnimation;
+				this.animationIndex = secondIndex >= 0 ? secondIndex : savedAnimationIndex;
+				this.animationLengthMs = secondLengthMs;
+				this._rebuildAnimationTimelineCache(secondAnimation);
+				secondaryPose = this._evaluatePoseForCurrentAnimation(secondSampleTimeMs);
+			}
+			finally
+			{
+				this.animation = savedAnimation;
+				this.animationIndex = savedAnimationIndex;
+				this.animationLengthMs = savedAnimationLengthMs;
+				this._timelineById.clear();
+				this._timelineNameById.clear();
+				for (const [id, timeline] of savedTimelineEntries)
+				{
+					this._timelineById.set(id, timeline);
+				}
+				for (const [id, timelineName] of savedTimelineNameEntries)
+				{
+					this._timelineNameById.set(id, timelineName);
+				}
+			}
+
+			if (secondaryPose)
+			{
+				this._blendPoseInPlace(primaryPose, secondaryPose, blend);
+			}
+		}
+
+		this._poseBoneStates.length = 0;
+		this._poseBoneStates.push(...primaryPose.bones);
+		this._poseObjectStates.length = 0;
+		this._poseObjectStates.push(...primaryPose.objects);
+	}
+
+	_evaluatePoseForCurrentAnimation(timeMs)
+	{
+		const animation = this.animation;
+		const fallbackTime = toFiniteNumber(timeMs, 0);
+		const emptyPose = {
+			mainKeyIndex: 0,
+			adjustedTimeMs: fallbackTime,
+			bones: [],
+			objects: []
+		};
+
+		const mainline = animation && animation.mainline;
 		const keys = mainline && Array.isArray(mainline.key) ? mainline.key : [];
 		if (!keys.length)
 		{
-			this._currentAdjustedTimeMs = toFiniteNumber(this.localTimeMs, 0);
-			this._currentMainlineKeyIndex = 0;
-			this._poseObjectStates.length = 0;
-			this._poseBoneStates.length = 0;
-			return;
+			return emptyPose;
 		}
 
-		const timeMs = this.localTimeMs;
-		const mainKeyIndex = this._findKeyIndexForTime(keys, timeMs);
+		const sampleTimeMs = this._normaliseSampleTime(fallbackTime, this.animationLengthMs, this._isAnimationLooping(animation));
+		const mainKeyIndex = this._findKeyIndexForTime(keys, sampleTimeMs);
 		const mainKey = keys[mainKeyIndex];
 		if (!mainKey)
 		{
-			this._currentAdjustedTimeMs = toFiniteNumber(this.localTimeMs, 0);
-			this._currentMainlineKeyIndex = 0;
-			this._poseObjectStates.length = 0;
-			this._poseBoneStates.length = 0;
-			return;
+			return emptyPose;
 		}
 
-		this._currentMainlineKeyIndex = mainKeyIndex;
-		const poseTimeMs = this._getMainlineAdjustedTime(keys, mainKeyIndex, timeMs);
-		this._currentAdjustedTimeMs = poseTimeMs;
-
+		const poseTimeMs = this._getMainlineAdjustedTime(keys, mainKeyIndex, sampleTimeMs);
 		const boneRefs = Array.isArray(mainKey.bone_ref) ? mainKey.bone_ref : [];
 		const objectRefs = Array.isArray(mainKey.object_ref) ? mainKey.object_ref : [];
 
@@ -2350,8 +2760,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			this._resolveBoneTransform(boneRef, poseTimeMs, boneRefsById, boneWorldById);
 		}
 
-		const poseBones = this._poseBoneStates;
-		poseBones.length = 0;
+		const bones = [];
 		for (const boneRef of boneRefs)
 		{
 			if (!boneRef)
@@ -2366,7 +2775,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				continue;
 			}
 
-			poseBones.push({
+			bones.push({
 				id,
 				parentId: toFiniteNumber(boneRef.parent, NaN),
 				x: toFiniteNumber(world.x, 0),
@@ -2375,19 +2784,109 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			});
 		}
 
-		const poseObjects = this._poseObjectStates;
-		poseObjects.length = 0;
-
+		const objects = [];
 		for (const objectRef of objectRefs)
 		{
 			const state = this._evaluateObjectRef(objectRef, poseTimeMs, boneRefsById, boneWorldById);
 			if (state)
 			{
-				poseObjects.push(state);
+				objects.push(state);
+			}
+		}
+		objects.sort((a, b) => a.zIndex - b.zIndex);
+
+		return {
+			mainKeyIndex,
+			adjustedTimeMs: poseTimeMs,
+			bones,
+			objects
+		};
+	}
+
+	_blendPoseInPlace(primaryPose, secondaryPose, blend)
+	{
+		const t = clamp01(toFiniteNumber(blend, 0));
+		if (t <= 0)
+		{
+			return;
+		}
+
+		const secondaryByObjectName = new Map();
+		for (const state of secondaryPose.objects)
+		{
+			if (!state || !state.timelineName)
+			{
+				continue;
+			}
+			secondaryByObjectName.set(state.timelineName, state);
+		}
+
+		for (const primaryState of primaryPose.objects)
+		{
+			if (!primaryState || !primaryState.timelineName)
+			{
+				continue;
+			}
+
+			const secondaryState = secondaryByObjectName.get(primaryState.timelineName);
+			if (!secondaryState)
+			{
+				continue;
+			}
+
+			primaryState.x = lerp(toFiniteNumber(primaryState.x, 0), toFiniteNumber(secondaryState.x, primaryState.x), t);
+			primaryState.y = lerp(toFiniteNumber(primaryState.y, 0), toFiniteNumber(secondaryState.y, primaryState.y), t);
+			primaryState.angle = lerpAngleRadiansShortest(primaryState.angle, secondaryState.angle, t);
+			primaryState.scaleX = lerp(toFiniteNumber(primaryState.scaleX, 1), toFiniteNumber(secondaryState.scaleX, primaryState.scaleX), t);
+			primaryState.scaleY = lerp(toFiniteNumber(primaryState.scaleY, 1), toFiniteNumber(secondaryState.scaleY, primaryState.scaleY), t);
+			primaryState.alpha = lerp(toFiniteNumber(primaryState.alpha, 1), toFiniteNumber(secondaryState.alpha, primaryState.alpha), t);
+			primaryState.pivotX = lerp(toFiniteNumber(primaryState.pivotX, 0), toFiniteNumber(secondaryState.pivotX, primaryState.pivotX), t);
+			primaryState.pivotY = lerp(toFiniteNumber(primaryState.pivotY, 0), toFiniteNumber(secondaryState.pivotY, primaryState.pivotY), t);
+			primaryState.width = lerp(toFiniteNumber(primaryState.width, 0), toFiniteNumber(secondaryState.width, primaryState.width), t);
+			primaryState.height = lerp(toFiniteNumber(primaryState.height, 0), toFiniteNumber(secondaryState.height, primaryState.height), t);
+
+			if (t > 0.5)
+			{
+				primaryState.folder = secondaryState.folder;
+				primaryState.file = secondaryState.file;
+				primaryState.name = secondaryState.name;
+				primaryState.atlasIndex = secondaryState.atlasIndex;
+				primaryState.atlasW = secondaryState.atlasW;
+				primaryState.atlasH = secondaryState.atlasH;
+				primaryState.atlasX = secondaryState.atlasX;
+				primaryState.atlasY = secondaryState.atlasY;
+				primaryState.atlasXOff = secondaryState.atlasXOff;
+				primaryState.atlasYOff = secondaryState.atlasYOff;
+				primaryState.atlasRotated = secondaryState.atlasRotated;
 			}
 		}
 
-		poseObjects.sort((a, b) => a.zIndex - b.zIndex);
+		const secondaryBonesById = new Map();
+		for (const state of secondaryPose.bones)
+		{
+			if (!state)
+			{
+				continue;
+			}
+			secondaryBonesById.set(toFiniteNumber(state.id, -1), state);
+		}
+
+		for (const primaryBone of primaryPose.bones)
+		{
+			if (!primaryBone)
+			{
+				continue;
+			}
+			const secondaryBone = secondaryBonesById.get(toFiniteNumber(primaryBone.id, -1));
+			if (!secondaryBone)
+			{
+				continue;
+			}
+
+			primaryBone.x = lerp(toFiniteNumber(primaryBone.x, 0), toFiniteNumber(secondaryBone.x, primaryBone.x), t);
+			primaryBone.y = lerp(toFiniteNumber(primaryBone.y, 0), toFiniteNumber(secondaryBone.y, primaryBone.y), t);
+			primaryBone.alpha = lerp(toFiniteNumber(primaryBone.alpha, 1), toFiniteNumber(secondaryBone.alpha, primaryBone.alpha), t);
+		}
 	}
 
 	_getSoundlinesForAnimation(animation)
@@ -3111,6 +3610,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.entity = entity;
 		this.animation = animation;
 		this.animationLengthMs = lengthMs;
+		this.secondAnimation = null;
+		this.animBlend = 0;
+		this._resetAutoBlendState();
 		this._playToTimeMs = -1;
 		this._currentMainlineKeyIndex = 0;
 
@@ -3886,13 +4388,39 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_resolveC2Instances(c2Object)
 	{
-		const sol = c2Object.GetSolStack()._current;
-		let instances = sol._instances;
-		if (instances.length === 0 && sol._selectAll === true)
+		if (!c2Object)
 		{
-			instances = c2Object._instances;
+			return [];
 		}
-		return Array.from(instances);
+
+		try
+		{
+			if (typeof c2Object.GetSolStack === "function")
+			{
+				const sol = c2Object.GetSolStack()._current;
+				if (sol)
+				{
+					let instances = Array.isArray(sol._instances) ? sol._instances : [];
+					if (!instances.length && sol._selectAll === true && Array.isArray(c2Object._instances))
+					{
+						instances = c2Object._instances;
+					}
+					return Array.from(instances);
+				}
+			}
+		}
+		catch (error)
+		{
+			console.warn("[Spriter] Failed to resolve picked instances for object mapping.", error);
+		}
+
+		if (typeof c2Object.GetFirstPicked === "function")
+		{
+			const picked = c2Object.GetFirstPicked();
+			return picked ? [picked] : [];
+		}
+
+		return [];
 	}
 
 	_setC2ObjectToSpriterObject(c2Object, setType, spriterName)
@@ -4161,11 +4689,131 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_findPoseStateByTimelineName(name)
 	{
+		const queryName = toStringOrEmpty(name).trim();
+		if (!queryName)
+		{
+			return null;
+		}
+
 		for (const state of this._poseObjectStates)
 		{
-			if (state.timelineName === name) return state;
+			if (state && state.timelineName === queryName)
+			{
+				return state;
+			}
 		}
+
+		const queryLower = toLowerCaseSafe(queryName);
+		if (!queryLower)
+		{
+			return null;
+		}
+
+		for (const state of this._poseObjectStates)
+		{
+			if (toLowerCaseSafe(state && state.timelineName) === queryLower)
+			{
+				return state;
+			}
+		}
+
 		return null;
+	}
+
+	_objectExists(name)
+	{
+		return !!this._findPoseStateByTimelineName(name);
+	}
+
+	_actionPointExists(name)
+	{
+		return this._objectExists(name);
+	}
+
+	_getPoseObjectX(name)
+	{
+		const state = this._findPoseStateByTimelineName(name);
+		return state ? toFiniteNumber(state.x, 0) : 0;
+	}
+
+	_getPoseObjectY(name)
+	{
+		const state = this._findPoseStateByTimelineName(name);
+		return state ? toFiniteNumber(state.y, 0) : 0;
+	}
+
+	_getPoseObjectAngleDegrees(name)
+	{
+		const state = this._findPoseStateByTimelineName(name);
+		return state ? radiansToDegrees(state.angle) : 0;
+	}
+
+	_getSecondAnimationName()
+	{
+		const animation = this.secondAnimation;
+		return animation && typeof animation.name === "string" ? animation.name : "";
+	}
+
+	_getWorldOpacityPercent()
+	{
+		const worldInfo = this._getWorldInfoOf(this);
+		const opacity = toFiniteNumber(callFirstMethod(worldInfo, ["GetOpacity", "getOpacity"]), 1);
+		return clamp(opacity * 100, 0, 100);
+	}
+
+	_getWorldZElevation(includeTotal = false)
+	{
+		const worldInfo = this._getWorldInfoOf(this);
+		if (!worldInfo)
+		{
+			return 0;
+		}
+
+		const methodNames = includeTotal
+			? ["GetTotalZElevation", "getTotalZElevation"]
+			: ["GetZElevation", "getZElevation"];
+		return toFiniteNumber(callFirstMethod(worldInfo, methodNames), 0);
+	}
+
+	_getWorldBoundingRect()
+	{
+		const worldInfo = this._getWorldInfoOf(this);
+		if (!worldInfo)
+		{
+			return {
+				left: 0,
+				top: 0,
+				right: 0,
+				bottom: 0
+			};
+		}
+
+		const bbox = callFirstMethod(worldInfo, ["GetBoundingBox", "getBoundingBox"]);
+		if (bbox)
+		{
+			const left = toFiniteNumber(callFirstMethod(bbox, ["GetLeft", "getLeft"]), toFiniteNumber(bbox.left, NaN));
+			const top = toFiniteNumber(callFirstMethod(bbox, ["GetTop", "getTop"]), toFiniteNumber(bbox.top, NaN));
+			const right = toFiniteNumber(callFirstMethod(bbox, ["GetRight", "getRight"]), toFiniteNumber(bbox.right, NaN));
+			const bottom = toFiniteNumber(callFirstMethod(bbox, ["GetBottom", "getBottom"]), toFiniteNumber(bbox.bottom, NaN));
+			if (Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(right) && Number.isFinite(bottom))
+			{
+				return { left, top, right, bottom };
+			}
+		}
+
+		const x = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
+		const y = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
+		const width = Math.abs(toFiniteNumber(callFirstMethod(worldInfo, ["GetWidth", "getWidth"]), 0));
+		const height = Math.abs(toFiniteNumber(callFirstMethod(worldInfo, ["GetHeight", "getHeight"]), 0));
+		const halfW = width * 0.5;
+		const halfH = height * 0.5;
+
+		return {
+			left: x - halfW,
+			top: y - halfH,
+			right: x + halfW,
+			bottom: y + halfH
+		};
 	}
 
 	// ───── End non-self-draw infrastructure ─────

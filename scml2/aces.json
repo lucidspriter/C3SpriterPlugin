@@ -1,6 +1,5 @@
 {
 	"$schema": "../aces.schema.json",
-
 	"initialisation": {
 		"conditions": [
 			{
@@ -24,8 +23,14 @@
 				"scriptName": "AssociateTypeWithName",
 				"highlight": true,
 				"params": [
-					{"id": "object-type", "type": "object"},
-					{"id": "spriter-name", "type": "string"}
+					{
+						"id": "object-type",
+						"type": "object"
+					},
+					{
+						"id": "spriter-name",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -35,14 +40,19 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "object0", "type": "object"},
-					{"id": "name1", "type": "string"}
+					{
+						"id": "object0",
+						"type": "object"
+					},
+					{
+						"id": "name1",
+						"type": "string"
+					}
 				]
 			}
 		],
 		"expressions": []
 	},
-
 	"animations": {
 		"conditions": [
 			{
@@ -51,7 +61,10 @@
 				"isTrigger": true,
 				"highlight": true,
 				"params": [
-					{"id": "animation-name", "type": "string"}
+					{
+						"id": "animation-name",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -62,7 +75,10 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "animation0", "type": "string"}
+					{
+						"id": "animation0",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -84,8 +100,15 @@
 				"scriptName": "CompareCurrentKey",
 				"highlight": false,
 				"params": [
-					{"id": "current-key-frame-is", "type": "cmp"},
-					{"id": "frame", "type": "number", "initialValue": "0"}
+					{
+						"id": "current-key-frame-is",
+						"type": "cmp"
+					},
+					{
+						"id": "frame",
+						"type": "number",
+						"initialValue": "0"
+					}
 				]
 			},
 			{
@@ -95,8 +118,15 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "current_key_frame_is0", "type": "cmp"},
-					{"id": "frame1", "type": "number", "initialValue": "0"}
+					{
+						"id": "current_key_frame_is0",
+						"type": "cmp"
+					},
+					{
+						"id": "frame1",
+						"type": "number",
+						"initialValue": "0"
+					}
 				]
 			},
 			{
@@ -104,9 +134,23 @@
 				"scriptName": "CompareCurrentTime",
 				"highlight": false,
 				"params": [
-					{"id": "current-animation-time-is", "type": "cmp"},
-					{"id": "time", "type": "number", "initialValue": "0"},
-					{"id": "time-format", "type": "combo", "items": ["milliseconds", "ratio of the animation length"]}
+					{
+						"id": "current-animation-time-is",
+						"type": "cmp"
+					},
+					{
+						"id": "time",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "time-format",
+						"type": "combo",
+						"items": [
+							"milliseconds",
+							"ratio of the animation length"
+						]
+					}
 				]
 			},
 			{
@@ -116,9 +160,23 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "current_animation_time_is0", "type": "cmp"},
-					{"id": "time1", "type": "number", "initialValue": "0"},
-					{"id": "time_format4", "type": "combo", "items": ["milliseconds", "ratio of the animation length"]}
+					{
+						"id": "current_animation_time_is0",
+						"type": "cmp"
+					},
+					{
+						"id": "time1",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "time_format4",
+						"type": "combo",
+						"items": [
+							"milliseconds",
+							"ratio of the animation length"
+						]
+					}
 				]
 			},
 			{
@@ -126,7 +184,10 @@
 				"scriptName": "CompareAnimation",
 				"highlight": false,
 				"params": [
-					{"id": "animation-name", "type": "string"}
+					{
+						"id": "animation-name",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -136,7 +197,10 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "animation0", "type": "string"}
+					{
+						"id": "animation0",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -162,6 +226,29 @@
 				"scriptName": "AnimationLooping",
 				"isDeprecated": true,
 				"highlight": false
+			},
+			{
+				"id": "compare-second-animation",
+				"scriptName": "CompareSecondAnimation",
+				"highlight": false,
+				"params": [
+					{
+						"id": "animation-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"id": "comparesecondanimation",
+				"scriptName": "CompareSecondAnimation",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "animation0",
+						"type": "string"
+					}
+				]
 			}
 		],
 		"actions": [
@@ -170,9 +257,26 @@
 				"scriptName": "SetAnimation",
 				"highlight": true,
 				"params": [
-					{"id": "animation-name", "type": "string"},
-					{"id": "where-to-start", "type": "combo", "items": ["play from start", "play from current time", "play from current time ratio", "blend to start", "blend at current time ratio"]},
-					{"id": "blend-duration", "type": "number", "initialValue": "0"}
+					{
+						"id": "animation-name",
+						"type": "string"
+					},
+					{
+						"id": "where-to-start",
+						"type": "combo",
+						"items": [
+							"play from start",
+							"play from current time",
+							"play from current time ratio",
+							"blend to start",
+							"blend at current time ratio"
+						]
+					},
+					{
+						"id": "blend-duration",
+						"type": "number",
+						"initialValue": "0"
+					}
 				]
 			},
 			{
@@ -182,9 +286,26 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "animation0", "type": "string"},
-					{"id": "where_to_start_playing_this_animation6", "type": "combo", "items": ["play from start", "play from current time", "play from current time ratio", "blend to start", "blend at current time ratio"]},
-					{"id": "blend_duration7", "type": "number", "initialValue": "0"}
+					{
+						"id": "animation0",
+						"type": "string"
+					},
+					{
+						"id": "where_to_start_playing_this_animation6",
+						"type": "combo",
+						"items": [
+							"play from start",
+							"play from current time",
+							"play from current time ratio",
+							"blend to start",
+							"blend at current time ratio"
+						]
+					},
+					{
+						"id": "blend_duration7",
+						"type": "number",
+						"initialValue": "0"
+					}
 				]
 			},
 			{
@@ -192,7 +313,11 @@
 				"scriptName": "SetPlaybackSpeedRatio",
 				"highlight": false,
 				"params": [
-					{"id": "speed-ratio", "type": "number", "initialValue": "1.0"}
+					{
+						"id": "speed-ratio",
+						"type": "number",
+						"initialValue": "1.0"
+					}
 				]
 			},
 			{
@@ -202,7 +327,11 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "speed_ratio0", "type": "number", "initialValue": "1.0"}
+					{
+						"id": "speed_ratio0",
+						"type": "number",
+						"initialValue": "1.0"
+					}
 				]
 			},
 			{
@@ -210,7 +339,14 @@
 				"scriptName": "SetAnimationLoop",
 				"highlight": false,
 				"params": [
-					{"id": "loop-animation", "type": "combo", "items": ["play once", "loop"]}
+					{
+						"id": "loop-animation",
+						"type": "combo",
+						"items": [
+							"play once",
+							"loop"
+						]
+					}
 				]
 			},
 			{
@@ -220,7 +356,14 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "loop_animation2", "type": "combo", "items": ["play once", "loop"]}
+					{
+						"id": "loop_animation2",
+						"type": "combo",
+						"items": [
+							"play once",
+							"loop"
+						]
+					}
 				]
 			},
 			{
@@ -228,8 +371,19 @@
 				"scriptName": "SetAnimationTime",
 				"highlight": false,
 				"params": [
-					{"id": "time-units", "type": "combo", "items": ["milliseconds", "ratio of total length"]},
-					{"id": "new-position", "type": "number", "initialValue": "0"}
+					{
+						"id": "time-units",
+						"type": "combo",
+						"items": [
+							"milliseconds",
+							"ratio of total length"
+						]
+					},
+					{
+						"id": "new-position",
+						"type": "number",
+						"initialValue": "0"
+					}
 				]
 			},
 			{
@@ -239,8 +393,19 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "time_units2", "type": "combo", "items": ["milliseconds", "ratio of total length"]},
-					{"id": "new_position3", "type": "number", "initialValue": "0"}
+					{
+						"id": "time_units2",
+						"type": "combo",
+						"items": [
+							"milliseconds",
+							"ratio of total length"
+						]
+					},
+					{
+						"id": "new_position3",
+						"type": "number",
+						"initialValue": "0"
+					}
 				]
 			},
 			{
@@ -272,8 +437,20 @@
 				"scriptName": "PlayAnimTo",
 				"highlight": false,
 				"params": [
-					{"id": "units", "type": "combo", "items": ["to keyframe", "to time", "to time ratio"]},
-					{"id": "target", "type": "number", "initialValue": "0"}
+					{
+						"id": "units",
+						"type": "combo",
+						"items": [
+							"to keyframe",
+							"to time",
+							"to time ratio"
+						]
+					},
+					{
+						"id": "target",
+						"type": "number",
+						"initialValue": "0"
+					}
 				]
 			},
 			{
@@ -283,9 +460,83 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "3", "type": "combo", "items": ["to keyframe", "to time", "to time ratio"]},
-					{"id": "target4", "type": "number", "initialValue": "0"}
+					{
+						"id": "3",
+						"type": "combo",
+						"items": [
+							"to keyframe",
+							"to time",
+							"to time ratio"
+						]
+					},
+					{
+						"id": "target4",
+						"type": "number",
+						"initialValue": "0"
+					}
 				]
+			},
+			{
+				"id": "set-second-anim",
+				"scriptName": "SetSecondAnim",
+				"highlight": false,
+				"params": [
+					{
+						"id": "animation-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 13,
+				"id": "setsecondanim13",
+				"scriptName": "setSecondAnim",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "animation0",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"id": "set-anim-blend-ratio",
+				"scriptName": "SetAnimBlendRatio",
+				"highlight": false,
+				"params": [
+					{
+						"id": "blend-ratio",
+						"type": "number",
+						"initialValue": "0"
+					}
+				]
+			},
+			{
+				"c2id": 14,
+				"id": "setanimblendratio14",
+				"scriptName": "setAnimBlendRatio",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "blend_level0",
+						"type": "number",
+						"initialValue": "0"
+					}
+				]
+			},
+			{
+				"id": "stop-second-anim",
+				"scriptName": "StopSecondAnim",
+				"highlight": false
+			},
+			{
+				"c2id": 15,
+				"id": "stopsecondanim15",
+				"scriptName": "stopSecondAnim",
+				"isDeprecated": true,
+				"highlight": false
 			}
 		],
 		"expressions": [
@@ -330,10 +581,23 @@
 				"expressionName": "SpeedRatio",
 				"highlight": false,
 				"returnType": "number"
+			},
+			{
+				"c2id": 15,
+				"id": "blend-ratio",
+				"expressionName": "BlendRatio",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"c2id": 16,
+				"id": "second-animation-name",
+				"expressionName": "SecondAnimationName",
+				"highlight": false,
+				"returnType": "string"
 			}
 		]
 	},
-
 	"entities": {
 		"conditions": [
 			{
@@ -341,7 +605,10 @@
 				"scriptName": "CompareEntity",
 				"highlight": false,
 				"params": [
-					{"id": "entity-name", "type": "string"}
+					{
+						"id": "entity-name",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -351,7 +618,10 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "entity0", "type": "string"}
+					{
+						"id": "entity0",
+						"type": "string"
+					}
 				]
 			}
 		],
@@ -361,8 +631,14 @@
 				"scriptName": "SetEntity",
 				"highlight": false,
 				"params": [
-					{"id": "entity-name", "type": "string"},
-					{"id": "animation-name", "type": "string"}
+					{
+						"id": "entity-name",
+						"type": "string"
+					},
+					{
+						"id": "animation-name",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -372,14 +648,19 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "entity0", "type": "string"},
-					{"id": "animation1", "type": "string"}
+					{
+						"id": "entity0",
+						"type": "string"
+					},
+					{
+						"id": "animation1",
+						"type": "string"
+					}
 				]
 			}
 		],
 		"expressions": []
 	},
-
 	"size_position": {
 		"conditions": [
 			{
@@ -413,9 +694,27 @@
 				"scriptName": "SetObjectScaleRatio",
 				"highlight": false,
 				"params": [
-					{"id": "scale-ratio", "type": "number", "initialValue": "1.0"},
-					{"id": "flip-x-axis", "type": "combo", "items": ["don't flip x axis", "flip x axis"]},
-					{"id": "flip-y-axis", "type": "combo", "items": ["don't flip y axis", "flip y axis"]}
+					{
+						"id": "scale-ratio",
+						"type": "number",
+						"initialValue": "1.0"
+					},
+					{
+						"id": "flip-x-axis",
+						"type": "combo",
+						"items": [
+							"don't flip x axis",
+							"flip x axis"
+						]
+					},
+					{
+						"id": "flip-y-axis",
+						"type": "combo",
+						"items": [
+							"don't flip y axis",
+							"flip y axis"
+						]
+					}
 				]
 			},
 			{
@@ -425,9 +724,27 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "scale_ratio0", "type": "number", "initialValue": "1.0"},
-					{"id": "flip_x_axis3", "type": "combo", "items": ["don't flip x axis", "flip x axis"]},
-					{"id": "flip_y_axis6", "type": "combo", "items": ["don't flip y axis", "flip y axis"]}
+					{
+						"id": "scale_ratio0",
+						"type": "number",
+						"initialValue": "1.0"
+					},
+					{
+						"id": "flip_x_axis3",
+						"type": "combo",
+						"items": [
+							"don't flip x axis",
+							"flip x axis"
+						]
+					},
+					{
+						"id": "flip_y_axis6",
+						"type": "combo",
+						"items": [
+							"don't flip y axis",
+							"flip y axis"
+						]
+					}
 				]
 			},
 			{
@@ -435,7 +752,14 @@
 				"scriptName": "SetObjectXFlip",
 				"highlight": false,
 				"params": [
-					{"id": "mirror-x-axis", "type": "combo", "items": ["don't mirror x axis", "mirror x axis"]}
+					{
+						"id": "mirror-x-axis",
+						"type": "combo",
+						"items": [
+							"don't mirror x axis",
+							"mirror x axis"
+						]
+					}
 				]
 			},
 			{
@@ -445,7 +769,14 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "mirror_x_axis2", "type": "combo", "items": ["don't mirror x axis", "mirror x axis"]}
+					{
+						"id": "mirror_x_axis2",
+						"type": "combo",
+						"items": [
+							"don't mirror x axis",
+							"mirror x axis"
+						]
+					}
 				]
 			},
 			{
@@ -453,7 +784,14 @@
 				"scriptName": "SetObjectYFlip",
 				"highlight": false,
 				"params": [
-					{"id": "flip-y-axis", "type": "combo", "items": ["don't flip y axis", "flip y axis"]}
+					{
+						"id": "flip-y-axis",
+						"type": "combo",
+						"items": [
+							"don't flip y axis",
+							"flip y axis"
+						]
+					}
 				]
 			},
 			{
@@ -463,7 +801,14 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "flip_y_axis2", "type": "combo", "items": ["don't flip y axis", "flip y axis"]}
+					{
+						"id": "flip_y_axis2",
+						"type": "combo",
+						"items": [
+							"don't flip y axis",
+							"flip y axis"
+						]
+					}
 				]
 			}
 		],
@@ -474,10 +819,37 @@
 				"expressionName": "ScaleRatio",
 				"highlight": false,
 				"returnType": "number"
+			},
+			{
+				"c2id": 24,
+				"id": "bbox-left",
+				"expressionName": "BBoxLeft",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"c2id": 25,
+				"id": "bbox-right",
+				"expressionName": "BBoxRight",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"c2id": 26,
+				"id": "bbox-top",
+				"expressionName": "BBoxTop",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"c2id": 27,
+				"id": "bbox-bottom",
+				"expressionName": "BBoxBottom",
+				"highlight": false,
+				"returnType": "number"
 			}
 		]
 	},
-
 	"custom": {
 		"conditions": [
 			{
@@ -529,7 +901,6 @@
 			}
 		]
 	},
-
 	"sounds": {
 		"conditions": [
 			{
@@ -619,7 +990,6 @@
 			}
 		]
 	},
-
 	"attach_c2_object": {
 		"conditions": [],
 		"actions": [
@@ -628,9 +998,23 @@
 				"scriptName": "PinC3ObjectToSpriterObject",
 				"highlight": false,
 				"params": [
-					{"id": "c3-object", "type": "object"},
-					{"id": "set-which-properties", "type": "combo", "items": ["angle and position", "angle", "position"]},
-					{"id": "spriter-object-name", "type": "string"}
+					{
+						"id": "c3-object",
+						"type": "object"
+					},
+					{
+						"id": "set-which-properties",
+						"type": "combo",
+						"items": [
+							"angle and position",
+							"angle",
+							"position"
+						]
+					},
+					{
+						"id": "spriter-object-name",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -640,9 +1024,23 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "c2_object0", "type": "object"},
-					{"id": "set_which_properties4", "type": "combo", "items": ["angle and position", "angle", "position"]},
-					{"id": "spriter_object5", "type": "string"}
+					{
+						"id": "c2_object0",
+						"type": "object"
+					},
+					{
+						"id": "set_which_properties4",
+						"type": "combo",
+						"items": [
+							"angle and position",
+							"angle",
+							"position"
+						]
+					},
+					{
+						"id": "spriter_object5",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -650,9 +1048,23 @@
 				"scriptName": "SetC3ObjectToSpriterObject",
 				"highlight": false,
 				"params": [
-					{"id": "c3-object", "type": "object"},
-					{"id": "set-which-properties", "type": "combo", "items": ["angle and position", "angle", "position"]},
-					{"id": "spriter-object-name", "type": "string"}
+					{
+						"id": "c3-object",
+						"type": "object"
+					},
+					{
+						"id": "set-which-properties",
+						"type": "combo",
+						"items": [
+							"angle and position",
+							"angle",
+							"position"
+						]
+					},
+					{
+						"id": "spriter-object-name",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -662,9 +1074,23 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "c2_object0", "type": "object"},
-					{"id": "set_which_properties4", "type": "combo", "items": ["angle and position", "angle", "position"]},
-					{"id": "spriter_object5", "type": "string"}
+					{
+						"id": "c2_object0",
+						"type": "object"
+					},
+					{
+						"id": "set_which_properties4",
+						"type": "combo",
+						"items": [
+							"angle and position",
+							"angle",
+							"position"
+						]
+					},
+					{
+						"id": "spriter_object5",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -672,8 +1098,14 @@
 				"scriptName": "UnpinC3ObjectFromSpriterObject",
 				"highlight": false,
 				"params": [
-					{"id": "c3-object", "type": "object"},
-					{"id": "spriter-object-name", "type": "string"}
+					{
+						"id": "c3-object",
+						"type": "object"
+					},
+					{
+						"id": "spriter-object-name",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -683,8 +1115,14 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "c2_object0", "type": "object"},
-					{"id": "spriter_object5", "type": "string"}
+					{
+						"id": "c2_object0",
+						"type": "object"
+					},
+					{
+						"id": "spriter_object5",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -692,7 +1130,10 @@
 				"scriptName": "UnpinAllFromSpriterObject",
 				"highlight": false,
 				"params": [
-					{"id": "spriter-object-name", "type": "string"}
+					{
+						"id": "spriter-object-name",
+						"type": "string"
+					}
 				]
 			},
 			{
@@ -702,10 +1143,405 @@
 				"isDeprecated": true,
 				"highlight": false,
 				"params": [
-					{"id": "spriter_object5", "type": "string"}
+					{
+						"id": "spriter_object5",
+						"type": "string"
+					}
 				]
 			}
 		],
 		"expressions": []
+	},
+	"action_points": {
+		"conditions": [
+			{
+				"id": "action-point-exists",
+				"scriptName": "ActionPointExists",
+				"highlight": false,
+				"params": [
+					{
+						"id": "point-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 12,
+				"id": "actionpointexists12",
+				"scriptName": "actionPointExists",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "name0",
+						"type": "string"
+					}
+				]
+			}
+		],
+		"actions": [],
+		"expressions": [
+			{
+				"c2id": 8,
+				"id": "point-x",
+				"expressionName": "PointX",
+				"highlight": false,
+				"returnType": "number",
+				"params": [
+					{
+						"id": "point-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 9,
+				"id": "point-y",
+				"expressionName": "PointY",
+				"highlight": false,
+				"returnType": "number",
+				"params": [
+					{
+						"id": "point-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 10,
+				"id": "point-angle",
+				"expressionName": "PointAngle",
+				"highlight": false,
+				"returnType": "number",
+				"params": [
+					{
+						"id": "point-name",
+						"type": "string"
+					}
+				]
+			}
+		]
+	},
+	"objects": {
+		"conditions": [
+			{
+				"id": "object-exists",
+				"scriptName": "ObjectExists",
+				"highlight": false,
+				"params": [
+					{
+						"id": "object-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 17,
+				"id": "objectexists17",
+				"scriptName": "objectExists",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "name0",
+						"type": "string"
+					}
+				]
+			}
+		],
+		"actions": [
+			{
+				"id": "find-spriter-object",
+				"scriptName": "FindSpriterObject",
+				"highlight": false,
+				"params": [
+					{
+						"id": "c2-object",
+						"type": "object"
+					}
+				]
+			},
+			{
+				"c2id": 23,
+				"id": "findspriterobject23",
+				"scriptName": "findSpriterObject",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "c2_object0",
+						"type": "object"
+					}
+				]
+			}
+		],
+		"expressions": [
+			{
+				"c2id": 19,
+				"id": "object-x",
+				"expressionName": "ObjectX",
+				"highlight": false,
+				"returnType": "number",
+				"params": [
+					{
+						"id": "object-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 20,
+				"id": "object-y",
+				"expressionName": "ObjectY",
+				"highlight": false,
+				"returnType": "number",
+				"params": [
+					{
+						"id": "object-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 21,
+				"id": "object-angle",
+				"expressionName": "ObjectAngle",
+				"highlight": false,
+				"returnType": "number",
+				"params": [
+					{
+						"id": "object-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 28,
+				"id": "found-object",
+				"expressionName": "FoundObject",
+				"highlight": false,
+				"returnType": "string"
+			}
+		]
+	},
+	"appearance": {
+		"conditions": [],
+		"actions": [
+			{
+				"c2id": 16,
+				"id": "setvisible16",
+				"scriptName": "setVisible",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "visibility2",
+						"type": "combo",
+						"items": [
+							"invisible",
+							"visible"
+						]
+					}
+				]
+			},
+			{
+				"c2id": 18,
+				"id": "setopacity18",
+				"scriptName": "setOpacity",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "opacity0",
+						"type": "number",
+						"initialValue": "100"
+					}
+				]
+			}
+		],
+		"expressions": [
+			{
+				"c2id": 18,
+				"id": "get-opacity",
+				"expressionName": "GetOpacity",
+				"isDeprecated": true,
+				"highlight": false,
+				"returnType": "number"
+			}
+		]
+	},
+	"misc": {
+		"conditions": [],
+		"actions": [
+			{
+				"id": "set-ignore-global-time-scale",
+				"scriptName": "SetIgnoreGlobalTimeScale",
+				"highlight": false,
+				"params": [
+					{
+						"id": "ignore-layout-time-scale",
+						"type": "combo",
+						"items": [
+							"don't ignore layout time scale",
+							"ignore layout time scale"
+						]
+					}
+				]
+			},
+			{
+				"c2id": 22,
+				"id": "setignoreglobaltimescale22",
+				"scriptName": "setIgnoreGlobalTimeScale",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "ignore_layout_time_scale?2",
+						"type": "combo",
+						"items": [
+							"don't ignore layout time scale",
+							"ignore layout time scale"
+						]
+					}
+				]
+			},
+			{
+				"id": "stop-resume-setting-layer",
+				"scriptName": "StopResumeSettingLayer",
+				"highlight": false,
+				"params": [
+					{
+						"id": "set-sprite-layers",
+						"type": "combo",
+						"items": [
+							"Stop",
+							"Resume"
+						]
+					}
+				]
+			},
+			{
+				"c2id": 24,
+				"id": "stopresumesettinglayer24",
+				"scriptName": "stopResumeSettingLayer",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "setspritelayers8",
+						"type": "combo",
+						"items": [
+							"Stop",
+							"Resume"
+						]
+					}
+				]
+			},
+			{
+				"id": "stop-resume-setting-visibility-for-objects",
+				"scriptName": "StopResumeSettingVisibilityForObjects",
+				"highlight": false,
+				"params": [
+					{
+						"id": "set-sprite-visibility",
+						"type": "combo",
+						"items": [
+							"Stop",
+							"Resume"
+						]
+					}
+				]
+			},
+			{
+				"id": "stopresumesettingvisibilityforobjects",
+				"scriptName": "stopResumeSettingVisibilityForObjects",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "setspritevisibility",
+						"type": "combo",
+						"items": [
+							"Stop",
+							"Resume"
+						]
+					}
+				]
+			},
+			{
+				"id": "stop-resume-setting-collisions-for-objects",
+				"scriptName": "StopResumeSettingCollisionsForObjects",
+				"highlight": false,
+				"params": [
+					{
+						"id": "set-sprite-collisions",
+						"type": "combo",
+						"items": [
+							"Stop",
+							"Resume"
+						]
+					}
+				]
+			},
+			{
+				"id": "stopresumesettingcollisionsforobjects",
+				"scriptName": "stopResumeSettingCollisionsForObjects",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "setspritecollisions",
+						"type": "combo",
+						"items": [
+							"Stop",
+							"Resume"
+						]
+					}
+				]
+			}
+		],
+		"expressions": []
+	},
+	"z_order": {
+		"conditions": [
+			{
+				"id": "compare-z-elevation",
+				"scriptName": "CompareZElevation",
+				"highlight": false,
+				"params": [
+					{
+						"id": "which",
+						"type": "combo",
+						"items": [
+							"Z Elevation",
+							"Total Z Elevation"
+						]
+					},
+					{
+						"id": "comparison",
+						"type": "cmp"
+					},
+					{
+						"id": "z-elevation",
+						"type": "number"
+					}
+				]
+			}
+		],
+		"actions": [],
+		"expressions": [
+			{
+				"id": "z-elevation",
+				"expressionName": "ZElevation",
+				"highlight": false,
+				"returnType": "number"
+			},
+			{
+				"id": "total-z-elevation",
+				"expressionName": "TotalZElevation",
+				"highlight": false,
+				"returnType": "number"
+			}
+		]
 	}
 }

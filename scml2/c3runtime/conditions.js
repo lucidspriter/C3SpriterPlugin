@@ -96,12 +96,59 @@ C3.Plugins.Spriter.Cnds =
 		return lower(currentAnimationName) === lower(name);
 	},
 
+	CompareSecondAnimation(name)
+	{
+		const secondAnimationName = (typeof this._getSecondAnimationName === "function")
+			? this._getSecondAnimationName()
+			: "";
+		if (!secondAnimationName)
+		{
+			return false;
+		}
+		return lower(secondAnimationName) === lower(name);
+	},
+
 	CompareEntity(name)
 	{
 		const currentEntityName = this.entity && typeof this.entity.name === "string"
 			? this.entity.name
 			: "";
 		return lower(currentEntityName) === lower(name);
+	},
+
+	ActionPointExists(pointName)
+	{
+		return (typeof this._actionPointExists === "function")
+			? this._actionPointExists(pointName)
+			: false;
+	},
+
+	// Legacy ACE alias used by older projects.
+	actionPointExists(pointName)
+	{
+		return this.ActionPointExists(pointName);
+	},
+
+	ObjectExists(objectName)
+	{
+		return (typeof this._objectExists === "function")
+			? this._objectExists(objectName)
+			: false;
+	},
+
+	// Legacy ACE alias used by older projects.
+	objectExists(objectName)
+	{
+		return this.ObjectExists(objectName);
+	},
+
+	CompareZElevation(which, cmp, zElevation)
+	{
+		const useTotal = Number(which) === 1;
+		const value = (typeof this._getWorldZElevation === "function")
+			? this._getWorldZElevation(useTotal)
+			: 0;
+		return compareValues(value, cmp, zElevation);
 	},
 
 	AnimationPaused()

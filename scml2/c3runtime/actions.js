@@ -156,6 +156,146 @@ C3.Plugins.Spriter.Acts =
 		this.SetObjectYFlip(yFlip);
 	},
 
+	SetIgnoreGlobalTimeScale(ignore)
+	{
+		if (typeof this._setIgnoreGlobalTimeScale === "function")
+		{
+			this._setIgnoreGlobalTimeScale(ignore);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setIgnoreGlobalTimeScale(ignore)
+	{
+		this.SetIgnoreGlobalTimeScale(ignore);
+	},
+
+	StopResumeSettingLayer(resume)
+	{
+		if (typeof this._stopResumeSettingLayer === "function")
+		{
+			this._stopResumeSettingLayer(resume);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	stopResumeSettingLayer(resume)
+	{
+		this.StopResumeSettingLayer(resume);
+	},
+
+	StopResumeSettingVisibilityForObjects(resume)
+	{
+		if (typeof this._stopResumeSettingVisibilityForObjects === "function")
+		{
+			this._stopResumeSettingVisibilityForObjects(resume);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	stopResumeSettingVisibilityForObjects(resume)
+	{
+		this.StopResumeSettingVisibilityForObjects(resume);
+	},
+
+	StopResumeSettingCollisionsForObjects(resume)
+	{
+		if (typeof this._stopResumeSettingCollisionsForObjects === "function")
+		{
+			this._stopResumeSettingCollisionsForObjects(resume);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	stopResumeSettingCollisionsForObjects(resume)
+	{
+		this.StopResumeSettingCollisionsForObjects(resume);
+	},
+
+	SetVisible(visible)
+	{
+		if (typeof this._setVisible === "function")
+		{
+			this._setVisible(visible);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setVisible(visible)
+	{
+		this.SetVisible(visible);
+	},
+
+	SetOpacity(opacityPercent)
+	{
+		if (typeof this._setOpacity === "function")
+		{
+			this._setOpacity(opacityPercent);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setOpacity(opacityPercent)
+	{
+		this.SetOpacity(opacityPercent);
+	},
+
+	SetSecondAnim(animationName)
+	{
+		if (typeof this._setSecondAnim === "function")
+		{
+			this._setSecondAnim(animationName);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setSecondAnim(animationName)
+	{
+		this.SetSecondAnim(animationName);
+	},
+
+	StopSecondAnim()
+	{
+		if (typeof this._stopSecondAnim === "function")
+		{
+			this._stopSecondAnim();
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	stopSecondAnim()
+	{
+		this.StopSecondAnim();
+	},
+
+	SetAnimBlendRatio(blendRatio)
+	{
+		if (typeof this._setAnimBlendRatio === "function")
+		{
+			this._setAnimBlendRatio(blendRatio);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setAnimBlendRatio(blendRatio)
+	{
+		this.SetAnimBlendRatio(blendRatio);
+	},
+
+	FindSpriterObject(c2Object)
+	{
+		if (typeof this._findSpriterObject === "function")
+		{
+			this._findSpriterObject(c2Object);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	findSpriterObject(c2Object)
+	{
+		this.FindSpriterObject(c2Object);
+	},
+
 	AssociateTypeWithName(objectType, name)
 	{
 		this._associateTypeWithName(objectType, name);

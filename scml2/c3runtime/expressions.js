@@ -88,10 +88,118 @@ C3.Plugins.Spriter.Exps =
 		return Number.isFinite(scale) ? scale : 1;
 	},
 
+	BlendRatio()
+	{
+		const blend = Number(this.animBlend);
+		return Number.isFinite(blend) ? blend : 0;
+	},
+
+	// Legacy ACE alias used by older projects.
+	blendRatio()
+	{
+		return this.BlendRatio();
+	},
+
+	SecondAnimationName()
+	{
+		return (typeof this._getSecondAnimationName === "function")
+			? this._getSecondAnimationName()
+			: "";
+	},
+
+	// Legacy ACE alias used by older projects.
+	secondAnimationName()
+	{
+		return this.SecondAnimationName();
+	},
+
 	ObjectCount()
 	{
 		const states = this._poseObjectStates;
 		return Array.isArray(states) ? states.length : 0;
+	},
+
+	FoundObject()
+	{
+		return this.lastFoundObject || "";
+	},
+
+	// Legacy ACE alias used by older projects.
+	foundObject()
+	{
+		return this.FoundObject();
+	},
+
+	PointX(name)
+	{
+		return (typeof this._getPoseObjectX === "function")
+			? this._getPoseObjectX(name)
+			: 0;
+	},
+
+	// Legacy ACE alias used by older projects.
+	pointX(name)
+	{
+		return this.PointX(name);
+	},
+
+	PointY(name)
+	{
+		return (typeof this._getPoseObjectY === "function")
+			? this._getPoseObjectY(name)
+			: 0;
+	},
+
+	// Legacy ACE alias used by older projects.
+	pointY(name)
+	{
+		return this.PointY(name);
+	},
+
+	PointAngle(name)
+	{
+		return (typeof this._getPoseObjectAngleDegrees === "function")
+			? this._getPoseObjectAngleDegrees(name)
+			: 0;
+	},
+
+	// Legacy ACE alias used by older projects.
+	pointAngle(name)
+	{
+		return this.PointAngle(name);
+	},
+
+	ObjectX(name)
+	{
+		return this.PointX(name);
+	},
+
+	// Legacy ACE alias used by older projects.
+	objectX(name)
+	{
+		return this.ObjectX(name);
+	},
+
+	ObjectY(name)
+	{
+		return this.PointY(name);
+	},
+
+	// Legacy ACE alias used by older projects.
+	objectY(name)
+	{
+		return this.ObjectY(name);
+	},
+
+	ObjectAngle(name)
+	{
+		return this.PointAngle(name);
+	},
+
+	// Legacy ACE alias used by older projects.
+	objectAngle(name)
+	{
+		return this.ObjectAngle(name);
 	},
 
 	EntityName()
@@ -166,5 +274,88 @@ C3.Plugins.Spriter.Exps =
 	soundPanning(soundTag)
 	{
 		return this.SoundPanning(soundTag);
+	},
+
+	GetOpacity()
+	{
+		return (typeof this._getWorldOpacityPercent === "function")
+			? this._getWorldOpacityPercent()
+			: 0;
+	},
+
+	// Legacy ACE alias used by older projects.
+	Opacity()
+	{
+		return this.GetOpacity();
+	},
+
+	BBoxLeft()
+	{
+		const rect = (typeof this._getWorldBoundingRect === "function")
+			? this._getWorldBoundingRect()
+			: null;
+		return rect ? Number(rect.left) || 0 : 0;
+	},
+
+	// Legacy ACE alias used by older projects.
+	bboxLeft()
+	{
+		return this.BBoxLeft();
+	},
+
+	BBoxTop()
+	{
+		const rect = (typeof this._getWorldBoundingRect === "function")
+			? this._getWorldBoundingRect()
+			: null;
+		return rect ? Number(rect.top) || 0 : 0;
+	},
+
+	// Legacy ACE alias used by older projects.
+	bboxTop()
+	{
+		return this.BBoxTop();
+	},
+
+	BBoxRight()
+	{
+		const rect = (typeof this._getWorldBoundingRect === "function")
+			? this._getWorldBoundingRect()
+			: null;
+		return rect ? Number(rect.right) || 0 : 0;
+	},
+
+	// Legacy ACE alias used by older projects.
+	bboxRight()
+	{
+		return this.BBoxRight();
+	},
+
+	BBoxBottom()
+	{
+		const rect = (typeof this._getWorldBoundingRect === "function")
+			? this._getWorldBoundingRect()
+			: null;
+		return rect ? Number(rect.bottom) || 0 : 0;
+	},
+
+	// Legacy ACE alias used by older projects.
+	bboxBottom()
+	{
+		return this.BBoxBottom();
+	},
+
+	ZElevation()
+	{
+		return (typeof this._getWorldZElevation === "function")
+			? this._getWorldZElevation(false)
+			: 0;
+	},
+
+	TotalZElevation()
+	{
+		return (typeof this._getWorldZElevation === "function")
+			? this._getWorldZElevation(true)
+			: 0;
 	}
 };

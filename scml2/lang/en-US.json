@@ -1,6 +1,5 @@
 {
 	"$schema": "../../plugin.lang.schema.json",
-
 	"languageTag": "en-US",
 	"fileDescription": "Strings for Spriter (SCML).",
 	"text": {
@@ -62,7 +61,12 @@
 					"size_position": "Size & Position",
 					"custom": "Custom",
 					"sounds": "Sounds",
-					"attach_c2_object": "Attach C3 Object"
+					"attach_c2_object": "Attach C3 Object",
+					"appearance": "Appearance",
+					"misc": "Misc",
+					"action_points": "Action points",
+					"objects": "Objects",
+					"z_order": "Z order"
 				},
 				"conditions": {
 					"on-ready": {
@@ -306,6 +310,95 @@
 						"list-name": "On sound panning change (legacy)",
 						"display-text": "On sound panning change (legacy)",
 						"description": "Legacy alias for On sound panning change."
+					},
+					"compare-second-animation": {
+						"list-name": "Compare second animation",
+						"display-text": "Second animation is [i]{0}[/i]",
+						"description": "Compare the secondary animation used for blending.",
+						"params": {
+							"animation-name": {
+								"name": "Animation name",
+								"desc": "The secondary animation name to compare."
+							}
+						}
+					},
+					"comparesecondanimation": {
+						"list-name": "Compare second animation (legacy)",
+						"display-text": "Second animation is [i]{0}[/i] (legacy)",
+						"description": "Legacy alias for Compare second animation.",
+						"params": {
+							"animation0": {
+								"name": "Animation name",
+								"desc": "The secondary animation name to compare."
+							}
+						}
+					},
+					"action-point-exists": {
+						"list-name": "Action point exists",
+						"display-text": "Action point [i]{0}[/i] exists",
+						"description": "Check if an action point/object timeline exists in the current pose.",
+						"params": {
+							"point-name": {
+								"name": "Point name",
+								"desc": "The action point timeline name to check."
+							}
+						}
+					},
+					"actionpointexists12": {
+						"list-name": "Action point exists (legacy)",
+						"display-text": "Action point [i]{0}[/i] exists (legacy)",
+						"description": "Legacy alias for Action point exists.",
+						"params": {
+							"name0": {
+								"name": "Point name",
+								"desc": "The action point timeline name to check."
+							}
+						}
+					},
+					"object-exists": {
+						"list-name": "Object exists",
+						"display-text": "Object [i]{0}[/i] exists",
+						"description": "Check if a Spriter object timeline exists in the current pose.",
+						"params": {
+							"object-name": {
+								"name": "Object name",
+								"desc": "The Spriter object timeline name to check."
+							}
+						}
+					},
+					"objectexists17": {
+						"list-name": "Object exists (legacy)",
+						"display-text": "Object [i]{0}[/i] exists (legacy)",
+						"description": "Legacy alias for Object exists.",
+						"params": {
+							"name0": {
+								"name": "Object name",
+								"desc": "The Spriter object timeline name to check."
+							}
+						}
+					},
+					"compare-z-elevation": {
+						"list-name": "Compare Z elevation",
+						"display-text": "Compare {0} {1} {2}",
+						"description": "Compare this instance's Z elevation value.",
+						"params": {
+							"which": {
+								"name": "Which",
+								"desc": "Choose Z elevation value.",
+								"items": {
+									"Z Elevation": "Z Elevation",
+									"Total Z Elevation": "Total Z Elevation"
+								}
+							},
+							"comparison": {
+								"name": "Comparison",
+								"desc": "Comparison to perform."
+							},
+							"z-elevation": {
+								"name": "Z elevation",
+								"desc": "The comparison value."
+							}
+						}
 					}
 				},
 				"actions": {
@@ -832,6 +925,228 @@
 								"desc": "The Spriter object name to unpin from (empty to unpin all)."
 							}
 						}
+					},
+					"set-second-anim": {
+						"list-name": "Set second animation",
+						"display-text": "Set second animation to [i]{0}[/i]",
+						"description": "Set a secondary animation for blending.",
+						"params": {
+							"animation-name": {
+								"name": "Animation name",
+								"desc": "The animation name to blend to."
+							}
+						}
+					},
+					"setsecondanim13": {
+						"list-name": "Set second animation (legacy)",
+						"display-text": "Set second animation to [i]{0}[/i] (legacy)",
+						"description": "Legacy alias for Set second animation.",
+						"params": {
+							"animation0": {
+								"name": "Animation name",
+								"desc": "The animation name to blend to."
+							}
+						}
+					},
+					"set-anim-blend-ratio": {
+						"list-name": "Set animation blend ratio",
+						"display-text": "Set animation blend ratio to {0}",
+						"description": "Set blend ratio between primary and secondary animations.",
+						"params": {
+							"blend-ratio": {
+								"name": "Blend ratio",
+								"desc": "Blend ratio from 0 to 1."
+							}
+						}
+					},
+					"setanimblendratio14": {
+						"list-name": "Set animation blend ratio (legacy)",
+						"display-text": "Set animation blend ratio to {0} (legacy)",
+						"description": "Legacy alias for Set animation blend ratio.",
+						"params": {
+							"blend_level0": {
+								"name": "Blend ratio",
+								"desc": "Blend ratio from 0 to 1."
+							}
+						}
+					},
+					"stop-second-anim": {
+						"list-name": "Stop second animation",
+						"display-text": "Stop second animation",
+						"description": "Clear the secondary blending animation."
+					},
+					"stopsecondanim15": {
+						"list-name": "Stop second animation (legacy)",
+						"display-text": "Stop second animation (legacy)",
+						"description": "Legacy alias for Stop second animation."
+					},
+					"find-spriter-object": {
+						"list-name": "Find Spriter object",
+						"display-text": "Find Spriter object for {0}",
+						"description": "Set FoundObject to the matching Spriter timeline name for the picked object.",
+						"params": {
+							"c2-object": {
+								"name": "Object",
+								"desc": "The object to look up in current associations."
+							}
+						}
+					},
+					"findspriterobject23": {
+						"list-name": "Find Spriter object (legacy)",
+						"display-text": "Find Spriter object for {0} (legacy)",
+						"description": "Legacy alias for Find Spriter object.",
+						"params": {
+							"c2_object0": {
+								"name": "Object",
+								"desc": "The object to look up in current associations."
+							}
+						}
+					},
+					"setvisible16": {
+						"list-name": "Set visible (legacy)",
+						"display-text": "Set visible to {0} (legacy)",
+						"description": "Legacy visibility action used by older projects.",
+						"params": {
+							"visibility2": {
+								"name": "Visibility",
+								"desc": "Choose whether object is visible.",
+								"items": {
+									"invisible": "Invisible",
+									"visible": "Visible"
+								}
+							}
+						}
+					},
+					"setopacity18": {
+						"list-name": "Set opacity (legacy)",
+						"display-text": "Set opacity to {0} (legacy)",
+						"description": "Legacy opacity action used by older projects.",
+						"params": {
+							"opacity0": {
+								"name": "Opacity",
+								"desc": "Opacity percent from 0 to 100."
+							}
+						}
+					},
+					"set-ignore-global-time-scale": {
+						"list-name": "Set ignore global time scale",
+						"display-text": "Set ignore global time scale to {0}",
+						"description": "Control whether animation playback ignores layout time scale.",
+						"params": {
+							"ignore-layout-time-scale": {
+								"name": "Ignore time scale",
+								"desc": "Whether to ignore the layout time scale.",
+								"items": {
+									"don't ignore layout time scale": "Don't ignore layout time scale",
+									"ignore layout time scale": "Ignore layout time scale"
+								}
+							}
+						}
+					},
+					"setignoreglobaltimescale22": {
+						"list-name": "Set ignore global time scale (legacy)",
+						"display-text": "Set ignore global time scale to {0} (legacy)",
+						"description": "Legacy alias for Set ignore global time scale.",
+						"params": {
+							"ignore_layout_time_scale?2": {
+								"name": "Ignore time scale",
+								"desc": "Whether to ignore the layout time scale.",
+								"items": {
+									"don't ignore layout time scale": "Don't ignore layout time scale",
+									"ignore layout time scale": "Ignore layout time scale"
+								}
+							}
+						}
+					},
+					"stop-resume-setting-layer": {
+						"list-name": "Set sprite layer updates",
+						"display-text": "Sprite layer updates: {0}",
+						"description": "Stop or resume automatic layer syncing for associated objects.",
+						"params": {
+							"set-sprite-layers": {
+								"name": "Mode",
+								"desc": "Stop or resume layer updates.",
+								"items": {
+									"Stop": "Stop",
+									"Resume": "Resume"
+								}
+							}
+						}
+					},
+					"stopresumesettinglayer24": {
+						"list-name": "Set sprite layer updates (legacy)",
+						"display-text": "Sprite layer updates: {0} (legacy)",
+						"description": "Legacy alias for sprite layer update mode.",
+						"params": {
+							"setspritelayers8": {
+								"name": "Mode",
+								"desc": "Stop or resume layer updates.",
+								"items": {
+									"Stop": "Stop",
+									"Resume": "Resume"
+								}
+							}
+						}
+					},
+					"stop-resume-setting-visibility-for-objects": {
+						"list-name": "Set sprite visibility updates",
+						"display-text": "Sprite visibility updates: {0}",
+						"description": "Stop or resume automatic visibility syncing for associated objects.",
+						"params": {
+							"set-sprite-visibility": {
+								"name": "Mode",
+								"desc": "Stop or resume visibility updates.",
+								"items": {
+									"Stop": "Stop",
+									"Resume": "Resume"
+								}
+							}
+						}
+					},
+					"stopresumesettingvisibilityforobjects": {
+						"list-name": "Set sprite visibility updates (legacy)",
+						"display-text": "Sprite visibility updates: {0} (legacy)",
+						"description": "Legacy alias for sprite visibility update mode.",
+						"params": {
+							"setspritevisibility": {
+								"name": "Mode",
+								"desc": "Stop or resume visibility updates.",
+								"items": {
+									"Stop": "Stop",
+									"Resume": "Resume"
+								}
+							}
+						}
+					},
+					"stop-resume-setting-collisions-for-objects": {
+						"list-name": "Set sprite collision updates",
+						"display-text": "Sprite collision updates: {0}",
+						"description": "Stop or resume automatic collision syncing for associated objects.",
+						"params": {
+							"set-sprite-collisions": {
+								"name": "Mode",
+								"desc": "Stop or resume collision updates.",
+								"items": {
+									"Stop": "Stop",
+									"Resume": "Resume"
+								}
+							}
+						}
+					},
+					"stopresumesettingcollisionsforobjects": {
+						"list-name": "Set sprite collision updates (legacy)",
+						"display-text": "Sprite collision updates: {0} (legacy)",
+						"description": "Legacy alias for sprite collision update mode.",
+						"params": {
+							"setspritecollisions": {
+								"name": "Mode",
+								"desc": "Stop or resume collision updates.",
+								"items": {
+									"Stop": "Stop",
+									"Resume": "Resume"
+								}
+							}
+						}
 					}
 				},
 				"expressions": {
@@ -966,6 +1281,106 @@
 								"desc": "The soundline name to query."
 							}
 						}
+					},
+					"blend-ratio": {
+						"translated-name": "BlendRatio",
+						"description": "Get the current animation blend ratio (0-1)."
+					},
+					"second-animation-name": {
+						"translated-name": "SecondAnimationName",
+						"description": "Get the current secondary animation name (if any)."
+					},
+					"point-x": {
+						"translated-name": "PointX",
+						"description": "Get the current X position for an action point timeline.",
+						"params": {
+							"point-name": {
+								"name": "Point name",
+								"desc": "The action point timeline name to query."
+							}
+						}
+					},
+					"point-y": {
+						"translated-name": "PointY",
+						"description": "Get the current Y position for an action point timeline.",
+						"params": {
+							"point-name": {
+								"name": "Point name",
+								"desc": "The action point timeline name to query."
+							}
+						}
+					},
+					"point-angle": {
+						"translated-name": "PointAngle",
+						"description": "Get the current angle (degrees) for an action point timeline.",
+						"params": {
+							"point-name": {
+								"name": "Point name",
+								"desc": "The action point timeline name to query."
+							}
+						}
+					},
+					"object-x": {
+						"translated-name": "ObjectX",
+						"description": "Get the current X position for a Spriter object timeline.",
+						"params": {
+							"object-name": {
+								"name": "Object name",
+								"desc": "The Spriter object timeline name to query."
+							}
+						}
+					},
+					"object-y": {
+						"translated-name": "ObjectY",
+						"description": "Get the current Y position for a Spriter object timeline.",
+						"params": {
+							"object-name": {
+								"name": "Object name",
+								"desc": "The Spriter object timeline name to query."
+							}
+						}
+					},
+					"object-angle": {
+						"translated-name": "ObjectAngle",
+						"description": "Get the current angle (degrees) for a Spriter object timeline.",
+						"params": {
+							"object-name": {
+								"name": "Object name",
+								"desc": "The Spriter object timeline name to query."
+							}
+						}
+					},
+					"found-object": {
+						"translated-name": "FoundObject",
+						"description": "Get the Spriter object name found by FindSpriterObject."
+					},
+					"get-opacity": {
+						"translated-name": "GetOpacity",
+						"description": "Get this Spriter instance opacity in percent (0-100)."
+					},
+					"bbox-left": {
+						"translated-name": "BBoxLeft",
+						"description": "Get the current bounding-box left edge."
+					},
+					"bbox-right": {
+						"translated-name": "BBoxRight",
+						"description": "Get the current bounding-box right edge."
+					},
+					"bbox-top": {
+						"translated-name": "BBoxTop",
+						"description": "Get the current bounding-box top edge."
+					},
+					"bbox-bottom": {
+						"translated-name": "BBoxBottom",
+						"description": "Get the current bounding-box bottom edge."
+					},
+					"z-elevation": {
+						"translated-name": "ZElevation",
+						"description": "Get this instance's Z elevation."
+					},
+					"total-z-elevation": {
+						"translated-name": "TotalZElevation",
+						"description": "Get this instance's total Z elevation."
 					}
 				}
 			}
