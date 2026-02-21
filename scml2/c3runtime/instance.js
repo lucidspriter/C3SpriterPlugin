@@ -2357,9 +2357,70 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return true;
 		}
 
+		const aUid = this._getInstanceUidMaybe(a);
+		const bUid = this._getInstanceUidMaybe(b);
+		if (Number.isFinite(aUid) && Number.isFinite(bUid) && aUid === bUid)
+		{
+			return true;
+		}
+
 		const ai = a._inst || null;
 		const bi = b._inst || null;
-		return (ai && (ai === b || ai === bi)) || (bi && bi === a);
+		if ((ai && (ai === b || ai === bi)) || (bi && (bi === a || bi === ai)))
+		{
+			return true;
+		}
+
+		const aSdk = typeof this._getSdkInstanceOf === "function" ? this._getSdkInstanceOf(a) : null;
+		const bSdk = typeof this._getSdkInstanceOf === "function" ? this._getSdkInstanceOf(b) : null;
+		if (aSdk && (aSdk === b || aSdk === bi || (bSdk && aSdk === bSdk)))
+		{
+			return true;
+		}
+		if (bSdk && (bSdk === a || bSdk === ai))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	_getInstanceUidMaybe(inst)
+	{
+		if (!inst)
+		{
+			return NaN;
+		}
+
+		const methods = ["GetUID", "getUID", "getUid"];
+		for (const fnName of methods)
+		{
+			if (typeof inst[fnName] === "function")
+			{
+				const uid = Number(inst[fnName]());
+				if (Number.isFinite(uid))
+				{
+					return uid;
+				}
+			}
+		}
+
+		const props = ["uid", "_uid"];
+		for (const propName of props)
+		{
+			const uid = Number(inst[propName]);
+			if (Number.isFinite(uid))
+			{
+				return uid;
+			}
+		}
+
+		if (inst._inst && inst._inst !== inst)
+		{
+			return this._getInstanceUidMaybe(inst._inst);
+		}
+
+		return NaN;
 	}
 
 	_findSpriterObject(c2Object)
@@ -2370,18 +2431,50 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
+		const candidateType = (c2Object && typeof c2Object.GetObjectClass === "function")
+			? c2Object.GetObjectClass()
+			: (c2Object && typeof c2Object.getObjectClass === "function")
+				? c2Object.getObjectClass()
+				: (c2Object && c2Object.objectType)
+					? c2Object.objectType
+					: (c2Object && c2Object.type)
+						? c2Object.type
+						: c2Object;
+
 		let picked = null;
-		if (typeof c2Object.GetFirstPicked === "function")
-		{
-			picked = c2Object.GetFirstPicked();
-		}
-		if (!picked && typeof this._resolveC2Instances === "function")
+		if (typeof this._resolveC2Instances === "function")
 		{
 			const instances = this._resolveC2Instances(c2Object);
 			picked = Array.isArray(instances) && instances.length ? instances[0] : null;
 		}
+		if (!picked && typeof c2Object.GetFirstPicked === "function")
+		{
+			picked = c2Object.GetFirstPicked();
+		}
+		if (!picked && typeof c2Object.getFirstPicked === "function")
+		{
+			picked = c2Object.getFirstPicked();
+		}
 		if (!picked)
 		{
+			let typeMatchName = "";
+			for (const [name, entry] of this._c2ObjectMap)
+			{
+				if (!entry || !entry.type || entry.type !== candidateType)
+				{
+					continue;
+				}
+
+				if (typeMatchName)
+				{
+					typeMatchName = "";
+					break;
+				}
+
+				typeMatchName = name;
+			}
+
+			this.lastFoundObject = typeMatchName;
 			return;
 		}
 
@@ -2394,6 +2487,24 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				return;
 			}
 		}
+
+		let fallbackName = "";
+		for (const [name, entry] of this._c2ObjectMap)
+		{
+			if (!entry || !entry.type || entry.type !== candidateType)
+			{
+				continue;
+			}
+
+			if (fallbackName)
+			{
+				fallbackName = "";
+				break;
+			}
+
+			fallbackName = name;
+		}
+		this.lastFoundObject = fallbackName;
 	}
 
 	_setAnimationLoop(loopOn)
@@ -4417,6 +4528,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (typeof c2Object.GetFirstPicked === "function")
 		{
 			const picked = c2Object.GetFirstPicked();
+			return picked ? [picked] : [];
+		}
+
+		if (typeof c2Object.getFirstPicked === "function")
+		{
+			const picked = c2Object.getFirstPicked();
 			return picked ? [picked] : [];
 		}
 
