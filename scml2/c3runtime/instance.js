@@ -677,6 +677,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._resolvedCharMapByObject = new Map();
 		this._resolvedCharMapGlobal = new Map();
 		this._objectInfoByName = new Map();
+		this._boneLengthByTimelineName = new Map();
 		this._objectOverridesByName = new Map();
 		this._boneIkOverridesByName = new Map();
 		this._eventLines = [];
@@ -2960,7 +2961,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			this._resolveBoneTransform(boneRef, poseTimeMs, boneRefsById, boneWorldById);
 		}
-		this._applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById);
+		this._applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs);
 
 		const bones = [];
 		for (const boneRef of boneRefs)
@@ -3716,6 +3717,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_buildObjectInfoLookup(entity)
 	{
 		this._objectInfoByName.clear();
+		this._boneLengthByTimelineName.clear();
 
 		const objInfoList = entity && Array.isArray(entity.obj_info)
 			? entity.obj_info
@@ -3772,6 +3774,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				frames: frameList,
 				frameBySource
 			};
+			const boneLength = toFiniteNumber(objInfo.w, NaN);
 
 			const candidateNames = [
 				typeof objInfo.name === "string" ? objInfo.name : "",
@@ -3783,6 +3786,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				if (key)
 				{
 					this._objectInfoByName.set(key, entry);
+					if (Number.isFinite(boneLength))
+					{
+						this._boneLengthByTimelineName.set(key, boneLength);
+					}
 				}
 			}
 		}
@@ -3955,6 +3962,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	{
 		const key = normaliseTimelineLookupName(timelineName, this.entity && this.entity.name);
 		return key ? (this._objectInfoByName.get(key) || null) : null;
+	}
+
+	_getBoneLengthForTimelineName(timelineName)
+	{
+		const key = normaliseTimelineLookupName(timelineName, this.entity && this.entity.name);
+		if (!key || !this._boneLengthByTimelineName)
+		{
+			return 0;
+		}
+
+		return toFiniteNumber(this._boneLengthByTimelineName.get(key), 0);
 	}
 
 	_refreshStateFileInfo(state)
@@ -4877,7 +4895,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		return result;
 	}
 
-	_resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById)
+	_resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById, overrideWorldById = null)
 	{
 		if (!boneRef)
 		{
@@ -4895,6 +4913,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return boneWorldById.get(boneId);
 		}
 
+		if (overrideWorldById && overrideWorldById.has(boneId))
+		{
+			const overridden = overrideWorldById.get(boneId);
+			boneWorldById.set(boneId, overridden);
+			return overridden;
+		}
+
 		const timelineId = toFiniteNumber(boneRef.timeline, NaN);
 		const keyIndex = toFiniteNumber(boneRef.key, 0);
 		const timeline = this._timelineById.get(timelineId);
@@ -4909,7 +4934,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (Number.isFinite(parentId))
 		{
 			const parentRef = boneRefsById.get(parentId);
-			const parentWorld = this._resolveBoneTransform(parentRef, timeMs, boneRefsById, boneWorldById);
+			const parentWorld = this._resolveBoneTransform(parentRef, timeMs, boneRefsById, boneWorldById, overrideWorldById);
 			if (parentWorld)
 			{
 				world = combineTransforms(parentWorld, local);
@@ -4920,15 +4945,253 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		return world;
 	}
 
-	_applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById)
+	_applyIkToWorldBones(targetX, targetY, additionalLength, parentBone, childBoneAbs, childBoneLocal, childBoneLength)
+	{
+		if (!parentBone || !childBoneAbs || !childBoneLocal)
+		{
+			return null;
+		}
+
+		const parent = {
+			...parentBone
+		};
+		const childLocal = {
+			...childBoneLocal
+		};
+
+		const parentScaleX = toFiniteNumber(parent.scaleX, 1);
+		const parentScaleY = toFiniteNumber(parent.scaleY, 1);
+		const childLocalScaleX = toFiniteNumber(childLocal.scaleX, 1);
+		const twoPi = Math.PI * 2;
+		const rad180 = Math.PI;
+		const rad270 = Math.PI * 1.5;
+
+		const distanceAB = Math.hypot(
+			toFiniteNumber(childLocal.x, 0) * parentScaleX,
+			toFiniteNumber(childLocal.y, 0) * parentScaleY
+		);
+		const distanceATarget = Math.hypot(
+			toFiniteNumber(parent.x, 0) - toFiniteNumber(targetX, 0),
+			toFiniteNumber(parent.y, 0) - toFiniteNumber(targetY, 0)
+		);
+		const distanceBTarget = Math.abs(toFiniteNumber(childBoneLength, 0) * childLocalScaleX * parentScaleX) + toFiniteNumber(additionalLength, 0);
+		const parentBoneFactor = (parentScaleX * parentScaleY) < 0;
+		const previousParentAngle = toFiniteNumber(parent.angle, 0);
+
+		if (!(distanceAB > 0) || !(distanceATarget > 0))
+		{
+			const child = combineTransforms(parent, childLocal);
+			child.angle = toFiniteNumber(child.angle, toFiniteNumber(childBoneAbs.angle, 0));
+			return {
+				parentBone: parent,
+				childBone: child
+			};
+		}
+
+		if (distanceATarget > distanceAB + distanceBTarget)
+		{
+			let newAngle = rad270 - Math.atan2(
+				toFiniteNumber(parent.x, 0) - toFiniteNumber(targetX, 0),
+				toFiniteNumber(parent.y, 0) - toFiniteNumber(targetY, 0)
+			);
+			if (parentScaleX < 0)
+			{
+				newAngle -= rad180;
+			}
+			if (this._xFlip)
+			{
+				newAngle -= rad180;
+			}
+			parent.angle = newAngle;
+		}
+		else
+		{
+			const xDiff = toFiniteNumber(parent.x, 0) - toFiniteNumber(targetX, 0);
+			const yDiff = toFiniteNumber(parent.y, 0) - toFiniteNumber(targetY, 0);
+			const acosDenominator = 2 * distanceAB * distanceATarget;
+			let newAngle = 0;
+			if (acosDenominator !== 0)
+			{
+				const cosValue = (
+					(distanceAB * distanceAB) +
+					(distanceATarget * distanceATarget) -
+					(distanceBTarget * distanceBTarget)
+				) / acosDenominator;
+				newAngle = Math.acos(clamp(cosValue, -1, 1));
+			}
+
+			const angleOffset = rad270 - Math.atan2(xDiff, yDiff);
+			let childAngleOffset = (
+				rad270 - Math.atan2(
+					toFiniteNumber(parent.x, 0) - toFiniteNumber(childBoneAbs.x, 0),
+					toFiniteNumber(parent.y, 0) - toFiniteNumber(childBoneAbs.y, 0)
+				)
+			) - previousParentAngle;
+			const ikReversal = toFiniteNumber(childLocal.angle, 0) > 0;
+
+			newAngle = angleOffset + (newAngle * (ikReversal ? -1 : 1) * (parentBoneFactor ? -1 : 1));
+			if (parentScaleX < 0)
+			{
+				childAngleOffset -= rad180;
+			}
+			newAngle -= childAngleOffset;
+
+			if (!Number.isFinite(newAngle))
+			{
+				newAngle = previousParentAngle;
+			}
+			else if (parentScaleX < 0)
+			{
+				newAngle -= rad180;
+			}
+
+			parent.angle = newAngle;
+		}
+
+		const child = combineTransforms(parent, childLocal);
+		let childAngle = rad270 - Math.atan2(
+			toFiniteNumber(child.x, 0) - toFiniteNumber(targetX, 0),
+			toFiniteNumber(child.y, 0) - toFiniteNumber(targetY, 0)
+		);
+		if (toFiniteNumber(child.scaleX, 1) < 0)
+		{
+			childAngle -= rad180;
+		}
+		if (this._xFlip)
+		{
+			childAngle -= rad180;
+		}
+		if (parentBoneFactor)
+		{
+			childAngle = (twoPi - childAngle) * -1;
+		}
+		child.angle = childAngle;
+
+		return {
+			parentBone: parent,
+			childBone: child
+		};
+	}
+
+	_applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, timeMs)
 	{
 		if (!this._boneIkOverridesByName || this._boneIkOverridesByName.size === 0)
 		{
 			return;
 		}
 
-		// The legacy ACE contract stores IK targets persistently. A full 2-bone IK solve is
-		// still pending; keep the values so existing projects load and action calls remain valid.
+		const boneRefByName = new Map();
+		const childRefsByParentId = new Map();
+
+		for (const boneRef of boneRefs)
+		{
+			if (!boneRef)
+			{
+				continue;
+			}
+
+			const id = toFiniteNumber(boneRef.id, NaN);
+			const parentId = toFiniteNumber(boneRef.parent, NaN);
+			if (Number.isFinite(parentId))
+			{
+				if (!childRefsByParentId.has(parentId))
+				{
+					childRefsByParentId.set(parentId, []);
+				}
+				childRefsByParentId.get(parentId).push(boneRef);
+			}
+
+			const timelineId = toFiniteNumber(boneRef.timeline, NaN);
+			const timelineName = this._timelineNameById.get(timelineId) || "";
+			const key = normaliseTimelineLookupName(timelineName, this.entity && this.entity.name);
+			if (key && Number.isFinite(id) && !boneRefByName.has(key))
+			{
+				boneRefByName.set(key, boneRef);
+			}
+		}
+
+		const overrideWorldById = new Map();
+
+		for (const [parentBoneName, ikOverride] of this._boneIkOverridesByName)
+		{
+			const parentRef = boneRefByName.get(parentBoneName);
+			if (!parentRef || !ikOverride)
+			{
+				continue;
+			}
+
+			const parentId = toFiniteNumber(parentRef.id, NaN);
+			if (!Number.isFinite(parentId))
+			{
+				continue;
+			}
+
+			let childRef = null;
+			if (ikOverride.childBone)
+			{
+				childRef = boneRefByName.get(ikOverride.childBone) || null;
+			}
+			if (!childRef)
+			{
+				const directChildren = childRefsByParentId.get(parentId) || [];
+				childRef = directChildren.length ? directChildren[0] : null;
+			}
+			if (!childRef)
+			{
+				continue;
+			}
+
+			const childId = toFiniteNumber(childRef.id, NaN);
+			if (!Number.isFinite(childId))
+			{
+				continue;
+			}
+
+			const parentWorld = overrideWorldById.get(parentId) || boneWorldById.get(parentId);
+			const childWorld = overrideWorldById.get(childId) || boneWorldById.get(childId);
+			if (!parentWorld || !childWorld)
+			{
+				continue;
+			}
+
+			const childTimelineId = toFiniteNumber(childRef.timeline, NaN);
+			const childTimeline = this._timelineById.get(childTimelineId);
+			const childLocal = this._evaluateTimelineTransform(childTimeline, toFiniteNumber(childRef.key, 0), timeMs);
+			if (!childLocal)
+			{
+				continue;
+			}
+
+			const childTimelineName = this._timelineNameById.get(childTimelineId) || "";
+			const childBoneLength = this._getBoneLengthForTimelineName(childTimelineName);
+			const solved = this._applyIkToWorldBones(
+				toFiniteNumber(ikOverride.targetX, 0),
+				toFiniteNumber(ikOverride.targetY, 0),
+				toFiniteNumber(ikOverride.additionalLength, 0),
+				parentWorld,
+				childWorld,
+				childLocal,
+				childBoneLength
+			);
+			if (!solved || !solved.parentBone || !solved.childBone)
+			{
+				continue;
+			}
+
+			overrideWorldById.set(parentId, solved.parentBone);
+			overrideWorldById.set(childId, solved.childBone);
+		}
+
+		if (!overrideWorldById.size)
+		{
+			return;
+		}
+
+		boneWorldById.clear();
+		for (const boneRef of boneRefs)
+		{
+			this._resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById, overrideWorldById);
+		}
 	}
 
 	_evaluateObjectRef(objectRef, timeMs, boneRefsById, boneWorldById)
