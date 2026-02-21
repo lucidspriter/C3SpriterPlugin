@@ -57,6 +57,16 @@ C3.Plugins.Spriter.Cnds =
 		return true;
 	},
 
+	OnURLLoaded()
+	{
+		return true;
+	},
+
+	OnURLFailed()
+	{
+		return true;
+	},
+
 	OnAnimFinished(animationName)
 	{
 		const currentAnimationName = this.animation && typeof this.animation.name === "string"
@@ -68,6 +78,31 @@ C3.Plugins.Spriter.Cnds =
 	OnAnyAnimFinished()
 	{
 		return true;
+	},
+
+	OnEventTriggered(name)
+	{
+		const triggered = typeof this._triggeredEventName === "string" ? this._triggeredEventName : "";
+		return lower(triggered) === lower(name);
+	},
+
+	outsidePaddedViewport()
+	{
+		return typeof this._isOutsideViewportBox === "function"
+			? this._isOutsideViewportBox()
+			: false;
+	},
+
+	OutsidePaddedViewport()
+	{
+		return this.outsidePaddedViewport();
+	},
+
+	tagActive(tagName, objectName)
+	{
+		return typeof this._tagActive === "function"
+			? this._tagActive(tagName, objectName)
+			: false;
 	},
 
 	CompareCurrentKey(cmp, frame)

@@ -376,6 +376,26 @@ const PROPERTY_INDEX = Object.freeze({
 	DRAW_DEBUG: 7
 });
 
+const AUTOMATIC_PAUSE_MODE = Object.freeze({
+	NEVER: 0,
+	ALL: 1,
+	ALL_BUT_SOUND: 2
+});
+
+const OVERRIDE_COMPONENT = Object.freeze({
+	ANGLE: 0,
+	X: 1,
+	Y: 2,
+	SCALE_X: 3,
+	SCALE_Y: 4,
+	IMAGE: 5,
+	PIVOT_X: 6,
+	PIVOT_Y: 7,
+	ENTITY_INDEX: 8,
+	ANIMATION_INDEX: 9,
+	TIME_RATIO: 10
+});
+
 const DRAW_SELF_OPTIONS = ["false", "true"];
 const BLEND_MODE_OPTIONS = ["no premultiplied alpha blend", "use effects blend mode"];
 const DRAW_DEBUG_OPTIONS = ["false", "true"];
@@ -473,6 +493,18 @@ function normaliseSpriterObjectName(name)
 	const hasSingleQuotes = text.length >= 2 && text.startsWith("'") && text.endsWith("'");
 	const hasDoubleQuotes = text.length >= 2 && text.startsWith("\"") && text.endsWith("\"");
 	return (hasSingleQuotes || hasDoubleQuotes) ? text.slice(1, -1).trim() : text;
+}
+
+function normaliseTimelineLookupName(name, entityName = "")
+{
+	const raw = normaliseSpriterObjectName(name);
+	if (!raw)
+	{
+		return "";
+	}
+
+	const stripped = stripEntityPrefix(raw, entityName);
+	return toLowerCaseSafe(stripped || raw);
 }
 
 function makeFolderFileKey(folder, file)
@@ -639,6 +671,28 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.setVisibilityForObjects = true;
 		this.setCollisionsForObjects = true;
 
+		// Legacy compatibility state (character maps, overrides, events, vars/tags, viewport pausing).
+		this._characterMapsByName = new Map();
+		this._activeCharMapNames = [];
+		this._resolvedCharMapByObject = new Map();
+		this._resolvedCharMapGlobal = new Map();
+		this._objectInfoByName = new Map();
+		this._objectOverridesByName = new Map();
+		this._boneIkOverridesByName = new Map();
+		this._eventLines = [];
+		this._triggeredEventName = "";
+		this._varDefsById = new Map();
+		this._varDefsByName = new Map();
+		this._varDefsByScope = new Map();
+		this._tagDefs = [];
+		this._activeTagsByScope = new Map();
+		this._varValuesByScope = new Map();
+		this._autoPauseMode = AUTOMATIC_PAUSE_MODE.NEVER;
+		this._autoPauseLeftBuffer = 0;
+		this._autoPauseRightBuffer = 0;
+		this._autoPauseTopBuffer = 0;
+		this._autoPauseBottomBuffer = 0;
+
 		// Enable ticking (Addon SDK v2): _tick() runs before events; _tick2() runs after events.
 		// https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkinstancebase
 		if (typeof this._setTicking === "function")
@@ -677,12 +731,33 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			this._advanceAutoBlend(dtSeconds);
 		}
 
-		this._evaluatePose();
-		this._evaluateSoundLines(this._currentAdjustedTimeMs);
+		const outsideViewport = this._isOutsideViewportBox();
+		const pauseAll = outsideViewport && this._autoPauseMode === AUTOMATIC_PAUSE_MODE.ALL;
+		const pauseAllButSound = outsideViewport && this._autoPauseMode === AUTOMATIC_PAUSE_MODE.ALL_BUT_SOUND;
 
-		if (!this.drawSelf)
+		if (!pauseAllButSound)
 		{
-			this._applyPoseToInstances();
+			this._evaluatePose();
+			this._refreshMetaState(this._currentAdjustedTimeMs);
+
+			if (!this.drawSelf)
+			{
+				this._applyPoseToInstances();
+			}
+		}
+
+		if (pauseAll)
+		{
+			return;
+		}
+
+		this._evaluateSoundLines(this._currentAdjustedTimeMs);
+		this._evaluateEventLines(this._currentAdjustedTimeMs);
+
+		// Keep vars/tags in sync while paused by viewport optimization modes.
+		if (pauseAllButSound)
+		{
+			this._refreshMetaState(this._currentAdjustedTimeMs);
 		}
 	}
 
@@ -1829,8 +1904,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		this._rebuildAnimationTimelineCache(nextAnimation);
 		this._buildSoundLineCache();
+		this._buildEventLineCache();
+		this._applyAnimationBoundsToWorldInfo(nextAnimation);
 		this._evaluatePose();
+		this._refreshMetaState(this._currentAdjustedTimeMs);
 		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
+		this._evaluateEventLines(this._currentAdjustedTimeMs, true);
 	}
 
 	_normaliseLoopTime(timeMs, lengthMs)
@@ -2086,8 +2165,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		this._rebuildAnimationTimelineCache(nextAnimation);
 		this._buildSoundLineCache();
+		this._buildEventLineCache();
+		this._applyAnimationBoundsToWorldInfo(nextAnimation);
 		this._evaluatePose();
+		this._refreshMetaState(this._currentAdjustedTimeMs);
 		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
+		this._evaluateEventLines(this._currentAdjustedTimeMs, true);
 		return true;
 	}
 
@@ -2167,6 +2250,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			this.entityIndex = nextEntityIndex;
 			this.entity = nextEntity;
 			this.startingEntityName = typeof nextEntity.name === "string" ? nextEntity.name : this.startingEntityName;
+			this._buildVarDefLookup(nextEntity);
+			this._buildObjectInfoLookup(nextEntity);
+			this._buildCharacterMapLookup(nextEntity);
+			this._rebuildResolvedCharacterMapLookup();
 			this._buildObjectArray();
 			this._refreshAssociatedFrameLookups();
 		}
@@ -2237,16 +2324,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		this._xFlip = this._parseFlipValue(xFlip);
 		this._yFlip = this._parseFlipValue(yFlip);
+		this._applyAnimationBoundsToWorldInfo(this.animation);
 	}
 
 	_setObjectXFlip(xFlip)
 	{
 		this._xFlip = this._parseFlipValue(xFlip);
+		this._applyAnimationBoundsToWorldInfo(this.animation);
 	}
 
 	_setObjectYFlip(yFlip)
 	{
 		this._yFlip = this._parseFlipValue(yFlip);
+		this._applyAnimationBoundsToWorldInfo(this.animation);
 	}
 
 	_setIgnoreGlobalTimeScale(ignore)
@@ -2870,6 +2960,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			this._resolveBoneTransform(boneRef, poseTimeMs, boneRefsById, boneWorldById);
 		}
+		this._applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById);
 
 		const bones = [];
 		for (const boneRef of boneRefs)
@@ -2889,8 +2980,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			bones.push({
 				id,
 				parentId: toFiniteNumber(boneRef.parent, NaN),
+				timelineName: this._timelineNameById.get(toFiniteNumber(boneRef.timeline, NaN)) || "",
 				x: toFiniteNumber(world.x, 0),
 				y: toFiniteNumber(world.y, 0),
+				angle: toFiniteNumber(world.angle, 0),
+				scaleX: toFiniteNumber(world.scaleX, 1),
+				scaleY: toFiniteNumber(world.scaleY, 1),
 				alpha: toFiniteNumber(world.alpha, 1)
 			});
 		}
@@ -3331,6 +3426,1397 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 	}
 
+	_getEventlinesForAnimation(animation)
+	{
+		if (!animation || typeof animation !== "object")
+		{
+			return [];
+		}
+
+		if (Array.isArray(animation.eventline))
+		{
+			return animation.eventline;
+		}
+
+		if (Array.isArray(animation.eventlines))
+		{
+			return animation.eventlines;
+		}
+
+		return [];
+	}
+
+	_buildEventLineCache()
+	{
+		this._eventLines.length = 0;
+		this._triggeredEventName = "";
+
+		const eventlines = this._getEventlinesForAnimation(this.animation);
+		for (const eventline of eventlines)
+		{
+			if (!eventline || typeof eventline !== "object")
+			{
+				continue;
+			}
+
+			const lineName = typeof eventline.name === "string" ? eventline.name : "";
+			const sourceKeys = Array.isArray(eventline.key) ? eventline.key : [];
+			if (!sourceKeys.length)
+			{
+				continue;
+			}
+
+			const keys = [];
+			for (const key of sourceKeys)
+			{
+				if (!key || typeof key !== "object")
+				{
+					continue;
+				}
+
+				keys.push({
+					time: toFiniteNumber(key.time, 0)
+				});
+			}
+
+			if (!keys.length)
+			{
+				continue;
+			}
+
+			keys.sort((a, b) => a.time - b.time);
+			this._eventLines.push({
+				name: lineName,
+				keys,
+				lastTimeMs: 0,
+				hasTime: false
+			});
+		}
+	}
+
+	_triggerEvent(eventName)
+	{
+		this._triggeredEventName = eventName || "";
+		const cnds = C3.Plugins.Spriter.Cnds;
+		if (typeof this._trigger === "function" && cnds && typeof cnds.OnEventTriggered === "function")
+		{
+			this._trigger(cnds.OnEventTriggered);
+		}
+	}
+
+	_evaluateEventLines(currentTimeMs, suppressTriggers = false)
+	{
+		if (!Array.isArray(this._eventLines) || !this._eventLines.length)
+		{
+			return;
+		}
+
+		const now = toFiniteNumber(currentTimeMs, 0);
+		for (const eventLine of this._eventLines)
+		{
+			const keys = Array.isArray(eventLine.keys) ? eventLine.keys : [];
+			if (!keys.length)
+			{
+				continue;
+			}
+
+			const hasTime = !!eventLine.hasTime;
+			const lastTime = hasTime ? toFiniteNumber(eventLine.lastTimeMs, now) : now;
+			if (hasTime && !suppressTriggers && now !== lastTime)
+			{
+				for (const key of keys)
+				{
+					if (this._testSoundTriggerTime(lastTime, now, toFiniteNumber(key.time, 0)))
+					{
+						this._triggerEvent(eventLine.name);
+					}
+				}
+			}
+
+			eventLine.lastTimeMs = now;
+			eventLine.hasTime = true;
+		}
+	}
+
+	_getVarDefListFromSource(source)
+	{
+		if (!source || typeof source !== "object")
+		{
+			return [];
+		}
+
+		if (Array.isArray(source.var_defs))
+		{
+			return source.var_defs;
+		}
+
+		if (Array.isArray(source.varDefs))
+		{
+			return source.varDefs;
+		}
+
+		return [];
+	}
+
+	_normaliseVarDef(def, fallbackId)
+	{
+		if (!def || typeof def !== "object")
+		{
+			return null;
+		}
+
+		const id = toFiniteNumber(def.id, fallbackId);
+		const name = typeof def.name === "string" ? def.name : "";
+		const type = typeof def.type === "string" ? def.type.toLowerCase() : "float";
+		let defaultValue = def.default;
+		if (!Object.prototype.hasOwnProperty.call(def, "default"))
+		{
+			defaultValue = def.def;
+		}
+		if (!Object.prototype.hasOwnProperty.call(def, "default") && !Object.prototype.hasOwnProperty.call(def, "def"))
+		{
+			defaultValue = def.default_value;
+		}
+		if (!Object.prototype.hasOwnProperty.call(def, "default") && !Object.prototype.hasOwnProperty.call(def, "def") && !Object.prototype.hasOwnProperty.call(def, "default_value"))
+		{
+			defaultValue = 0;
+		}
+
+		return {
+			id,
+			name,
+			type,
+			defaultValue
+		};
+	}
+
+	_registerVarDef(lookup, def)
+	{
+		if (!lookup || !def)
+		{
+			return;
+		}
+
+		if (!lookup.byId)
+		{
+			lookup.byId = new Map();
+		}
+		if (!lookup.byName)
+		{
+			lookup.byName = new Map();
+		}
+
+		if (Number.isFinite(def.id))
+		{
+			lookup.byId.set(def.id, def);
+		}
+
+		const key = toLowerCaseSafe(def.name);
+		if (key)
+		{
+			lookup.byName.set(key, def);
+		}
+	}
+
+	_buildTagDefLookup(projectData)
+	{
+		this._tagDefs.length = 0;
+		const tagDefs = Array.isArray(projectData && projectData.tag_list)
+			? projectData.tag_list
+			: Array.isArray(projectData && projectData.tagList)
+				? projectData.tagList
+				: [];
+
+		for (let i = 0; i < tagDefs.length; i++)
+		{
+			const tagDef = tagDefs[i];
+			if (!tagDef || typeof tagDef !== "object")
+			{
+				continue;
+			}
+
+			const name = typeof tagDef.name === "string" ? tagDef.name : "";
+			if (!name)
+			{
+				continue;
+			}
+
+			const id = toFiniteNumber(tagDef.id, i);
+			this._tagDefs[id] = name;
+		}
+	}
+
+	_buildVarDefLookup(entity)
+	{
+		this._varDefsById.clear();
+		this._varDefsByName.clear();
+		this._varDefsByScope.clear();
+
+		const globalLookup = {
+			byId: this._varDefsById,
+			byName: this._varDefsByName
+		};
+
+		const globalDefs = this._getVarDefListFromSource(entity);
+		for (let i = 0; i < globalDefs.length; i++)
+		{
+			const def = this._normaliseVarDef(globalDefs[i], i);
+			this._registerVarDef(globalLookup, def);
+		}
+
+		this._varDefsByScope.set("", {
+			byId: new Map(this._varDefsById),
+			byName: new Map(this._varDefsByName)
+		});
+
+		const objInfoList = entity && Array.isArray(entity.obj_info)
+			? entity.obj_info
+			: entity && Array.isArray(entity.objInfo)
+				? entity.objInfo
+				: [];
+
+		for (const objInfo of objInfoList)
+		{
+			if (!objInfo || typeof objInfo !== "object")
+			{
+				continue;
+			}
+
+			const defs = this._getVarDefListFromSource(objInfo);
+			if (!defs.length)
+			{
+				continue;
+			}
+
+			const scopeLookup = {
+				byId: new Map(this._varDefsById),
+				byName: new Map(this._varDefsByName)
+			};
+			for (let i = 0; i < defs.length; i++)
+			{
+				const def = this._normaliseVarDef(defs[i], i);
+				this._registerVarDef(scopeLookup, def);
+			}
+
+			const scopeNames = [
+				typeof objInfo.name === "string" ? objInfo.name : "",
+				typeof objInfo.realname === "string" ? objInfo.realname : ""
+			];
+			for (const scopeName of scopeNames)
+			{
+				const key = normaliseTimelineLookupName(scopeName, this.entity && this.entity.name);
+				if (key)
+				{
+					this._varDefsByScope.set(key, scopeLookup);
+				}
+			}
+		}
+	}
+
+	_buildObjectInfoLookup(entity)
+	{
+		this._objectInfoByName.clear();
+
+		const objInfoList = entity && Array.isArray(entity.obj_info)
+			? entity.obj_info
+			: entity && Array.isArray(entity.objInfo)
+				? entity.objInfo
+				: [];
+
+		for (const objInfo of objInfoList)
+		{
+			if (!objInfo || typeof objInfo !== "object")
+			{
+				continue;
+			}
+
+			const frameSource = Array.isArray(objInfo.frames) ? objInfo.frames : [];
+			const frameList = [];
+			const frameBySource = new Map();
+			for (let frameIndex = 0; frameIndex < frameSource.length; frameIndex++)
+			{
+				const frame = frameSource[frameIndex];
+				if (!frame || typeof frame !== "object")
+				{
+					continue;
+				}
+
+				const folder = toFiniteNumber(frame.folder, NaN);
+				const file = toFiniteNumber(frame.file, NaN);
+				if (!Number.isFinite(folder) || !Number.isFinite(file))
+				{
+					continue;
+				}
+
+				const fileInfo = this._getFileInfo(folder, file);
+				const key = makeFolderFileKey(folder, file);
+				const fallbackPivotX = fileInfo ? toFiniteNumber(fileInfo.pivotX, 0) : 0;
+				let fallbackPivotY = fileInfo ? toFiniteNumber(fileInfo.pivotY, 0) : 0;
+				if (Object.prototype.hasOwnProperty.call(frame, "pivot_y") && !Object.prototype.hasOwnProperty.call(frame, "pivotY"))
+				{
+					fallbackPivotY = Number.isFinite(fallbackPivotY) ? 1 - fallbackPivotY : fallbackPivotY;
+				}
+
+				frameList.push({
+					index: frameList.length,
+					folder,
+					file,
+					key,
+					pivotX: toFiniteNumber(frame.pivot_x, fallbackPivotX),
+					pivotY: toFiniteNumber(frame.pivot_y, fallbackPivotY)
+				});
+				frameBySource.set(key, frameList.length - 1);
+			}
+
+			const entry = {
+				frames: frameList,
+				frameBySource
+			};
+
+			const candidateNames = [
+				typeof objInfo.name === "string" ? objInfo.name : "",
+				typeof objInfo.realname === "string" ? objInfo.realname : ""
+			];
+			for (const candidateName of candidateNames)
+			{
+				const key = normaliseTimelineLookupName(candidateName, this.entity && this.entity.name);
+				if (key)
+				{
+					this._objectInfoByName.set(key, entry);
+				}
+			}
+		}
+	}
+
+	_getCharacterMapsFromEntity(entity)
+	{
+		if (!entity || typeof entity !== "object")
+		{
+			return [];
+		}
+
+		if (Array.isArray(entity.character_map))
+		{
+			return entity.character_map;
+		}
+
+		if (Array.isArray(entity.char_map))
+		{
+			return entity.char_map;
+		}
+
+		return [];
+	}
+
+	_buildCharacterMapLookup(entity)
+	{
+		this._characterMapsByName.clear();
+
+		const maps = this._getCharacterMapsFromEntity(entity);
+		for (const mapEntry of maps)
+		{
+			if (!mapEntry || typeof mapEntry !== "object")
+			{
+				continue;
+			}
+
+			const mapName = typeof mapEntry.name === "string" ? mapEntry.name.trim() : "";
+			if (!mapName)
+			{
+				continue;
+			}
+
+			const def = {
+				name: mapName,
+				perObject: new Map(),
+				global: new Map()
+			};
+			const entries = Array.isArray(mapEntry.map) ? mapEntry.map : [];
+			for (const entry of entries)
+			{
+				if (!entry || typeof entry !== "object")
+				{
+					continue;
+				}
+
+				const sourceFolder = toFiniteNumber(entry.folder, NaN);
+				const sourceFile = toFiniteNumber(entry.file, NaN);
+				if (!Number.isFinite(sourceFolder) || !Number.isFinite(sourceFile))
+				{
+					continue;
+				}
+
+				const sourceKey = makeFolderFileKey(sourceFolder, sourceFile);
+				const targetFolder = toFiniteNumber(entry.target_folder, NaN);
+				const targetFile = toFiniteNumber(entry.target_file, NaN);
+				const hidden = !(Number.isFinite(targetFolder) && Number.isFinite(targetFile));
+				const mapped = {
+					hidden,
+					folder: hidden ? sourceFolder : targetFolder,
+					file: hidden ? sourceFile : targetFile
+				};
+
+				let appliedToObject = false;
+				const targetKey = hidden ? "" : makeFolderFileKey(targetFolder, targetFile);
+				for (const [objectName, objectInfo] of this._objectInfoByName)
+				{
+					if (!objectInfo || !objectInfo.frameBySource || !objectInfo.frameBySource.has(sourceKey))
+					{
+						continue;
+					}
+
+					if (!hidden && !objectInfo.frameBySource.has(targetKey))
+					{
+						continue;
+					}
+
+					let objectMap = def.perObject.get(objectName);
+					if (!objectMap)
+					{
+						objectMap = new Map();
+						def.perObject.set(objectName, objectMap);
+					}
+					objectMap.set(sourceKey, mapped);
+					appliedToObject = true;
+				}
+
+				if (!appliedToObject)
+				{
+					def.global.set(sourceKey, mapped);
+				}
+			}
+
+			this._characterMapsByName.set(toLowerCaseSafe(mapName), def);
+		}
+	}
+
+	_rebuildResolvedCharacterMapLookup()
+	{
+		this._resolvedCharMapByObject.clear();
+		this._resolvedCharMapGlobal.clear();
+
+		for (const mapName of this._activeCharMapNames)
+		{
+			const def = this._characterMapsByName.get(toLowerCaseSafe(mapName));
+			if (!def)
+			{
+				continue;
+			}
+
+			for (const [objectName, objectMap] of def.perObject)
+			{
+				let resolvedMap = this._resolvedCharMapByObject.get(objectName);
+				if (!resolvedMap)
+				{
+					resolvedMap = new Map();
+					this._resolvedCharMapByObject.set(objectName, resolvedMap);
+				}
+
+				for (const [sourceKey, mapped] of objectMap)
+				{
+					resolvedMap.set(sourceKey, mapped);
+				}
+			}
+
+			for (const [sourceKey, mapped] of def.global)
+			{
+				this._resolvedCharMapGlobal.set(sourceKey, mapped);
+			}
+		}
+	}
+
+	_resolveCharacterMapForState(timelineName, folder, file)
+	{
+		if (!this._activeCharMapNames.length)
+		{
+			return null;
+		}
+
+		if (!Number.isFinite(folder) || !Number.isFinite(file))
+		{
+			return null;
+		}
+
+		const sourceKey = makeFolderFileKey(folder, file);
+		const objectName = normaliseTimelineLookupName(timelineName, this.entity && this.entity.name);
+		if (objectName)
+		{
+			const objectMap = this._resolvedCharMapByObject.get(objectName);
+			if (objectMap && objectMap.has(sourceKey))
+			{
+				return objectMap.get(sourceKey);
+			}
+		}
+
+		return this._resolvedCharMapGlobal.get(sourceKey) || null;
+	}
+
+	_getObjectInfoForTimelineName(timelineName)
+	{
+		const key = normaliseTimelineLookupName(timelineName, this.entity && this.entity.name);
+		return key ? (this._objectInfoByName.get(key) || null) : null;
+	}
+
+	_refreshStateFileInfo(state)
+	{
+		const fileInfo = this._getFileInfo(toFiniteNumber(state.folder, NaN), toFiniteNumber(state.file, NaN));
+		state.width = fileInfo ? toFiniteNumber(fileInfo.width, 0) : 0;
+		state.height = fileInfo ? toFiniteNumber(fileInfo.height, 0) : 0;
+		state.name = fileInfo && typeof fileInfo.name === "string" ? fileInfo.name : "";
+		state.atlasIndex = fileInfo ? toFiniteNumber(fileInfo.atlasIndex, 0) : 0;
+		state.atlasW = fileInfo ? toFiniteNumber(fileInfo.atlasW, 0) : 0;
+		state.atlasH = fileInfo ? toFiniteNumber(fileInfo.atlasH, 0) : 0;
+		state.atlasX = fileInfo ? toFiniteNumber(fileInfo.atlasX, 0) : 0;
+		state.atlasY = fileInfo ? toFiniteNumber(fileInfo.atlasY, 0) : 0;
+		state.atlasXOff = fileInfo ? toFiniteNumber(fileInfo.atlasXOff, 0) : 0;
+		state.atlasYOff = fileInfo ? toFiniteNumber(fileInfo.atlasYOff, 0) : 0;
+		state.atlasRotated = fileInfo ? !!fileInfo.atlasRotated : false;
+
+		if (!Number.isFinite(toFiniteNumber(state.pivotX, NaN)))
+		{
+			state.pivotX = fileInfo ? toFiniteNumber(fileInfo.pivotX, 0) : 0;
+		}
+		if (!Number.isFinite(toFiniteNumber(state.pivotY, NaN)))
+		{
+			state.pivotY = fileInfo ? toFiniteNumber(fileInfo.pivotY, 0) : 0;
+		}
+	}
+
+	_applyImageFrameOverrideToState(state, frameIndex)
+	{
+		const objectInfo = this._getObjectInfoForTimelineName(state.timelineName);
+		if (!objectInfo || !Array.isArray(objectInfo.frames) || !objectInfo.frames.length)
+		{
+			return;
+		}
+
+		const frame = objectInfo.frames[clamp(Math.floor(toFiniteNumber(frameIndex, 0)), 0, objectInfo.frames.length - 1)];
+		if (!frame)
+		{
+			return;
+		}
+
+		state.folder = frame.folder;
+		state.file = frame.file;
+		state.pivotX = frame.pivotX;
+		state.pivotY = frame.pivotY;
+		this._refreshStateFileInfo(state);
+	}
+
+	_lookupObjectOverrideEntries(timelineName)
+	{
+		if (!this._objectOverridesByName || this._objectOverridesByName.size === 0)
+		{
+			return null;
+		}
+
+		const key = normaliseTimelineLookupName(timelineName, this.entity && this.entity.name);
+		return key ? (this._objectOverridesByName.get(key) || null) : null;
+	}
+
+	_worldToPoseLocal(worldX, worldY)
+	{
+		const worldInfo = this._getWorldInfoOf(this);
+		const myX = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
+		const myY = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
+		const myAngle = toFiniteNumber(callFirstMethod(worldInfo, ["GetAngle", "getAngle"]), 0);
+		const cosA = Math.cos(myAngle);
+		const sinA = Math.sin(myAngle);
+		const dx = toFiniteNumber(worldX, myX) - myX;
+		const dy = toFiniteNumber(worldY, myY) - myY;
+		const rotatedX = dx * cosA + dy * sinA;
+		const rotatedY = -dx * sinA + dy * cosA;
+		const globalScale = toFiniteNumber(this._globalScaleRatio, 1) || 1;
+		const mirrorFactor = this._xFlip ? -1 : 1;
+		const flipFactor = this._yFlip ? -1 : 1;
+		return {
+			x: rotatedX / (globalScale * mirrorFactor),
+			y: rotatedY / (globalScale * flipFactor)
+		};
+	}
+
+	_applyObjectPositionWorldOverride(state, overrideX, overrideY)
+	{
+		const worldState = this._getPoseStateWorldTransform(state);
+		const targetX = overrideX != null ? toFiniteNumber(overrideX, worldState ? worldState.x : 0) : (worldState ? worldState.x : 0);
+		const targetY = overrideY != null ? toFiniteNumber(overrideY, worldState ? worldState.y : 0) : (worldState ? worldState.y : 0);
+		const local = this._worldToPoseLocal(targetX, targetY);
+		state.x = local.x;
+		state.y = local.y;
+	}
+
+	_applyObjectComponentOverrides(state)
+	{
+		const overrides = this._lookupObjectOverrideEntries(state.timelineName);
+		if (!overrides)
+		{
+			return;
+		}
+
+		let hasXOverride = false;
+		let hasYOverride = false;
+		let overrideX = 0;
+		let overrideY = 0;
+
+		for (const [component, value] of overrides)
+		{
+			switch (component)
+			{
+				case OVERRIDE_COMPONENT.X:
+					hasXOverride = true;
+					overrideX = toFiniteNumber(value, 0);
+					break;
+				case OVERRIDE_COMPONENT.Y:
+					hasYOverride = true;
+					overrideY = toFiniteNumber(value, 0);
+					break;
+				default:
+					break;
+			}
+		}
+
+		if (hasXOverride || hasYOverride)
+		{
+			this._applyObjectPositionWorldOverride(state, hasXOverride ? overrideX : null, hasYOverride ? overrideY : null);
+		}
+
+		for (const [component, value] of overrides)
+		{
+			switch (component)
+			{
+				case OVERRIDE_COMPONENT.ANGLE:
+				{
+					const worldInfo = this._getWorldInfoOf(this);
+					const objectAngle = degreesToRadians(toFiniteNumber(value, 0));
+					const myAngle = toFiniteNumber(callFirstMethod(worldInfo, ["GetAngle", "getAngle"]), 0);
+					const flipSign = (this._xFlip ? -1 : 1) * (this._yFlip ? -1 : 1);
+					state.angle = flipSign < 0
+						? (Math.PI * 2) - (objectAngle - myAngle)
+						: objectAngle - myAngle;
+					break;
+				}
+				case OVERRIDE_COMPONENT.SCALE_X:
+					state.scaleX = toFiniteNumber(value, state.scaleX);
+					break;
+				case OVERRIDE_COMPONENT.SCALE_Y:
+					state.scaleY = toFiniteNumber(value, state.scaleY);
+					break;
+				case OVERRIDE_COMPONENT.IMAGE:
+					this._applyImageFrameOverrideToState(state, value);
+					break;
+				case OVERRIDE_COMPONENT.PIVOT_X:
+					state.pivotX = toFiniteNumber(value, state.pivotX);
+					break;
+				case OVERRIDE_COMPONENT.PIVOT_Y:
+					state.pivotY = toFiniteNumber(value, state.pivotY);
+					break;
+				default:
+					break;
+			}
+		}
+	}
+
+	_getAnimationBounds(animation)
+	{
+		if (!animation || typeof animation !== "object")
+		{
+			return null;
+		}
+
+		const left = toFiniteNumber(animation.l, NaN);
+		const right = toFiniteNumber(animation.r, NaN);
+		const top = toFiniteNumber(animation.t, NaN);
+		const bottom = toFiniteNumber(animation.b, NaN);
+		if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(top) || !Number.isFinite(bottom))
+		{
+			return null;
+		}
+
+		const width = right - left;
+		const height = bottom - top;
+		if (!(width > 0) || !(height > 0))
+		{
+			return null;
+		}
+
+		return {
+			left,
+			right,
+			top,
+			bottom,
+			width,
+			height
+		};
+	}
+
+	_applyAnimationBoundsToWorldInfo(animation)
+	{
+		const worldInfo = this._getWorldInfoOf(this);
+		const bounds = this._getAnimationBounds(animation);
+		if (!worldInfo || !bounds)
+		{
+			return;
+		}
+
+		const scale = Math.abs(toFiniteNumber(this._globalScaleRatio, 1)) || 1;
+		const width = bounds.width * scale;
+		const height = bounds.height * scale;
+		callFirstMethod(worldInfo, ["SetWidth", "setWidth"], width);
+		callFirstMethod(worldInfo, ["SetHeight", "setHeight"], height);
+
+		const originX = -((this._xFlip ? -bounds.right : bounds.left) / bounds.width);
+		const originY = -((this._yFlip ? -bounds.bottom : bounds.top) / bounds.height);
+		callFirstMethod(worldInfo, ["SetOriginX", "setOriginX"], originX);
+		callFirstMethod(worldInfo, ["SetOriginY", "setOriginY"], originY);
+		callFirstMethod(worldInfo, ["SetBboxChanged", "setBboxChanged"]);
+	}
+
+	_getViewportBoundsFromLayer(layer)
+	{
+		const viewport = callFirstMethod(layer, ["GetViewport", "getViewport"]);
+		if (!viewport)
+		{
+			return null;
+		}
+
+		const left = toFiniteNumber(callFirstMethod(viewport, ["GetLeft", "getLeft"]), toFiniteNumber(viewport.left, NaN));
+		const right = toFiniteNumber(callFirstMethod(viewport, ["GetRight", "getRight"]), toFiniteNumber(viewport.right, NaN));
+		const top = toFiniteNumber(callFirstMethod(viewport, ["GetTop", "getTop"]), toFiniteNumber(viewport.top, NaN));
+		const bottom = toFiniteNumber(callFirstMethod(viewport, ["GetBottom", "getBottom"]), toFiniteNumber(viewport.bottom, NaN));
+		if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(top) || !Number.isFinite(bottom))
+		{
+			return null;
+		}
+
+		return {
+			left,
+			right,
+			top,
+			bottom
+		};
+	}
+
+	_isOutsideViewportBox()
+	{
+		const worldInfo = this._getWorldInfoOf(this);
+		if (!worldInfo)
+		{
+			return false;
+		}
+
+		const layer = callFirstMethod(worldInfo, ["GetLayer", "getLayer"]);
+		if (!layer)
+		{
+			return false;
+		}
+
+		const bounds = this._getViewportBoundsFromLayer(layer);
+		if (!bounds)
+		{
+			return false;
+		}
+
+		const x = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
+		const y = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
+
+		return (
+			x < bounds.left - toFiniteNumber(this._autoPauseLeftBuffer, 0) ||
+			x > bounds.right + toFiniteNumber(this._autoPauseRightBuffer, 0) ||
+			y < bounds.top - toFiniteNumber(this._autoPauseTopBuffer, 0) ||
+			y > bounds.bottom + toFiniteNumber(this._autoPauseBottomBuffer, 0)
+		);
+	}
+
+	_setAutomaticPausing(mode, leftBuffer, rightBuffer, topBuffer, bottomBuffer)
+	{
+		this._autoPauseMode = clamp(toFiniteNumber(mode, AUTOMATIC_PAUSE_MODE.NEVER), AUTOMATIC_PAUSE_MODE.NEVER, AUTOMATIC_PAUSE_MODE.ALL_BUT_SOUND);
+		this._autoPauseLeftBuffer = toFiniteNumber(leftBuffer, 0);
+		this._autoPauseRightBuffer = toFiniteNumber(rightBuffer, 0);
+		this._autoPauseTopBuffer = toFiniteNumber(topBuffer, 0);
+		this._autoPauseBottomBuffer = toFiniteNumber(bottomBuffer, 0);
+	}
+
+	_appendCharMap(mapName)
+	{
+		const key = toLowerCaseSafe(mapName);
+		if (!key)
+		{
+			return;
+		}
+
+		const mapDef = this._characterMapsByName.get(key);
+		if (!mapDef)
+		{
+			return;
+		}
+
+		if (!this._activeCharMapNames.some((name) => toLowerCaseSafe(name) === key))
+		{
+			this._activeCharMapNames.push(mapDef.name);
+			this._rebuildResolvedCharacterMapLookup();
+		}
+	}
+
+	_removeCharMap(mapName)
+	{
+		const key = toLowerCaseSafe(mapName);
+		if (!key)
+		{
+			return;
+		}
+
+		const index = this._activeCharMapNames.findIndex((name) => toLowerCaseSafe(name) === key);
+		if (index >= 0)
+		{
+			this._activeCharMapNames.splice(index, 1);
+			this._rebuildResolvedCharacterMapLookup();
+		}
+	}
+
+	_removeAllCharMaps()
+	{
+		if (!this._activeCharMapNames.length)
+		{
+			return;
+		}
+
+		this._activeCharMapNames.length = 0;
+		this._rebuildResolvedCharacterMapLookup();
+	}
+
+	_overrideObjectComponent(objectName, component, newValue)
+	{
+		const key = normaliseTimelineLookupName(objectName, this.entity && this.entity.name);
+		if (!key)
+		{
+			return;
+		}
+
+		const componentIndex = toFiniteNumber(component, NaN);
+		if (!Number.isFinite(componentIndex))
+		{
+			return;
+		}
+
+		let overrides = this._objectOverridesByName.get(key);
+		if (!overrides)
+		{
+			overrides = new Map();
+			this._objectOverridesByName.set(key, overrides);
+		}
+		overrides.set(componentIndex, newValue);
+	}
+
+	_overrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength)
+	{
+		const key = normaliseTimelineLookupName(parentBoneName, this.entity && this.entity.name);
+		if (!key)
+		{
+			return;
+		}
+
+		this._boneIkOverridesByName.set(key, {
+			childBone: normaliseTimelineLookupName(childBoneName, this.entity && this.entity.name),
+			targetX: toFiniteNumber(targetX, 0),
+			targetY: toFiniteNumber(targetY, 0),
+			additionalLength: toFiniteNumber(additionalLength, 0)
+		});
+	}
+
+	_setZElevation(zElevation)
+	{
+		const worldInfo = this._getWorldInfoOf(this);
+		if (!worldInfo)
+		{
+			return;
+		}
+
+		callFirstMethod(worldInfo, ["SetZElevation", "setZElevation"], toFiniteNumber(zElevation, 0));
+		callFirstMethod(worldInfo, ["SetBboxChanged", "setBboxChanged"]);
+	}
+
+	_triggerOnURLLoaded()
+	{
+		const cnds = C3.Plugins.Spriter.Cnds;
+		if (typeof this._trigger === "function" && cnds && typeof cnds.OnURLLoaded === "function")
+		{
+			this._trigger(cnds.OnURLLoaded);
+		}
+	}
+
+	_triggerOnURLFailed()
+	{
+		const cnds = C3.Plugins.Spriter.Cnds;
+		if (typeof this._trigger === "function" && cnds && typeof cnds.OnURLFailed === "function")
+		{
+			this._trigger(cnds.OnURLFailed);
+		}
+	}
+
+	async _loadFromURL(url, crossOrigin, sconText)
+	{
+		try
+		{
+			let jsonText = typeof sconText === "string" ? sconText.trim() : "";
+			if (!jsonText)
+			{
+				const targetUrl = toStringOrEmpty(url).trim();
+				if (!targetUrl)
+				{
+					throw new Error("Spriter: loadFromURL requires a URL or SCON text.");
+				}
+
+				const response = await fetch(targetUrl, { mode: "cors" });
+				if (!response.ok)
+				{
+					throw new Error(`Spriter: failed to fetch '${targetUrl}' (${response.status}).`);
+				}
+
+				jsonText = await response.text();
+			}
+
+			const projectData = JSON.parse(jsonText);
+			this.projectData = projectData;
+			this._projectDataPromise = null;
+			this.loadError = null;
+			this.loadErrorMessage = "";
+			this.isReady = false;
+			this._didTriggerReady = false;
+			this._didTriggerLoadFailed = false;
+			this._initPlaybackFromProject(projectData);
+			this.isReady = true;
+			this._triggerOnURLLoaded();
+			this._triggerOnReady();
+		}
+		catch (error)
+		{
+			const message = error instanceof Error ? error.message : String(error);
+			console.error("[Spriter] loadFromURL failed:", message, error);
+			this._triggerOnURLFailed();
+		}
+	}
+
+	_getTaglineKeys(meta)
+	{
+		const tagline = meta && typeof meta === "object" ? meta.tagline : null;
+		if (!tagline)
+		{
+			return [];
+		}
+
+		if (Array.isArray(tagline.key))
+		{
+			return tagline.key;
+		}
+		if (Array.isArray(tagline.keys))
+		{
+			return tagline.keys;
+		}
+
+		return [];
+	}
+
+	_getVarlines(meta)
+	{
+		if (!meta || typeof meta !== "object")
+		{
+			return [];
+		}
+
+		if (Array.isArray(meta.varline))
+		{
+			return meta.varline;
+		}
+		if (Array.isArray(meta.varlines))
+		{
+			return meta.varlines;
+		}
+
+		return [];
+	}
+
+	_resolveTagNameFromEntry(tagEntry)
+	{
+		if (typeof tagEntry === "string")
+		{
+			return tagEntry;
+		}
+		if (!tagEntry || typeof tagEntry !== "object")
+		{
+			return "";
+		}
+
+		if (typeof tagEntry.name === "string")
+		{
+			return tagEntry.name;
+		}
+
+		const id = toFiniteNumber(tagEntry.t, NaN);
+		if (Number.isFinite(id) && typeof this._tagDefs[id] === "string")
+		{
+			return this._tagDefs[id];
+		}
+
+		return "";
+	}
+
+	_evaluateTaglineAtTime(meta, timeMs, animationLengthMs, isLooping)
+	{
+		const keys = this._getTaglineKeys(meta);
+		if (!keys.length)
+		{
+			return [];
+		}
+
+		const sorted = [...keys].sort((a, b) => toFiniteNumber(a && a.time, 0) - toFiniteNumber(b && b.time, 0));
+		const currentTime = toFiniteNumber(timeMs, 0);
+		let index = 0;
+		if (currentTime < toFiniteNumber(sorted[0] && sorted[0].time, 0))
+		{
+			index = isLooping ? (sorted.length - 1) : 0;
+		}
+		else
+		{
+			for (let i = 1; i < sorted.length; i++)
+			{
+				if (currentTime < toFiniteNumber(sorted[i] && sorted[i].time, 0))
+				{
+					index = i - 1;
+					break;
+				}
+				if (i === sorted.length - 1)
+				{
+					index = i;
+				}
+			}
+		}
+
+		const currentKey = sorted[index];
+		if (!currentKey || typeof currentKey !== "object")
+		{
+			return [];
+		}
+
+		const tagEntries = Array.isArray(currentKey.tag)
+			? currentKey.tag
+			: Array.isArray(currentKey.tags)
+				? currentKey.tags
+				: [];
+		const tags = [];
+		for (const tagEntry of tagEntries)
+		{
+			const tagName = this._resolveTagNameFromEntry(tagEntry);
+			if (tagName)
+			{
+				tags.push(tagName);
+			}
+		}
+
+		return tags;
+	}
+
+	_resolveVarDefForLine(varline, scopeLookup)
+	{
+		const fallbackDef = {
+			id: NaN,
+			name: typeof varline.name === "string" ? varline.name : "",
+			type: "float",
+			defaultValue: 0
+		};
+
+		if (!varline || typeof varline !== "object")
+		{
+			return fallbackDef;
+		}
+
+		const rawDef = varline.def;
+		if (rawDef && typeof rawDef === "object")
+		{
+			const normalised = this._normaliseVarDef(rawDef, toFiniteNumber(rawDef.id, NaN));
+			return normalised || fallbackDef;
+		}
+
+		const byId = scopeLookup && scopeLookup.byId;
+		const byName = scopeLookup && scopeLookup.byName;
+		const defId = toFiniteNumber(rawDef, NaN);
+		if (Number.isFinite(defId) && byId instanceof Map && byId.has(defId))
+		{
+			return byId.get(defId);
+		}
+
+		const defName = toLowerCaseSafe(typeof rawDef === "string" ? rawDef : varline.name);
+		if (defName && byName instanceof Map && byName.has(defName))
+		{
+			return byName.get(defName);
+		}
+
+		return fallbackDef;
+	}
+
+	_coerceVarValue(value, type)
+	{
+		const lowerType = typeof type === "string" ? type.toLowerCase() : "float";
+		switch (lowerType)
+		{
+			case "string":
+				return toStringOrEmpty(value);
+			case "int":
+				return Math.floor(toFiniteNumber(value, 0));
+			case "bool":
+			case "boolean":
+				return !!toFiniteNumber(value, 0);
+			default:
+				return toFiniteNumber(value, 0);
+		}
+	}
+
+	_evaluateVarlineAtTime(varline, varDef, timeMs, animationLengthMs, isLooping)
+	{
+		const keys = Array.isArray(varline && varline.key) ? [...varline.key] : [];
+		const type = varDef && typeof varDef.type === "string" ? varDef.type : "float";
+		const defaultValue = this._coerceVarValue(varDef ? varDef.defaultValue : 0, type);
+		if (!keys.length)
+		{
+			return defaultValue;
+		}
+
+		keys.sort((a, b) => toFiniteNumber(a && a.time, 0) - toFiniteNumber(b && b.time, 0));
+		if (keys.length === 1)
+		{
+			return this._coerceVarValue(keys[0] && keys[0].val, type);
+		}
+
+		const currentTime = toFiniteNumber(timeMs, 0);
+		let firstIndex = -1;
+		let secondIndex = -1;
+
+		for (let i = 0; i < keys.length; i++)
+		{
+			const keyTime = toFiniteNumber(keys[i] && keys[i].time, 0);
+			if (currentTime === keyTime)
+			{
+				return this._coerceVarValue(keys[i] && keys[i].val, type);
+			}
+			if (currentTime < keyTime)
+			{
+				if (i > 0)
+				{
+					firstIndex = i - 1;
+					secondIndex = i;
+				}
+				else if (isLooping)
+				{
+					firstIndex = keys.length - 1;
+					secondIndex = 0;
+				}
+				else
+				{
+					return defaultValue;
+				}
+				break;
+			}
+			if (i === keys.length - 1)
+			{
+				if (isLooping)
+				{
+					firstIndex = i;
+					secondIndex = 0;
+				}
+				else
+				{
+					return this._coerceVarValue(keys[i] && keys[i].val, type);
+				}
+			}
+		}
+
+		if (firstIndex < 0 || secondIndex < 0)
+		{
+			return defaultValue;
+		}
+
+		const firstKey = keys[firstIndex];
+		const secondKey = keys[secondIndex];
+		const firstValue = this._coerceVarValue(firstKey && firstKey.val, type);
+		if (type === "string" || type === "bool" || type === "boolean")
+		{
+			return firstValue;
+		}
+
+		const secondValue = this._coerceVarValue(secondKey && secondKey.val, type);
+		let firstTime = toFiniteNumber(firstKey && firstKey.time, 0);
+		let secondTime = toFiniteNumber(secondKey && secondKey.time, firstTime);
+		let sampleTime = currentTime;
+		if (isLooping)
+		{
+			if (firstTime > sampleTime)
+			{
+				firstTime -= animationLengthMs;
+			}
+			if (secondTime < sampleTime)
+			{
+				secondTime += animationLengthMs;
+			}
+		}
+
+		const denom = secondTime - firstTime;
+		const linearT = denom > 0 ? clamp01((sampleTime - firstTime) / denom) : 0;
+		const curvedT = evaluateCurveT(firstKey, linearT);
+		const result = lerp(toFiniteNumber(firstValue, 0), toFiniteNumber(secondValue, toFiniteNumber(firstValue, 0)), curvedT);
+		return type === "int" ? Math.floor(result) : result;
+	}
+
+	_applyMetaScopeState(scopeKey, meta, varDefsLookup, timeMs, animationLengthMs, isLooping)
+	{
+		if (!meta || typeof meta !== "object")
+		{
+			return;
+		}
+
+		const tags = this._evaluateTaglineAtTime(meta, timeMs, animationLengthMs, isLooping);
+		if (tags.length)
+		{
+			const lowered = new Set(tags.map((name) => toLowerCaseSafe(name)).filter(Boolean));
+			this._activeTagsByScope.set(scopeKey, lowered);
+		}
+
+		const varLines = this._getVarlines(meta);
+		if (!varLines.length)
+		{
+			return;
+		}
+
+		const values = new Map();
+		for (const varline of varLines)
+		{
+			const def = this._resolveVarDefForLine(varline, varDefsLookup);
+			const keyName = toLowerCaseSafe(def && def.name);
+			if (!keyName)
+			{
+				continue;
+			}
+
+			const value = this._evaluateVarlineAtTime(varline, def, timeMs, animationLengthMs, isLooping);
+			values.set(keyName, value);
+		}
+
+		if (values.size)
+		{
+			this._varValuesByScope.set(scopeKey, values);
+		}
+	}
+
+	_refreshMetaState(timeMs)
+	{
+		this._activeTagsByScope.clear();
+		this._varValuesByScope.clear();
+
+		const animation = this.animation;
+		if (!animation)
+		{
+			return;
+		}
+
+		const sampleTime = toFiniteNumber(timeMs, this._currentAdjustedTimeMs);
+		const lengthMs = Math.max(0, toFiniteNumber(this.animationLengthMs, 0));
+		const isLooping = this._isAnimationLooping(animation);
+		const globalVarDefs = this._varDefsByScope.get("") || { byId: this._varDefsById, byName: this._varDefsByName };
+
+		this._applyMetaScopeState("", animation.meta, globalVarDefs, sampleTime, lengthMs, isLooping);
+
+		const timelineList = Array.isArray(animation.timeline) ? animation.timeline : [];
+		for (const timeline of timelineList)
+		{
+			if (!timeline || typeof timeline !== "object" || !timeline.meta)
+			{
+				continue;
+			}
+
+			const scopeKey = normaliseTimelineLookupName(timeline.name, this.entity && this.entity.name);
+			if (!scopeKey)
+			{
+				continue;
+			}
+
+			const scopeVarDefs = this._varDefsByScope.get(scopeKey) || globalVarDefs;
+			this._applyMetaScopeState(scopeKey, timeline.meta, scopeVarDefs, sampleTime, lengthMs, isLooping);
+		}
+
+		const soundlineList = this._getSoundlinesForAnimation(animation);
+		for (const soundline of soundlineList)
+		{
+			if (!soundline || typeof soundline !== "object" || !soundline.meta)
+			{
+				continue;
+			}
+
+			const scopeKey = normaliseTimelineLookupName(soundline.name, this.entity && this.entity.name);
+			if (!scopeKey)
+			{
+				continue;
+			}
+
+			this._applyMetaScopeState(scopeKey, soundline.meta, globalVarDefs, sampleTime, lengthMs, isLooping);
+		}
+
+		const eventlineList = this._getEventlinesForAnimation(animation);
+		for (const eventline of eventlineList)
+		{
+			if (!eventline || typeof eventline !== "object" || !eventline.meta)
+			{
+				continue;
+			}
+
+			const scopeKey = normaliseTimelineLookupName(eventline.name, this.entity && this.entity.name);
+			if (!scopeKey)
+			{
+				continue;
+			}
+
+			this._applyMetaScopeState(scopeKey, eventline.meta, globalVarDefs, sampleTime, lengthMs, isLooping);
+		}
+	}
+
+	_tagActive(tagName, objectName)
+	{
+		const tagKey = toLowerCaseSafe(tagName);
+		if (!tagKey)
+		{
+			return false;
+		}
+
+		if (this._activeTagsByScope.size === 0)
+		{
+			this._refreshMetaState(this._currentAdjustedTimeMs);
+		}
+
+		const scopeKey = objectName ? normaliseTimelineLookupName(objectName, this.entity && this.entity.name) : "";
+		const tags = this._activeTagsByScope.get(scopeKey);
+		return tags ? tags.has(tagKey) : false;
+	}
+
+	_val(varName, objectName)
+	{
+		const key = toLowerCaseSafe(varName);
+		if (!key)
+		{
+			return 0;
+		}
+
+		if (this._varValuesByScope.size === 0)
+		{
+			this._refreshMetaState(this._currentAdjustedTimeMs);
+		}
+
+		const scopeKey = objectName ? normaliseTimelineLookupName(objectName, this.entity && this.entity.name) : "";
+		const vars = this._varValuesByScope.get(scopeKey);
+		if (!vars)
+		{
+			return 0;
+		}
+
+		return vars.has(key) ? vars.get(key) : 0;
+	}
+
 	_getMainlineAdjustedTime(mainKeys, mainKeyIndex, timeMs)
 	{
 		if (!Array.isArray(mainKeys) || !mainKeys.length)
@@ -3434,6 +4920,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		return world;
 	}
 
+	_applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById)
+	{
+		if (!this._boneIkOverridesByName || this._boneIkOverridesByName.size === 0)
+		{
+			return;
+		}
+
+		// The legacy ACE contract stores IK targets persistently. A full 2-bone IK solve is
+		// still pending; keep the values so existing projects load and action calls remain valid.
+	}
+
 	_evaluateObjectRef(objectRef, timeMs, boneRefsById, boneWorldById)
 	{
 		if (!objectRef)
@@ -3462,11 +4959,25 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
-		const fileInfo = this._getFileInfo(evaluated.folder, evaluated.file);
+		const timelineName = this._timelineNameById.get(timelineId) || "";
+		let folder = evaluated.folder;
+		let file = evaluated.file;
+		const charMapEntry = this._resolveCharacterMapForState(timelineName, folder, file);
+		if (charMapEntry)
+		{
+			if (charMapEntry.hidden)
+			{
+				return null;
+			}
 
-		return {
-			folder: evaluated.folder,
-			file: evaluated.file,
+			folder = charMapEntry.folder;
+			file = charMapEntry.file;
+		}
+
+		const fileInfo = this._getFileInfo(folder, file);
+		const state = {
+			folder,
+			file,
 			zIndex: toFiniteNumber(objectRef.z_index, 0),
 			x: world.x,
 			y: world.y,
@@ -3479,7 +4990,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			width: fileInfo ? fileInfo.width : 0,
 			height: fileInfo ? fileInfo.height : 0,
 			name: fileInfo ? fileInfo.name : "",
-			timelineName: this._timelineNameById.get(timelineId) || "",
+			timelineName,
 			atlasIndex: fileInfo ? toFiniteNumber(fileInfo.atlasIndex, 0) : 0,
 			atlasW: fileInfo ? toFiniteNumber(fileInfo.atlasW, 0) : 0,
 			atlasH: fileInfo ? toFiniteNumber(fileInfo.atlasH, 0) : 0,
@@ -3489,6 +5000,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			atlasYOff: fileInfo ? toFiniteNumber(fileInfo.atlasYOff, 0) : 0,
 			atlasRotated: fileInfo ? !!fileInfo.atlasRotated : false
 		};
+		this._applyObjectComponentOverrides(state);
+
+		return state;
 	}
 
 	_evaluateTimelineTransform(timeline, keyIndex, timeMs)
@@ -3737,6 +5251,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.localTimeMs = 0;
 		this.playing = true;
 		this._lastTickTimeSec = null;
+		this._triggeredEventName = "";
+		this._activeTagsByScope.clear();
+		this._varValuesByScope.clear();
+		this._activeCharMapNames.length = 0;
+		this._resolvedCharMapByObject.clear();
+		this._resolvedCharMapGlobal.clear();
+		this._objectOverridesByName.clear();
+		this._boneIkOverridesByName.clear();
+
+		this._buildTagDefLookup(projectData);
+		this._buildVarDefLookup(entity);
 
 		this._buildObjectArray();
 		this._refreshAssociatedFrameLookups();
@@ -3820,13 +5345,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
+		this._buildObjectInfoLookup(entity);
+		this._buildCharacterMapLookup(entity);
+
 		this._rebuildAnimationTimelineCache(animation);
 
 		this._buildSoundLineCache();
+		this._buildEventLineCache();
+		this._applyAnimationBoundsToWorldInfo(animation);
 
 		// Ensure we have an evaluated pose ready for the first draw.
 		this._evaluatePose();
+		this._refreshMetaState(this._currentAdjustedTimeMs);
 		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
+		this._evaluateEventLines(this._currentAdjustedTimeMs, true);
 	}
 
 	_loadProjectDataIfNeeded()

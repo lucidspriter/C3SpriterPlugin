@@ -405,5 +405,19 @@ C3.Plugins.Spriter.Exps =
 		return (typeof this._getWorldZElevation === "function")
 			? this._getWorldZElevation(true)
 			: 0;
+	},
+
+	val(varName, objectName = "")
+	{
+		return (typeof this._val === "function")
+			? this._val(varName, objectName)
+			: 0;
+	},
+
+	Val(varName, objectName = "")
+	{
+		return (typeof this._val === "function")
+			? this._val(varName, objectName)
+			: 0;
 	}
 };

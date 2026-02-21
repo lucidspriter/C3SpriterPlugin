@@ -399,6 +399,78 @@
 								"desc": "The comparison value."
 							}
 						}
+					},
+					"outside-padded-viewport": {
+						"list-name": "Outside padded viewport",
+						"display-text": "Object is outside padded viewport",
+						"description": "True when the Spriter object position is outside the configured padded viewport."
+					},
+					"outsidepaddedviewport13": {
+						"list-name": "Outside padded viewport (legacy)",
+						"display-text": "Object is outside padded viewport (legacy)",
+						"description": "Legacy alias for Outside padded viewport."
+					},
+					"on-url-loaded": {
+						"list-name": "On URL loaded",
+						"display-text": "On URL loaded",
+						"description": "Triggered when loadFromURL finishes successfully."
+					},
+					"on-url-failed": {
+						"list-name": "On URL failed",
+						"display-text": "On URL failed",
+						"description": "Triggered when loadFromURL fails."
+					},
+					"on-event-triggered": {
+						"list-name": "On event triggered",
+						"display-text": "On event [i]{0}[/i] triggered",
+						"description": "Triggered when a Spriter eventline with the given name is fired.",
+						"params": {
+							"event-name": {
+								"name": "Event name",
+								"desc": "The eventline name to match."
+							}
+						}
+					},
+					"oneventtriggered14": {
+						"list-name": "On event triggered (legacy)",
+						"display-text": "On event [i]{0}[/i] triggered (legacy)",
+						"description": "Legacy alias for On event triggered.",
+						"params": {
+							"name0": {
+								"name": "Event name",
+								"desc": "The eventline name to match."
+							}
+						}
+					},
+					"tag-active": {
+						"list-name": "Tag active",
+						"display-text": "Tag [i]{0}[/i] is active ({1})",
+						"description": "Check if a tag is active on the current animation or on a specific timeline/soundline/eventline.",
+						"params": {
+							"tag-name": {
+								"name": "Tag name",
+								"desc": "The tag to check."
+							},
+							"object-name": {
+								"name": "Object name",
+								"desc": "Optional timeline/soundline/eventline name. Leave empty for animation meta."
+							}
+						}
+					},
+					"tagactive15": {
+						"list-name": "Tag active (legacy)",
+						"display-text": "Tag [i]{0}[/i] is active ({1}) (legacy)",
+						"description": "Legacy alias for Tag active.",
+						"params": {
+							"tag_name0": {
+								"name": "Tag name",
+								"desc": "The tag to check."
+							},
+							"object_name1": {
+								"name": "Object name",
+								"desc": "Optional timeline/soundline/eventline name."
+							}
+						}
 					}
 				},
 				"actions": {
@@ -1147,6 +1219,287 @@
 								}
 							}
 						}
+					},
+					"set-automatic-pausing": {
+						"list-name": "Set automatic pausing",
+						"display-text": "Set automatic pausing to [b]{0}[/b] (L:{1} R:{2} T:{3} B:{4})",
+						"description": "Configure automatic pausing based on the object position relative to the viewport.",
+						"params": {
+							"automatic-pause-settings": {
+								"name": "Automatic pause settings",
+								"desc": "Choose how playback should pause outside the padded viewport.",
+								"items": {
+									"no automatic pausing.": "No automatic pausing.",
+									"pause all playback automatically when scml object position is outside padded display area": "Pause all playback automatically when SCML object position is outside padded display area",
+									"pause all playback except sound automatically when scml object position is outside padded display area": "Pause all playback except sound automatically when SCML object position is outside padded display area"
+								}
+							},
+							"left-padding": {
+								"name": "Left padding",
+								"desc": "Padding added to the left viewport edge."
+							},
+							"right-padding": {
+								"name": "Right padding",
+								"desc": "Padding added to the right viewport edge."
+							},
+							"top-padding": {
+								"name": "Top padding",
+								"desc": "Padding added to the top viewport edge."
+							},
+							"bottom-padding": {
+								"name": "Bottom padding",
+								"desc": "Padding added to the bottom viewport edge."
+							}
+						}
+					},
+					"setautomaticpausing17": {
+						"list-name": "Set automatic pausing (legacy)",
+						"display-text": "Set automatic pausing to [b]{0}[/b] (legacy)",
+						"description": "Legacy alias for Set automatic pausing.",
+						"params": {
+							"automatic_pause_settings3": {
+								"name": "Automatic pause settings",
+								"desc": "Choose how playback should pause outside the padded viewport.",
+								"items": {
+									"no automatic pausing.": "No automatic pausing.",
+									"pause all playback automatically when scml object position is outside padded display area": "Pause all playback automatically when SCML object position is outside padded display area",
+									"pause all playback except sound automatically when scml object position is outside padded display area": "Pause all playback except sound automatically when SCML object position is outside padded display area"
+								}
+							},
+							"left_padding4": {
+								"name": "Left padding",
+								"desc": "Padding added to the left viewport edge."
+							},
+							"right_padding5": {
+								"name": "Right padding",
+								"desc": "Padding added to the right viewport edge."
+							},
+							"top_padding6": {
+								"name": "Top padding",
+								"desc": "Padding added to the top viewport edge."
+							},
+							"bottom_padding7": {
+								"name": "Bottom padding",
+								"desc": "Padding added to the bottom viewport edge."
+							}
+						}
+					},
+					"append-char-map": {
+						"list-name": "Append character map",
+						"display-text": "Append character map [i]{0}[/i]",
+						"description": "Apply a character map by name.",
+						"params": {
+							"character-map": {
+								"name": "Character map",
+								"desc": "Character map name to apply."
+							}
+						}
+					},
+					"appendcharmap10": {
+						"list-name": "Append character map (legacy)",
+						"display-text": "Append character map [i]{0}[/i] (legacy)",
+						"description": "Legacy alias for Append character map.",
+						"params": {
+							"character_map0": {
+								"name": "Character map",
+								"desc": "Character map name to apply."
+							}
+						}
+					},
+					"remove-char-map": {
+						"list-name": "Remove character map",
+						"display-text": "Remove character map [i]{0}[/i]",
+						"description": "Remove a previously applied character map.",
+						"params": {
+							"character-map": {
+								"name": "Character map",
+								"desc": "Character map name to remove."
+							}
+						}
+					},
+					"removeCharMap": {
+						"list-name": "Remove character map (legacy)",
+						"display-text": "Remove character map [i]{0}[/i] (legacy)",
+						"description": "Legacy alias for Remove character map.",
+						"params": {
+							"character_map": {
+								"name": "Character map",
+								"desc": "Character map name to remove."
+							}
+						}
+					},
+					"remove-all-char-maps": {
+						"list-name": "Remove all character maps",
+						"display-text": "Remove all character maps",
+						"description": "Clear all applied character maps."
+					},
+					"removeallcharmaps9": {
+						"list-name": "Remove all character maps (legacy)",
+						"display-text": "Remove all character maps (legacy)",
+						"description": "Legacy alias for Remove all character maps."
+					},
+					"override-object-component": {
+						"list-name": "Override object component",
+						"display-text": "Override [i]{0}[/i] component [b]{1}[/b] to {2}",
+						"description": "Override a timeline object component value.",
+						"params": {
+							"object-name": {
+								"name": "Object name",
+								"desc": "Timeline object name."
+							},
+							"override-component": {
+								"name": "Override component",
+								"desc": "Object component to override.",
+								"items": {
+									"angle": "Angle",
+									"x": "X",
+									"y": "Y",
+									"scale x": "Scale X",
+									"scale y": "Scale Y",
+									"image frame": "Image frame",
+									"pivot x": "Pivot X",
+									"pivot y": "Pivot Y",
+									"entity index": "Entity index",
+									"animation index": "Animation index",
+									"time ratio": "Time ratio"
+								}
+							},
+							"value": {
+								"name": "Value",
+								"desc": "Override value."
+							}
+						}
+					},
+					"overrideobjectcomponent19": {
+						"list-name": "Override object component (legacy)",
+						"display-text": "Override [i]{0}[/i] component [b]{1}[/b] to {2} (legacy)",
+						"description": "Legacy alias for Override object component.",
+						"params": {
+							"object_name0": {
+								"name": "Object name",
+								"desc": "Timeline object name."
+							},
+							"override_component12": {
+								"name": "Override component",
+								"desc": "Object component to override.",
+								"items": {
+									"angle": "Angle",
+									"x": "X",
+									"y": "Y",
+									"scale x": "Scale X",
+									"scale y": "Scale Y",
+									"image frame": "Image frame",
+									"pivot x": "Pivot X",
+									"pivot y": "Pivot Y",
+									"entity index": "Entity index",
+									"animation index": "Animation index",
+									"time ratio": "Time ratio"
+								}
+							},
+							"value13": {
+								"name": "Value",
+								"desc": "Override value."
+							}
+						}
+					},
+					"override-bones-with-ik": {
+						"list-name": "Override bones with IK",
+						"display-text": "Override IK parent [i]{0}[/i], child [i]{1}[/i], target ({2}, {3}), extra {4}",
+						"description": "Set a persistent IK override for a parent/child bone pair.",
+						"params": {
+							"parent-bone-name": {
+								"name": "Parent bone name",
+								"desc": "Parent bone timeline name."
+							},
+							"child-bone-name": {
+								"name": "Child bone name",
+								"desc": "Child bone timeline name."
+							},
+							"target-x": {
+								"name": "Target X",
+								"desc": "Target X in layout coordinates."
+							},
+							"target-y": {
+								"name": "Target Y",
+								"desc": "Target Y in layout coordinates."
+							},
+							"additional-child-bone-length": {
+								"name": "Additional child bone length",
+								"desc": "Extra child bone length adjustment."
+							}
+						}
+					},
+					"overrideboneswithik20": {
+						"list-name": "Override bones with IK (legacy)",
+						"display-text": "Override IK parent [i]{0}[/i], child [i]{1}[/i], target ({2}, {3}), extra {4} (legacy)",
+						"description": "Legacy alias for Override bones with IK.",
+						"params": {
+							"parent_bone_name0": {
+								"name": "Parent bone name",
+								"desc": "Parent bone timeline name."
+							},
+							"child_bone_name1": {
+								"name": "Child bone name",
+								"desc": "Child bone timeline name."
+							},
+							"target_x2": {
+								"name": "Target X",
+								"desc": "Target X in layout coordinates."
+							},
+							"target_y3": {
+								"name": "Target Y",
+								"desc": "Target Y in layout coordinates."
+							},
+							"additional_child_bone_length4": {
+								"name": "Additional child bone length",
+								"desc": "Extra child bone length adjustment."
+							}
+						}
+					},
+					"load-from-url": {
+						"list-name": "Load from URL",
+						"display-text": "Load from URL [i]{0}[/i] (cross-origin: {1})",
+						"description": "Load Spriter project data from URL or from the supplied SCON text.",
+						"params": {
+							"url": {
+								"name": "URL",
+								"desc": "URL to fetch SCON data from when SCON text is empty."
+							},
+							"cross-origin": {
+								"name": "Cross origin",
+								"desc": "Cross-origin mode hint.",
+								"items": {
+									"anonymous": "Anonymous",
+									"none": "None"
+								}
+							},
+							"scon-text": {
+								"name": "SCON text",
+								"desc": "Optional raw SCON JSON text."
+							}
+						}
+					},
+					"set-z-elevation": {
+						"list-name": "Set Z elevation",
+						"display-text": "Set Z elevation to {0}",
+						"description": "Set the object Z elevation.",
+						"params": {
+							"z-elevation": {
+								"name": "Z elevation",
+								"desc": "Z elevation value."
+							}
+						}
+					},
+					"SetZElevation": {
+						"list-name": "Set Z elevation (legacy)",
+						"display-text": "Set Z elevation to {0} (legacy)",
+						"description": "Legacy alias for Set Z elevation.",
+						"params": {
+							"z_elevation": {
+								"name": "Z elevation",
+								"desc": "Z elevation value."
+							}
+						}
 					}
 				},
 				"expressions": {
@@ -1381,6 +1734,17 @@
 					"total-z-elevation": {
 						"translated-name": "TotalZElevation",
 						"description": "Get this instance's total Z elevation."
+					},
+					"val": {
+						"list-name": "val",
+						"display-text": "val({0})",
+						"description": "Get the current Spriter variable value by name (optionally scoped to an object timeline).",
+						"params": {
+							"name0": {
+								"name": "Variable name",
+								"desc": "Variable name to read."
+							}
+						}
 					}
 				}
 			}

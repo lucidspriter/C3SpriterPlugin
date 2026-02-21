@@ -170,6 +170,20 @@ C3.Plugins.Spriter.Acts =
 		this.SetIgnoreGlobalTimeScale(ignore);
 	},
 
+	SetAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer)
+	{
+		if (typeof this._setAutomaticPausing === "function")
+		{
+			this._setAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer)
+	{
+		this.SetAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer);
+	},
+
 	StopResumeSettingLayer(resume)
 	{
 		if (typeof this._stopResumeSettingLayer === "function")
@@ -268,6 +282,76 @@ C3.Plugins.Spriter.Acts =
 		this.StopSecondAnim();
 	},
 
+	AppendCharMap(mapName)
+	{
+		if (typeof this._appendCharMap === "function")
+		{
+			this._appendCharMap(mapName);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	appendCharMap(mapName)
+	{
+		this.AppendCharMap(mapName);
+	},
+
+	RemoveCharMap(mapName)
+	{
+		if (typeof this._removeCharMap === "function")
+		{
+			this._removeCharMap(mapName);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	removeCharMap(mapName)
+	{
+		this.RemoveCharMap(mapName);
+	},
+
+	RemoveAllCharMaps()
+	{
+		if (typeof this._removeAllCharMaps === "function")
+		{
+			this._removeAllCharMaps();
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	removeAllCharMaps()
+	{
+		this.RemoveAllCharMaps();
+	},
+
+	OverrideObjectComponent(objectName, component, newValue)
+	{
+		if (typeof this._overrideObjectComponent === "function")
+		{
+			this._overrideObjectComponent(objectName, component, newValue);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	overrideObjectComponent(objectName, component, newValue)
+	{
+		this.OverrideObjectComponent(objectName, component, newValue);
+	},
+
+	OverrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength)
+	{
+		if (typeof this._overrideBonesWithIk === "function")
+		{
+			this._overrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	overrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength)
+	{
+		this.OverrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength);
+	},
+
 	SetAnimBlendRatio(blendRatio)
 	{
 		if (typeof this._setAnimBlendRatio === "function")
@@ -280,6 +364,30 @@ C3.Plugins.Spriter.Acts =
 	setAnimBlendRatio(blendRatio)
 	{
 		this.SetAnimBlendRatio(blendRatio);
+	},
+
+	SetZElevation(zElevation)
+	{
+		if (typeof this._setZElevation === "function")
+		{
+			this._setZElevation(zElevation);
+		}
+	},
+
+	// Legacy ACE alias used by older projects.
+	setZElevation(zElevation)
+	{
+		this.SetZElevation(zElevation);
+	},
+
+	loadFromURL(url, crossOrigin, sconText)
+	{
+		if (typeof this._loadFromURL === "function")
+		{
+			return this._loadFromURL(url, crossOrigin, sconText);
+		}
+
+		return undefined;
 	},
 
 	FindSpriterObject(c2Object)
