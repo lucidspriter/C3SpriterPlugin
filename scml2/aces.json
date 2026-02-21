@@ -898,6 +898,20 @@
 				"expressionName": "AnimationName",
 				"highlight": false,
 				"returnType": "string"
+			},
+			{
+				"c2id": 17,
+				"id": "val",
+				"expressionName": "val",
+				"highlight": false,
+				"returnType": "any",
+				"isVariadicParameters": true,
+				"params": [
+					{
+						"id": "name0",
+						"type": "string"
+					}
+				]
 			}
 		]
 	},
@@ -1371,7 +1385,92 @@
 		]
 	},
 	"misc": {
-		"conditions": [],
+		"conditions": [
+			{
+				"id": "outside-padded-viewport",
+				"scriptName": "outsidePaddedViewport",
+				"highlight": false
+			},
+			{
+				"c2id": 13,
+				"id": "outsidepaddedviewport13",
+				"scriptName": "outsidePaddedViewport",
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
+				"id": "on-url-loaded",
+				"scriptName": "OnURLLoaded",
+				"isTrigger": true,
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
+				"id": "on-url-failed",
+				"scriptName": "OnURLFailed",
+				"isTrigger": true,
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
+				"id": "on-event-triggered",
+				"scriptName": "OnEventTriggered",
+				"isTrigger": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "event-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 14,
+				"id": "oneventtriggered14",
+				"scriptName": "OnEventTriggered",
+				"isTrigger": true,
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "name0",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"id": "tag-active",
+				"scriptName": "tagActive",
+				"highlight": false,
+				"params": [
+					{
+						"id": "tag-name",
+						"type": "string"
+					},
+					{
+						"id": "object-name",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 15,
+				"id": "tagactive15",
+				"scriptName": "tagActive",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "tag_name0",
+						"type": "string"
+					},
+					{
+						"id": "object_name1",
+						"type": "string"
+					}
+				]
+			}
+		],
 		"actions": [
 			{
 				"id": "set-ignore-global-time-scale",
@@ -1498,6 +1597,292 @@
 						]
 					}
 				]
+			},
+			{
+				"id": "set-automatic-pausing",
+				"scriptName": "SetAutomaticPausing",
+				"highlight": false,
+				"params": [
+					{
+						"id": "automatic-pause-settings",
+						"type": "combo",
+						"items": [
+							"no automatic pausing.",
+							"pause all playback automatically when scml object position is outside padded display area",
+							"pause all playback except sound automatically when scml object position is outside padded display area"
+						]
+					},
+					{
+						"id": "left-padding",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "right-padding",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "top-padding",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "bottom-padding",
+						"type": "number",
+						"initialValue": "0"
+					}
+				]
+			},
+			{
+				"c2id": 17,
+				"id": "setautomaticpausing17",
+				"scriptName": "setAutomaticPausing",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "automatic_pause_settings3",
+						"type": "combo",
+						"items": [
+							"no automatic pausing.",
+							"pause all playback automatically when scml object position is outside padded display area",
+							"pause all playback except sound automatically when scml object position is outside padded display area"
+						]
+					},
+					{
+						"id": "left_padding4",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "right_padding5",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "top_padding6",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "bottom_padding7",
+						"type": "number",
+						"initialValue": "0"
+					}
+				]
+			},
+			{
+				"id": "append-char-map",
+				"scriptName": "AppendCharMap",
+				"highlight": false,
+				"params": [
+					{
+						"id": "character-map",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"c2id": 10,
+				"id": "appendcharmap10",
+				"scriptName": "appendCharMap",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "character_map0",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"id": "remove-char-map",
+				"scriptName": "RemoveCharMap",
+				"highlight": false,
+				"params": [
+					{
+						"id": "character-map",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"id": "removeCharMap",
+				"scriptName": "removeCharMap",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "character_map",
+						"type": "string"
+					}
+				]
+			},
+			{
+				"id": "remove-all-char-maps",
+				"scriptName": "RemoveAllCharMaps",
+				"highlight": false
+			},
+			{
+				"c2id": 9,
+				"id": "removeallcharmaps9",
+				"scriptName": "removeAllCharMaps",
+				"isDeprecated": true,
+				"highlight": false
+			},
+			{
+				"id": "override-object-component",
+				"scriptName": "OverrideObjectComponent",
+				"highlight": false,
+				"params": [
+					{
+						"id": "object-name",
+						"type": "string"
+					},
+					{
+						"id": "override-component",
+						"type": "combo",
+						"items": [
+							"angle",
+							"x",
+							"y",
+							"scale x",
+							"scale y",
+							"image frame",
+							"pivot x",
+							"pivot y",
+							"entity index",
+							"animation index",
+							"time ratio"
+						]
+					},
+					{
+						"id": "value",
+						"type": "number",
+						"initialValue": "0"
+					}
+				]
+			},
+			{
+				"c2id": 19,
+				"id": "overrideobjectcomponent19",
+				"scriptName": "overrideObjectComponent",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "object_name0",
+						"type": "string"
+					},
+					{
+						"id": "override_component12",
+						"type": "combo",
+						"items": [
+							"angle",
+							"x",
+							"y",
+							"scale x",
+							"scale y",
+							"image frame",
+							"pivot x",
+							"pivot y",
+							"entity index",
+							"animation index",
+							"time ratio"
+						]
+					},
+					{
+						"id": "value13",
+						"type": "number",
+						"initialValue": "0"
+					}
+				]
+			},
+			{
+				"id": "override-bones-with-ik",
+				"scriptName": "OverrideBonesWithIk",
+				"highlight": false,
+				"params": [
+					{
+						"id": "parent-bone-name",
+						"type": "string"
+					},
+					{
+						"id": "child-bone-name",
+						"type": "string"
+					},
+					{
+						"id": "target-x",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "target-y",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "additional-child-bone-length",
+						"type": "number",
+						"initialValue": "0"
+					}
+				]
+			},
+			{
+				"c2id": 20,
+				"id": "overrideboneswithik20",
+				"scriptName": "overrideBonesWithIk",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "parent_bone_name0",
+						"type": "string"
+					},
+					{
+						"id": "child_bone_name1",
+						"type": "string"
+					},
+					{
+						"id": "target_x2",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "target_y3",
+						"type": "number",
+						"initialValue": "0"
+					},
+					{
+						"id": "additional_child_bone_length4",
+						"type": "number",
+						"initialValue": "0"
+					}
+				]
+			},
+			{
+				"id": "load-from-url",
+				"scriptName": "loadFromURL",
+				"highlight": false,
+				"params": [
+					{
+						"id": "url",
+						"type": "string"
+					},
+					{
+						"id": "cross-origin",
+						"type": "combo",
+						"items": [
+							"anonymous",
+							"none"
+						]
+					},
+					{
+						"id": "scon-text",
+						"type": "string"
+					}
+				]
 			}
 		],
 		"expressions": []
@@ -1528,7 +1913,31 @@
 				]
 			}
 		],
-		"actions": [],
+		"actions": [
+			{
+				"id": "set-z-elevation",
+				"scriptName": "SetZElevation",
+				"highlight": false,
+				"params": [
+					{
+						"id": "z-elevation",
+						"type": "number"
+					}
+				]
+			},
+			{
+				"id": "SetZElevation",
+				"scriptName": "SetZElevation",
+				"isDeprecated": true,
+				"highlight": false,
+				"params": [
+					{
+						"id": "z_elevation",
+						"type": "number"
+					}
+				]
+			}
+		],
 		"expressions": [
 			{
 				"id": "z-elevation",

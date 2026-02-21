@@ -1254,7 +1254,7 @@
 					},
 					"setautomaticpausing17": {
 						"list-name": "Set automatic pausing (legacy)",
-						"display-text": "Set automatic pausing to [b]{0}[/b] (legacy)",
+						"display-text": "Set automatic pausing to [b]{0}[/b] (L:{1} R:{2} T:{3} B:{4}) (legacy)",
 						"description": "Legacy alias for Set automatic pausing.",
 						"params": {
 							"automatic_pause_settings3": {
@@ -1458,7 +1458,7 @@
 					},
 					"load-from-url": {
 						"list-name": "Load from URL",
-						"display-text": "Load from URL [i]{0}[/i] (cross-origin: {1})",
+						"display-text": "Load from URL [i]{0}[/i] (cross-origin: {1}, scon: {2})",
 						"description": "Load Spriter project data from URL or from the supplied SCON text.",
 						"params": {
 							"url": {
