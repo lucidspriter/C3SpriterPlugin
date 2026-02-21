@@ -4537,30 +4537,63 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return picked ? [picked] : [];
 		}
 
+		// Some runtimes only expose object classes (no SOL methods on this object param).
+		if (typeof this._getInstancesOf === "function")
+		{
+			const directInstances = this._getInstancesOf(c2Object);
+			if (Array.isArray(directInstances) && directInstances.length)
+			{
+				return directInstances;
+			}
+		}
+
+		const objectClass = (typeof c2Object.GetObjectClass === "function")
+			? c2Object.GetObjectClass()
+			: (typeof c2Object.getObjectClass === "function")
+				? c2Object.getObjectClass()
+				: null;
+		if (objectClass && typeof this._getInstancesOf === "function")
+		{
+			const classInstances = this._getInstancesOf(objectClass);
+			if (Array.isArray(classInstances) && classInstances.length)
+			{
+				return classInstances;
+			}
+		}
+
+		// If a concrete instance was passed, use it directly.
+		if (typeof c2Object === "object")
+		{
+			return [c2Object];
+		}
+
 		return [];
 	}
 
 	_setC2ObjectToSpriterObject(c2Object, setType, spriterName)
 	{
 		const c2Instances = this._resolveC2Instances(c2Object);
-		this._objectsToSet.push({ c2Instances, objectName: spriterName, setType, pin: false });
+		const objectName = normaliseSpriterObjectName(spriterName);
+		this._objectsToSet.push({ c2Instances, objectName, setType, pin: false });
 	}
 
 	_pinC2ObjectToSpriterObject(c2Object, setType, spriterName)
 	{
 		const c2Instances = this._resolveC2Instances(c2Object);
-		this._objectsToSet.push({ c2Instances, objectName: spriterName, setType, pin: true });
+		const objectName = normaliseSpriterObjectName(spriterName);
+		this._objectsToSet.push({ c2Instances, objectName, setType, pin: true });
 	}
 
 	_unpinC2ObjectFromSpriterObject(c2Object, spriterName)
 	{
-		const allObjs = spriterName === "";
+		const queryName = normaliseSpriterObjectName(spriterName);
+		const allObjs = queryName === "";
 		for (let i = this._objectsToSet.length - 1; i >= 0; i--)
 		{
 			const instr = this._objectsToSet[i];
 			if (instr.c2Instances.length > 0 &&
 				instr.c2Instances[0].GetObjectClass() === c2Object &&
-				(allObjs || instr.objectName === spriterName))
+				(allObjs || instr.objectName === queryName))
 			{
 				this._objectsToSet.splice(i, 1);
 			}
@@ -4751,27 +4784,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_applyObjectsToSet()
 	{
-		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo)
-		{
-			return;
-		}
-
-		const myX = worldInfo.GetX();
-		const myY = worldInfo.GetY();
-		const myAngle = worldInfo.GetAngle();
-		const cosA = Math.cos(myAngle);
-		const sinA = Math.sin(myAngle);
-		const globalScale = toFiniteNumber(this._globalScaleRatio, 1);
-		const mirrorFactor = this._xFlip ? -1 : 1;
-		const flipFactor = this._yFlip ? -1 : 1;
-		const rootFlipSign = mirrorFactor * flipFactor;
-
 		for (let i = this._objectsToSet.length - 1; i >= 0; i--)
 		{
 			const instr = this._objectsToSet[i];
 			const state = this._findPoseStateByTimelineName(instr.objectName);
 			if (!state) continue;
+			const worldState = this._getPoseStateWorldTransform(state);
+			if (!worldState) continue;
 
 			for (const c2Inst of instr.c2Instances)
 			{
@@ -4781,18 +4800,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 				// setType: 0=angle+position, 1=angle, 2=position
 				if (instr.setType === 0 || instr.setType === 1)
-				{
-					const finalAngle = (rootFlipSign < 0)
-						? ((Math.PI * 2) - state.angle) + myAngle
-						: state.angle + myAngle;
-					wi.SetAngle(finalAngle);
-				}
+					wi.SetAngle(worldState.angle);
+
 				if (instr.setType === 0 || instr.setType === 2)
 				{
-					const localX = state.x * globalScale * mirrorFactor;
-					const localY = state.y * globalScale * flipFactor;
-					wi.SetX(myX + localX * cosA - localY * sinA);
-					wi.SetY(myY + localX * sinA + localY * cosA);
+					wi.SetX(worldState.x);
+					wi.SetY(worldState.y);
 				}
 				wi.SetBboxChanged();
 			}
@@ -4806,7 +4819,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_findPoseStateByTimelineName(name)
 	{
-		const queryName = toStringOrEmpty(name).trim();
+		const queryNameRaw = normaliseSpriterObjectName(name);
+		const queryName = stripEntityPrefix(
+			queryNameRaw,
+			this.entity && typeof this.entity.name === "string" ? this.entity.name : ""
+		).trim();
 		if (!queryName)
 		{
 			return null;
@@ -4847,22 +4864,66 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		return this._objectExists(name);
 	}
 
+	_getPoseStateWorldTransform(state)
+	{
+		if (!state)
+		{
+			return null;
+		}
+
+		const worldInfo = this._getWorldInfoOf(this);
+		if (!worldInfo)
+		{
+			return {
+				x: toFiniteNumber(state.x, 0),
+				y: toFiniteNumber(state.y, 0),
+				angle: toFiniteNumber(state.angle, 0)
+			};
+		}
+
+		const myX = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
+		const myY = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
+		const myAngle = toFiniteNumber(callFirstMethod(worldInfo, ["GetAngle", "getAngle"]), 0);
+		const cosA = Math.cos(myAngle);
+		const sinA = Math.sin(myAngle);
+		const globalScale = toFiniteNumber(this._globalScaleRatio, 1);
+		const mirrorFactor = this._xFlip ? -1 : 1;
+		const flipFactor = this._yFlip ? -1 : 1;
+		const rootFlipSign = mirrorFactor * flipFactor;
+		const localX = toFiniteNumber(state.x, 0) * globalScale * mirrorFactor;
+		const localY = toFiniteNumber(state.y, 0) * globalScale * flipFactor;
+		const worldX = myX + localX * cosA - localY * sinA;
+		const worldY = myY + localX * sinA + localY * cosA;
+		const worldAngle = (rootFlipSign < 0)
+			? ((Math.PI * 2) - toFiniteNumber(state.angle, 0)) + myAngle
+			: toFiniteNumber(state.angle, 0) + myAngle;
+
+		return {
+			x: worldX,
+			y: worldY,
+			angle: worldAngle
+		};
+	}
+
 	_getPoseObjectX(name)
 	{
 		const state = this._findPoseStateByTimelineName(name);
-		return state ? toFiniteNumber(state.x, 0) : 0;
+		const worldState = this._getPoseStateWorldTransform(state);
+		return worldState ? toFiniteNumber(worldState.x, 0) : 0;
 	}
 
 	_getPoseObjectY(name)
 	{
 		const state = this._findPoseStateByTimelineName(name);
-		return state ? toFiniteNumber(state.y, 0) : 0;
+		const worldState = this._getPoseStateWorldTransform(state);
+		return worldState ? toFiniteNumber(worldState.y, 0) : 0;
 	}
 
 	_getPoseObjectAngleDegrees(name)
 	{
 		const state = this._findPoseStateByTimelineName(name);
-		return state ? radiansToDegrees(state.angle) : 0;
+		const worldState = this._getPoseStateWorldTransform(state);
+		return worldState ? radiansToDegrees(worldState.angle) : 0;
 	}
 
 	_getSecondAnimationName()
