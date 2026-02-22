@@ -647,14 +647,26 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 
 		try
 		{
-			// Temporary test path: force nearest sampling to evaluate atlas edge artifacts.
-			// Keep clamp wrapping so atlas UVs never wrap across the whole texture.
+			// Match legacy Spriter behavior (Sprite-backed textures): clamp wrapping and project sampling.
 			const textureOptions = {
 				wrapX: "clamp-to-edge",
-				wrapY: "clamp-to-edge",
-				sampling: "nearest",
-				mipMap: false
+				wrapY: "clamp-to-edge"
 			};
+
+			const getSampling = runtime && typeof runtime.GetSampling === "function"
+				? runtime.GetSampling.bind(runtime)
+				: runtime && typeof runtime.getSampling === "function"
+					? runtime.getSampling.bind(runtime)
+					: null;
+
+			if (getSampling)
+			{
+				const sampling = getSampling();
+				if (sampling != null)
+				{
+					textureOptions.sampling = sampling;
+				}
+			}
 
 			const texture = await createStaticTexture.call(renderer, imageBitmap, textureOptions);
 			const width = Number(imageBitmap && imageBitmap.width);

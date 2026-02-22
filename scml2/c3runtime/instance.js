@@ -1,5 +1,4 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v13]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -652,8 +651,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._atlasImagePathByIndex = new Map();
 		this._atlasDebug = {
 			loggedMissingMetadata: false,
-			loggedFirstAtlasDraw: false,
-			loggedProjectAtlasFallback: false,
 			loggedFrameLookupIssue: false,
 			missingFrameIndices: new Set(),
 			missingAtlasImageIndices: new Set(),
@@ -693,16 +690,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._autoPauseRightBuffer = 0;
 		this._autoPauseTopBuffer = 0;
 		this._autoPauseBottomBuffer = 0;
-		this._runtimeDiag = {
-			loggedTickingEnableSources: new Set(),
-			loggedOnCreate: false,
-			loggedFirstTick: false,
-			loggedFirstReadyTick: false,
-			loggedProjectLoadStart: false,
-			loggedProjectReady: false,
-			zeroDtTicks: 0,
-			loggedZeroDtStall: false
-		};
 
 		// Enable ticking (Addon SDK v2): _tick() runs before events; _tick2() runs after events.
 		// https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkinstancebase
@@ -715,36 +702,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_enableTickingCallbacks(source)
 	{
-		const hasTick = typeof this._setTicking === "function";
-		const hasTick2 = typeof this._setTicking2 === "function";
-
-		if (hasTick)
+		if (typeof this._setTicking === "function")
 		{
 			this._setTicking(true);
 		}
 
-		if (hasTick2)
+		if (typeof this._setTicking2 === "function")
 		{
 			this._setTicking2(true);
-		}
-
-		const diag = this._runtimeDiag;
-		if (diag && diag.loggedTickingEnableSources && !diag.loggedTickingEnableSources.has(source))
-		{
-			diag.loggedTickingEnableSources.add(source);
-			console.log(`[Spriter] Runtime diag (enable-ticking:${source}): _setTicking=${hasTick}, _setTicking2=${hasTick2}`);
 		}
 	}
 
 	_onCreate()
 	{
 		this._enableTickingCallbacks("onCreate");
-
-		if (this._runtimeDiag && !this._runtimeDiag.loggedOnCreate)
-		{
-			this._runtimeDiag.loggedOnCreate = true;
-			console.log(`[Spriter] Runtime diag (onCreate): scml='${this.projectFileName || ""}', drawSelf=${!!this.drawSelf}`);
-		}
 	}
 
 	_release()
@@ -755,12 +726,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_tick()
 	{
-		if (this._runtimeDiag && !this._runtimeDiag.loggedFirstTick)
-		{
-			this._runtimeDiag.loggedFirstTick = true;
-			console.log(`[Spriter] Runtime diag (first-tick): scml='${this.projectFileName || ""}', isReady=${!!this.isReady}, drawSelf=${!!this.drawSelf}`);
-		}
-
 		this._loadProjectDataIfNeeded();
 
 		if (!this.isReady || !this.animation)
@@ -769,31 +734,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		const dtSeconds = this._getDtSeconds();
-		if (this._runtimeDiag && !this._runtimeDiag.loggedFirstReadyTick)
-		{
-			this._runtimeDiag.loggedFirstReadyTick = true;
-			const animName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "(unnamed)";
-			console.log(`[Spriter] Runtime diag (first-ready-tick): anim='${animName}', lenMs=${this.animationLengthMs}, dt=${dtSeconds}`);
-		}
-
-		if (this._runtimeDiag)
-		{
-			if (dtSeconds > 0)
-			{
-				this._runtimeDiag.zeroDtTicks = 0;
-			}
-			else if (this.playing)
-			{
-				this._runtimeDiag.zeroDtTicks++;
-				if (!this._runtimeDiag.loggedZeroDtStall && this._runtimeDiag.zeroDtTicks >= 10)
-				{
-					this._runtimeDiag.loggedZeroDtStall = true;
-					const runtimeDt = this.runtime ? this.runtime.dt : undefined;
-					console.warn(`[Spriter] Runtime diag (zero-dt-stall): runtime.dt=${String(runtimeDt)}, playing=${!!this.playing}`);
-				}
-			}
-		}
-
 		const shouldAdvance = this.playing && dtSeconds > 0;
 		if (shouldAdvance)
 		{
@@ -1238,11 +1178,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 						imageWidth = textureSize ? toFiniteNumber(textureSize.width, 0) : 0;
 						imageHeight = textureSize ? toFiniteNumber(textureSize.height, 0) : 0;
 
-						if (this._atlasDebug && !this._atlasDebug.loggedProjectAtlasFallback)
-						{
-							this._atlasDebug.loggedProjectAtlasFallback = true;
-							console.log("[Spriter] Using project-file atlas texture path (SDK2 self-draw).");
-						}
 					}
 					else if (this._atlasDebug && !this._atlasDebug.missingAtlasImageIndices.has(atlasIndex))
 					{
@@ -1275,15 +1210,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 						uvH = atlasW;
 					}
 
-						// Slightly inset UVs to reduce atlas edge bleeding with linear filtering.
-						// Legacy plugin did not explicitly do this, but its older renderer path (Quad4 + frame textures)
-						// was a bit more forgiving in practice than this SDK2 fallback path.
-						const insetX = 0;//Math.min(0.5, Math.max(0, (uvW - 0.001) * 0.5));
-						const insetY = 0;//Math.min(0.5, Math.max(0, (uvH - 0.001) * 0.5));
-						const uvLeft = (atlasX + insetX) / imageWidth;
-						const uvTop = (atlasY + insetY) / imageHeight;
-						const uvRight = (atlasX + uvW - insetX) / imageWidth;
-						const uvBottom = (atlasY + uvH - insetY) / imageHeight;
+					const uvLeft = atlasX / imageWidth;
+					const uvTop = atlasY / imageHeight;
+					const uvRight = (atlasX + uvW) / imageWidth;
+					const uvBottom = (atlasY + uvH) / imageHeight;
 
 					const u0 = lerp(texLeft, texRight, uvLeft);
 					const u1 = lerp(texLeft, texRight, uvRight);
@@ -1384,11 +1314,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					}
 
 					quad3Dom(atlasDomQuad, uvRect);
-					if (this._atlasDebug && !this._atlasDebug.loggedFirstAtlasDraw)
-					{
-						this._atlasDebug.loggedFirstAtlasDraw = true;
-						console.log(`[Spriter] Atlas textured draw active (index ${atlasIndex}).`);
-					}
 					continue;
 				}
 			}
@@ -5717,12 +5642,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		if (this._runtimeDiag && !this._runtimeDiag.loggedProjectLoadStart)
-		{
-			this._runtimeDiag.loggedProjectLoadStart = true;
-			console.log(`[Spriter] Runtime diag (load-start): project='${projectFileName}'`);
-		}
-
 		this._projectDataPromise = loadPromise;
 
 		loadPromise
@@ -5740,13 +5659,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					this.loadError = null;
 					this.loadErrorMessage = "";
 					this.isReady = true;
-					if (this._runtimeDiag && !this._runtimeDiag.loggedProjectReady)
-					{
-						this._runtimeDiag.loggedProjectReady = true;
-						const entityName = this.entity && typeof this.entity.name === "string" ? this.entity.name : "(unnamed)";
-						const animName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "(unnamed)";
-						console.log(`[Spriter] Runtime diag (ready): entity='${entityName}', anim='${animName}', lenMs=${this.animationLengthMs}`);
-					}
 					this._triggerOnReady();
 				}
 				catch (error)
