@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v11]");
+console.log("[scml runtime: v13]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -1192,61 +1192,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				const atlasImagePathFromProject = this._atlasImagePathByIndex
 					? this._atlasImagePathByIndex.get(atlasIndex) || ""
 					: "";
+				let texture = null;
+				let imageWidth = 0;
+				let imageHeight = 0;
+				let texRect = fullTexRect;
 
-				const frame = this._getAtlasFrame(atlasIndex);
-				if (!frame && this._atlasDebug && !this._atlasDebug.missingFrameIndices.has(atlasIndex))
-				{
-					this._atlasDebug.missingFrameIndices.add(atlasIndex);
-					console.warn(`[Spriter] No atlas frame found at index ${atlasIndex}; using debug fallback.`);
-				}
-
-				const imageInfo = frame && typeof frame.GetImageInfo === "function"
-					? frame.GetImageInfo()
-					: frame && typeof frame.getImageInfo === "function"
-						? frame.getImageInfo()
-						: frame && frame._imageInfo
-							? frame._imageInfo
-							: null;
-
-				let texture = imageInfo && typeof imageInfo.GetTexture === "function"
-					? imageInfo.GetTexture()
-					: imageInfo && typeof imageInfo.getTexture === "function"
-						? imageInfo.getTexture()
-						: null;
-
-				// In some runtimes, atlas frame textures aren't ready until LoadStaticTexture() runs.
-				// Request it once per atlas frame and fall back to debug quads until it resolves.
-				if (!texture && imageInfo)
-				{
-					this._requestAtlasTextureLoad(atlasIndex, imageInfo, renderer);
-					if (this._atlasDebug && !this._atlasDebug.pendingTextureIndices.has(atlasIndex))
-					{
-						this._atlasDebug.pendingTextureIndices.add(atlasIndex);
-						console.log(`[Spriter] Atlas texture not ready for frame ${atlasIndex}; requested async texture load.`);
-					}
-				}
-
-				let imageWidth = toFiniteNumber(
-					imageInfo && typeof imageInfo.GetWidth === "function"
-						? imageInfo.GetWidth()
-						: imageInfo && imageInfo._width,
-					0
-				);
-
-				let imageHeight = toFiniteNumber(
-					imageInfo && typeof imageInfo.GetHeight === "function"
-						? imageInfo.GetHeight()
-						: imageInfo && imageInfo._height,
-					0
-				);
-
-				let texRect = imageInfo && typeof imageInfo.GetTexRect === "function"
-					? imageInfo.GetTexRect()
-					: imageInfo && typeof imageInfo.getTexRect === "function"
-						? imageInfo.getTexRect()
-						: null;
-
-				if ((!texture || imageWidth <= 0 || imageHeight <= 0) && atlasImagePathFromProject && getOrLoadTexture)
+				if (atlasImagePathFromProject && getOrLoadTexture)
 				{
 					let atlasImagePath = atlasImagePathFromProject;
 					let projectTexture = getOrLoadTexture(atlasImagePath, renderer);
@@ -1282,7 +1233,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					if (projectTexture)
 					{
 						texture = projectTexture;
-						texRect = fullTexRect;
 
 						const textureSize = getTextureSize ? getTextureSize(atlasImagePath) : null;
 						imageWidth = textureSize ? toFiniteNumber(textureSize.width, 0) : 0;
@@ -1291,7 +1241,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 						if (this._atlasDebug && !this._atlasDebug.loggedProjectAtlasFallback)
 						{
 							this._atlasDebug.loggedProjectAtlasFallback = true;
-							console.log("[Spriter] Atlas frame API unavailable; using project-file atlas texture fallback.");
+							console.log("[Spriter] Using project-file atlas texture path (SDK2 self-draw).");
 						}
 					}
 					else if (this._atlasDebug && !this._atlasDebug.missingAtlasImageIndices.has(atlasIndex))
@@ -1328,8 +1278,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 						// Slightly inset UVs to reduce atlas edge bleeding with linear filtering.
 						// Legacy plugin did not explicitly do this, but its older renderer path (Quad4 + frame textures)
 						// was a bit more forgiving in practice than this SDK2 fallback path.
-						const insetX = Math.min(0.5, Math.max(0, (uvW - 0.001) * 0.5));
-						const insetY = Math.min(0.5, Math.max(0, (uvH - 0.001) * 0.5));
+						const insetX = 0;//Math.min(0.5, Math.max(0, (uvW - 0.001) * 0.5));
+						const insetY = 0;//Math.min(0.5, Math.max(0, (uvH - 0.001) * 0.5));
 						const uvLeft = (atlasX + insetX) / imageWidth;
 						const uvTop = (atlasY + insetY) / imageHeight;
 						const uvRight = (atlasX + uvW - insetX) / imageWidth;

@@ -7,3 +7,13 @@ Each entry should note:
 - Links or references to any investigation so far.
 
 (Leave additional entries below this note.)
+
+## SDK2 runtime access to custom plugin animation frames / atlas image info
+- We can set `SetHasAnimations(true)` on the Spriter plugin object type and load atlas PNGs into the plugin's animation frames at import time (editor-side), but at runtime (SDK2) we have not found a documented API on `ISDKWorldInstanceBase` / `ISDKObjectTypeBase` / runtime `IObjectType` to enumerate that plugin object's animation frames (equivalent to legacy `GetObjectClass().GetAnimations()[0].GetFrames()`).
+- Current runtime logs show legacy/internal-style access (`GetObjectClass/getObjectClass`) is unavailable in some environments, so self-draw must fall back to loading atlas PNGs from Project Files and slicing via SCON metadata.
+- Question: Is there a supported SDK2 runtime API to access a custom plugin's animation frames/image infos for `SetHasAnimations(true)` object types, or is project-file loading the intended approach?
+- References:
+  - ISDKObjectTypeBase docs (shows `getImageInfo()` for `SetHasImage(true)`, but no documented animation-frame enumeration): https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdktypebase
+  - ISDKWorldInstanceBase docs (no documented `GetObjectClass/getObjectClass`): https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkinstancebase
+  - Runtime `IObjectType` script interface docs (no animation list methods documented): https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/object-interfaces/iobjecttype
+  - Editor Addon SDK `IObjectType` interface does expose `GetAnimations()` (editor-side only, not runtime): https://www.construct.net/en/make-games/manuals/addon-sdk/reference/objecttype

@@ -65,34 +65,6 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			this._atlasFrameCache.clear();
 		if (this._atlasTextureLoadState)
 			this._atlasTextureLoadState.clear();
-
-		// Preload atlas frame image assets if possible (matches legacy addon behaviour).
-		const frames = this._getAtlasFrames();
-		if (Array.isArray(frames) && frames.length)
-		{
-			const runtime = this.runtime;
-			for (const frame of frames)
-			{
-				const imageInfo = frame && typeof frame.GetImageInfo === "function"
-					? frame.GetImageInfo()
-					: frame && typeof frame.getImageInfo === "function"
-						? frame.getImageInfo()
-						: frame && frame._imageInfo
-							? frame._imageInfo
-							: null;
-
-				if (!imageInfo)
-				{
-					continue;
-				}
-
-				const loadAsset = imageInfo.LoadAsset || imageInfo.loadAsset || null;
-				if (typeof loadAsset === "function")
-				{
-					loadAsset.call(imageInfo, runtime);
-				}
-			}
-		}
 	}
 
 	_getObjectClass()
@@ -675,26 +647,14 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 
 		try
 		{
-			// Match legacy Spriter behavior (Sprite-backed textures): clamp wrapping and project sampling.
+			// Temporary test path: force nearest sampling to evaluate atlas edge artifacts.
+			// Keep clamp wrapping so atlas UVs never wrap across the whole texture.
 			const textureOptions = {
 				wrapX: "clamp-to-edge",
-				wrapY: "clamp-to-edge"
+				wrapY: "clamp-to-edge",
+				sampling: "nearest",
+				mipMap: false
 			};
-
-			const getSampling = runtime && typeof runtime.GetSampling === "function"
-				? runtime.GetSampling.bind(runtime)
-				: runtime && typeof runtime.getSampling === "function"
-					? runtime.getSampling.bind(runtime)
-					: null;
-
-			if (getSampling)
-			{
-				const sampling = getSampling();
-				if (sampling != null)
-				{
-					textureOptions.sampling = sampling;
-				}
-			}
 
 			const texture = await createStaticTexture.call(renderer, imageBitmap, textureOptions);
 			const width = Number(imageBitmap && imageBitmap.width);
