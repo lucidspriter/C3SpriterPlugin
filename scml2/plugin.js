@@ -1,6 +1,6 @@
 const SDK = globalThis.SDK;
 const lang = globalThis.lang;
-console.log("[scml editor: v1]");
+console.log("[scml editor: v3]");
 
 // Keep the plugin ID stable: projects reference this ID to identify object types.
 const PLUGIN_ID = "Spriter";
@@ -39,6 +39,72 @@ function getFirstFrame(objectType)
 
 	const frames = firstAnim.GetFrames();
 	return Array.isArray(frames) && frames.length ? frames[0] : null;
+}
+
+function getFrameCount(objectType)
+{
+	const firstAnim = getFirstAnim(objectType);
+	if (!firstAnim || typeof firstAnim.GetFrames !== "function")
+	{
+		return 0;
+	}
+
+	const frames = firstAnim.GetFrames();
+	return Array.isArray(frames) ? frames.length : 0;
+}
+
+function getFirstFrameImageSize(objectType)
+{
+	const firstFrame = getFirstFrame(objectType);
+	if (!firstFrame)
+	{
+		return null;
+	}
+
+	const imageInfo = (typeof firstFrame.GetImageInfo === "function")
+		? firstFrame.GetImageInfo()
+		: (typeof firstFrame.getImageInfo === "function")
+			? firstFrame.getImageInfo()
+			: firstFrame._imageInfo || null;
+
+	if (!imageInfo)
+	{
+		return null;
+	}
+
+	const getWidth = (typeof imageInfo.GetWidth === "function")
+		? imageInfo.GetWidth.bind(imageInfo)
+		: (typeof imageInfo.getWidth === "function")
+			? imageInfo.getWidth.bind(imageInfo)
+			: null;
+	const getHeight = (typeof imageInfo.GetHeight === "function")
+		? imageInfo.GetHeight.bind(imageInfo)
+		: (typeof imageInfo.getHeight === "function")
+			? imageInfo.getHeight.bind(imageInfo)
+			: null;
+
+	const width = getWidth ? Number(getWidth()) : Number(imageInfo._width);
+	const height = getHeight ? Number(getHeight()) : Number(imageInfo._height);
+
+	if (!Number.isFinite(width) || !Number.isFinite(height))
+	{
+		return null;
+	}
+
+	return { width, height };
+}
+
+function logObjectTypeFrameDiag(objectType, label)
+{
+	if (!objectType || typeof objectType.GetName !== "function")
+	{
+		return;
+	}
+
+	const frameCount = getFrameCount(objectType);
+	const firstSize = getFirstFrameImageSize(objectType);
+	const sizeText = firstSize ? `${firstSize.width}x${firstSize.height}` : "unknown";
+	console.log(`[Spriter] Import diag (${label}): type='${objectType.GetName()}', frames=${frameCount}, firstFrameSize=${sizeText}`);
 }
 
 function getObjectTypePluginId(objectType)
@@ -85,6 +151,16 @@ function saveJsonToBlob(json)
 {
 	const text = JSON.stringify(json, null, 2);
 	return new Blob([text], { type: "application/json" });
+}
+
+async function awaitMaybePromise(result)
+{
+	if (result && typeof result.then === "function")
+	{
+		return await result;
+	}
+
+	return result;
 }
 
 function normalisePathKey(path)
@@ -257,7 +333,7 @@ async function loadSoundsFromFolders(folders, zipFile, project)
 			// Legacy behaviour keeps only the leaf name in project audio files.
 			try
 			{
-				project.AddOrReplaceProjectFile(soundBlob, fileName, "sound");
+				await awaitMaybePromise(project.AddOrReplaceProjectFile(soundBlob, fileName, "sound"));
 			}
 			catch (error)
 			{
@@ -461,6 +537,9 @@ function processAtlases(folders, atlasFramesByName)
 
 async function loadAtlasPngIntoFrames(objectType, zipFile, atlasPngPath, appendAsNewFrame)
 {
+	const framesBefore = getFrameCount(objectType);
+	console.log(`[Spriter] Atlas frame load start: path='${atlasPngPath}', mode='${appendAsNewFrame ? "append" : "replace-first"}', framesBefore=${framesBefore}`);
+
 	const pngEntry = findAtlasPngEntry(zipFile, atlasPngPath);
 	if (!pngEntry)
 	{
@@ -478,6 +557,8 @@ async function loadAtlasPngIntoFrames(objectType, zipFile, atlasPngPath, appendA
 	if (appendAsNewFrame)
 	{
 		await firstAnim.AddFrame(pngBlob);
+		const framesAfter = getFrameCount(objectType);
+		console.log(`[Spriter] Atlas frame load done: path='${atlasPngPath}', framesAfter=${framesAfter}`);
 		return;
 	}
 
@@ -488,6 +569,8 @@ async function loadAtlasPngIntoFrames(objectType, zipFile, atlasPngPath, appendA
 	}
 
 	await firstFrame.ReplaceBlobAndDecode(pngBlob);
+	const framesAfter = getFrameCount(objectType);
+	console.log(`[Spriter] Atlas frame load done: path='${atlasPngPath}', framesAfter=${framesAfter}`);
 }
 
 async function addAtlasPngToProjectFiles(project, zipFile, atlasPngPath)
@@ -512,7 +595,7 @@ async function addAtlasPngToProjectFiles(project, zipFile, atlasPngPath)
 	}
 
 	// Use "general" for compatibility with current SDK folder kinds.
-	project.AddOrReplaceProjectFile(pngBlob, targetPath, "general");
+	await awaitMaybePromise(project.AddOrReplaceProjectFile(pngBlob, targetPath, "general"));
 	return true;
 }
 
@@ -916,6 +999,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 		{
 			console.log(`[Spriter] Object type plugin id: '${pluginId}'.`);
 		}
+		logObjectTypeFrameDiag(objectType, "after-object-type-resolve");
 
 		const atlases = Array.isArray(projectJson.atlas) ? projectJson.atlas : null;
 		const isAtlased = !!(atlases && atlases.length);
@@ -923,6 +1007,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			if (isAtlased)
 			{
 				console.log(`[Spriter] Atlased export detected. Loading atlas PNGs into frames...`);
+				logObjectTypeFrameDiag(objectType, "before-atlas-reset");
 				// Reset any existing atlas frames on the first animation (keep frame 0, replace it).
 				const firstAnim = getFirstAnim(objectType);
 				if (firstAnim)
@@ -933,6 +1018,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 						frames[i].Delete();
 					}
 				}
+				logObjectTypeFrameDiag(objectType, "after-atlas-reset");
 
 				// Load atlas PNGs into the Spriter object's own frames. Atlas index == frame index.
 				for (let i = 0; i < atlases.length; i++)
@@ -949,11 +1035,27 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 
 					console.log(`[Spriter] Loading atlas ${i}: '${atlasPngLeaf || atlasPngPath}'`);
 					await loadAtlasPngIntoFrames(objectType, zipFile, atlasPngPath, i > 0);
+					logObjectTypeFrameDiag(objectType, `after-atlas-${i}-frame-load`);
 
 					const added = await addAtlasPngToProjectFiles(project, zipFile, atlasPngPath);
 					if (added)
 					{
 						console.log(`[Spriter] Added atlas image to Project Files: '${atlasPngPath}'.`);
+						if (typeof project.GetProjectFileByName === "function")
+						{
+							try
+							{
+								const byFullPath = await awaitMaybePromise(project.GetProjectFileByName(atlasPngPath));
+								const byLeaf = atlasPngLeaf && atlasPngLeaf !== atlasPngPath
+									? await awaitMaybePromise(project.GetProjectFileByName(atlasPngLeaf))
+									: null;
+								console.log(`[Spriter] Import diag (project-file-check): atlas='${atlasPngPath}', hasFullPath=${!!byFullPath}, hasLeaf=${!!byLeaf}`);
+							}
+							catch (e)
+							{
+								console.warn(`[Spriter] Import diag failed while checking project file presence for atlas '${atlasPngPath}'.`, e);
+							}
+						}
 					}
 				}
 
@@ -1013,7 +1115,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			}
 
 			// Always save the normalized JSON for atlased exports so runtime has consistent metadata.
-			project.AddOrReplaceProjectFile(saveJsonToBlob(projectJson), sconFileName, "general");
+			await awaitMaybePromise(project.AddOrReplaceProjectFile(saveJsonToBlob(projectJson), sconFileName, "general"));
 			if (updatedCount > 0)
 			{
 				console.log(`[Spriter] Saved merged '${sconFileName}' to Project Files.`);
@@ -1022,11 +1124,24 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			{
 				console.log(`[Spriter] Saved normalized '${sconFileName}' to Project Files.`);
 			}
+			if (typeof project.GetProjectFileByName === "function")
+			{
+				try
+				{
+					const savedScon = await awaitMaybePromise(project.GetProjectFileByName(sconFileName));
+					console.log(`[Spriter] Import diag (project-file-check): scon='${sconFileName}', present=${!!savedScon}`);
+				}
+				catch (e)
+				{
+					console.warn(`[Spriter] Import diag failed while checking project file presence for '${sconFileName}'.`, e);
+				}
+			}
+			logObjectTypeFrameDiag(objectType, "after-atlas-import-complete");
 		}
 		else
 		{
 			// Non-atlased import: create individual Sprite object types for each Spriter part.
-			project.AddOrReplaceProjectFile(sconBlob, sconFileName, "general");
+			await awaitMaybePromise(project.AddOrReplaceProjectFile(sconBlob, sconFileName, "general"));
 			console.log(`[Spriter] Non-atlased export. Saved '${sconFileName}' to Project Files.`);
 
 			// Read old SCON for reimport cleanup (track which sprite types existed before).

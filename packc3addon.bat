@@ -41,8 +41,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 	"$zipDest = if ($destExt -eq '.zip') { $dest } else { [System.IO.Path]::ChangeExtension($dest, '.zip') };" ^
 	"if (Test-Path $dest) { Remove-Item $dest -Force };" ^
 	"if (Test-Path $zipDest) { Remove-Item $zipDest -Force };" ^
-	"Compress-Archive -Path (Join-Path $addonDir '*') -DestinationPath $zipDest -CompressionLevel Optimal;" ^
+	"Add-Type -AssemblyName System.IO.Compression;" ^
+	"Add-Type -AssemblyName System.IO.Compression.FileSystem;" ^
+	"$baseDir = [string]$addonDir;" ^
+	"if (-not $baseDir.EndsWith('\')) { $baseDir += '\' };" ^
+	"$zip = [System.IO.Compression.ZipFile]::Open($zipDest, [System.IO.Compression.ZipArchiveMode]::Create);" ^
+	"try {" ^
+	"  foreach ($file in Get-ChildItem -LiteralPath $addonDir -Recurse -File) {" ^
+	"    if ($file.FullName -eq $dest -or $file.FullName -eq $zipDest) { continue };" ^
+	"    $entryName = $file.FullName.Substring($baseDir.Length).Replace('\','/');" ^
+	"    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $file.FullName, $entryName, [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null;" ^
+	"  }" ^
+	"} finally { if ($zip) { $zip.Dispose() } };" ^
 	"if ($zipDest -ne $dest) { Move-Item -Path $zipDest -Destination $dest -Force };" ^
+	"$verify = [System.IO.Compression.ZipFile]::OpenRead($dest);" ^
+	"try { if (-not ($verify.Entries | Where-Object { $_.FullName -eq 'lang/en-US.json' })) { Write-Warning 'Package does not contain lang/en-US.json entry path.' } } finally { $verify.Dispose() };" ^
 	"Write-Host ('[packc3addon] Packed: ' + $dest);"
 
 if errorlevel 1 (
