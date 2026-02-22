@@ -1635,7 +1635,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		let options = undefined;
 		const getSampling = this.runtime && typeof this.runtime.GetSampling === "function"
 			? this.runtime.GetSampling.bind(this.runtime)
-			: null;
+			: this.runtime && typeof this.runtime.getSampling === "function"
+				? this.runtime.getSampling.bind(this.runtime)
+				: null;
 		if (getSampling)
 		{
 			const sampling = getSampling();

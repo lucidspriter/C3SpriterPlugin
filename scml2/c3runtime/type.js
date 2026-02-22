@@ -317,7 +317,12 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 
 		let options = undefined;
 		const runtime = this.runtime;
-		const sampling = runtime && typeof runtime.GetSampling === "function" ? runtime.GetSampling() : null;
+		const getSampling = runtime && typeof runtime.GetSampling === "function"
+			? runtime.GetSampling.bind(runtime)
+			: runtime && typeof runtime.getSampling === "function"
+				? runtime.getSampling.bind(runtime)
+				: null;
+		const sampling = getSampling ? getSampling() : null;
 		if (sampling != null)
 		{
 			options = { sampling };
