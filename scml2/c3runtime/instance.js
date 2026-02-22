@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v9]");
+console.log("[scml runtime: v11]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -1325,10 +1325,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 						uvH = atlasW;
 					}
 
-					const uvLeft = atlasX / imageWidth;
-					const uvTop = atlasY / imageHeight;
-					const uvRight = (atlasX + uvW) / imageWidth;
-					const uvBottom = (atlasY + uvH) / imageHeight;
+						// Slightly inset UVs to reduce atlas edge bleeding with linear filtering.
+						// Legacy plugin did not explicitly do this, but its older renderer path (Quad4 + frame textures)
+						// was a bit more forgiving in practice than this SDK2 fallback path.
+						const insetX = Math.min(0.5, Math.max(0, (uvW - 0.001) * 0.5));
+						const insetY = Math.min(0.5, Math.max(0, (uvH - 0.001) * 0.5));
+						const uvLeft = (atlasX + insetX) / imageWidth;
+						const uvTop = (atlasY + insetY) / imageHeight;
+						const uvRight = (atlasX + uvW - insetX) / imageWidth;
+						const uvBottom = (atlasY + uvH - insetY) / imageHeight;
 
 					const u0 = lerp(texLeft, texRight, uvLeft);
 					const u1 = lerp(texLeft, texRight, uvRight);
