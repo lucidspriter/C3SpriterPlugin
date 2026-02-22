@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v8]");
+console.log("[scml runtime: v9]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -1086,6 +1086,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			const state = poseObjects[i];
 			if (!state)
+			{
+				continue;
+			}
+
+			const spriterType = typeof state.spriterType === "string" ? state.spriterType : "sprite";
+			if (spriterType !== "sprite")
 			{
 				continue;
 			}
@@ -5334,6 +5340,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		const fileInfo = this._getFileInfo(folder, file);
+		const spriterType = timeline && typeof timeline.object_type === "string"
+			? timeline.object_type.trim().toLowerCase()
+			: "sprite";
 		const state = {
 			folder,
 			file,
@@ -5350,6 +5359,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			height: fileInfo ? fileInfo.height : 0,
 			name: fileInfo ? fileInfo.name : "",
 			timelineName,
+			spriterType,
 			atlasIndex: fileInfo ? toFiniteNumber(fileInfo.atlasIndex, 0) : 0,
 			atlasW: fileInfo ? toFiniteNumber(fileInfo.atlasW, 0) : 0,
 			atlasH: fileInfo ? toFiniteNumber(fileInfo.atlasH, 0) : 0,
