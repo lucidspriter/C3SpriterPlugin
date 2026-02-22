@@ -56,6 +56,11 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			loggedSource: false,
 			loggedFailure: false
 		};
+
+		this._samplingDebug = {
+			loggedAtlasFrameTextureLoad: false,
+			loggedProjectAtlasTextureCreate: false
+		};
 	}
 	
 	_onCreate()
@@ -317,15 +322,31 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 
 		let options = undefined;
 		const runtime = this.runtime;
-		const getSampling = runtime && typeof runtime.GetSampling === "function"
-			? runtime.GetSampling.bind(runtime)
+		const samplingProp = runtime && typeof runtime.sampling === "string"
+			? runtime.sampling
+			: null;
+		const getSamplingMethodName = runtime && typeof runtime.GetSampling === "function"
+			? "GetSampling"
 			: runtime && typeof runtime.getSampling === "function"
+				? "getSampling"
+				: "";
+		const getSampling = getSamplingMethodName === "GetSampling"
+			? runtime.GetSampling.bind(runtime)
+			: getSamplingMethodName === "getSampling"
 				? runtime.getSampling.bind(runtime)
 				: null;
-		const sampling = getSampling ? getSampling() : null;
+		const sampling = samplingProp != null ? samplingProp : (getSampling ? getSampling() : null);
 		if (sampling != null)
 		{
 			options = { sampling };
+		}
+
+		if (this._samplingDebug && !this._samplingDebug.loggedAtlasFrameTextureLoad)
+		{
+			this._samplingDebug.loggedAtlasFrameTextureLoad = true;
+			console.log(
+				`[Spriter] Sampling diag (atlas-frame LoadStaticTexture): prop=${samplingProp == null ? "null" : String(samplingProp)}, method=${getSamplingMethodName || "none"}, value=${sampling == null ? "null" : String(sampling)}, options=${options ? JSON.stringify(options) : "none"}`
+			);
 		}
 
 		try
@@ -521,7 +542,7 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 		return { width, height };
 	}
 
-	_getOrLoadTextureForPath(projectFileName, renderer)
+	_getOrLoadTextureForPath(projectFileName, renderer, samplingHint)
 	{
 		const entry = this._getTextureEntry(projectFileName);
 		if (!entry)
@@ -539,7 +560,7 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			return null;
 		}
 
-		entry.promise = this._loadTextureFromProjectFile(projectFileName, renderer)
+		entry.promise = this._loadTextureFromProjectFile(projectFileName, renderer, samplingHint)
 			.then((loaded) =>
 			{
 				entry.texture = loaded ? loaded.texture : null;
@@ -580,7 +601,7 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 		}
 	}
 
-	async _loadTextureFromProjectFile(projectFileName, renderer)
+	async _loadTextureFromProjectFile(projectFileName, renderer, samplingHint)
 	{
 		if (!renderer)
 		{
@@ -658,18 +679,52 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 				wrapY: "clamp-to-edge"
 			};
 
-			const getSampling = runtime && typeof runtime.GetSampling === "function"
-				? runtime.GetSampling.bind(runtime)
+			const samplingProp = runtime && typeof runtime.sampling === "string"
+				? runtime.sampling
+				: null;
+			const getSamplingMethodName = runtime && typeof runtime.GetSampling === "function"
+				? "GetSampling"
 				: runtime && typeof runtime.getSampling === "function"
+					? "getSampling"
+					: "";
+			const getSampling = getSamplingMethodName === "GetSampling"
+				? runtime.GetSampling.bind(runtime)
+				: getSamplingMethodName === "getSampling"
 					? runtime.getSampling.bind(runtime)
 					: null;
 
-			if (getSampling)
+			let sampling = null;
+			let samplingSource = "none";
+			if (samplingProp != null)
 			{
-				const sampling = getSampling();
-				if (sampling != null)
+				sampling = samplingProp;
+				samplingSource = "runtime.sampling";
+			}
+			else if (getSampling)
+			{
+				sampling = getSampling();
+				samplingSource = getSamplingMethodName || "runtime";
+			}
+			else if (samplingHint != null)
+			{
+				sampling = samplingHint;
+				samplingSource = "instance-hint";
+			}
+
+			if (sampling != null)
+			{
+				textureOptions.sampling = sampling;
+			}
+
+			if (this._samplingDebug && !this._samplingDebug.loggedProjectAtlasTextureCreate)
+			{
+				this._samplingDebug.loggedProjectAtlasTextureCreate = true;
+				console.log(
+					`[Spriter] Sampling diag (project-file atlas createStaticTexture): prop=${samplingProp == null ? "null" : String(samplingProp)}, method=${getSamplingMethodName || "none"}, value=${sampling == null ? "null" : String(sampling)}, options=${JSON.stringify(textureOptions)}`
+				);
+				if (samplingSource === "instance-hint")
 				{
-					textureOptions.sampling = sampling;
+					console.log("[Spriter] Sampling diag (project-file atlas createStaticTexture): using instance runtime sampling fallback.");
 				}
 			}
 

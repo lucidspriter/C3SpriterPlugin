@@ -656,6 +656,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			missingAtlasImageIndices: new Set(),
 			pendingTextureIndices: new Set()
 		};
+		this._samplingDiagLogged = false;
 
 		// Non-self-draw state
 		this._objectArray = [];
@@ -1010,8 +1011,40 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		};
 
 		const sdkType = this.objectType;
+		const runtimeSamplingProp = this.runtime && typeof this.runtime.sampling === "string"
+			? this.runtime.sampling
+			: null;
+		const getRuntimeSamplingMethodName = this.runtime && typeof this.runtime.GetSampling === "function"
+			? "GetSampling"
+			: this.runtime && typeof this.runtime.getSampling === "function"
+				? "getSampling"
+				: "";
+		const getRuntimeSampling = getRuntimeSamplingMethodName === "GetSampling"
+			? this.runtime.GetSampling.bind(this.runtime)
+			: getRuntimeSamplingMethodName === "getSampling"
+				? this.runtime.getSampling.bind(this.runtime)
+				: null;
+		let runtimeSamplingHint = runtimeSamplingProp;
+		if (runtimeSamplingHint == null && getRuntimeSampling)
+		{
+			try
+			{
+				runtimeSamplingHint = getRuntimeSampling();
+			}
+			catch (_)
+			{
+				runtimeSamplingHint = null;
+			}
+		}
+		if (!this._samplingDiagLogged)
+		{
+			this._samplingDiagLogged = true;
+			console.log(
+				`[Spriter] Sampling diag (instance runtime): prop=${runtimeSamplingProp == null ? "null" : String(runtimeSamplingProp)}, method=${getRuntimeSamplingMethodName || "none"}, value=${runtimeSamplingHint == null ? "null" : String(runtimeSamplingHint)}`
+			);
+		}
 		const getOrLoadTexture = sdkType && typeof sdkType._getOrLoadTextureForPath === "function"
-			? sdkType._getOrLoadTextureForPath.bind(sdkType)
+			? ((path, rend) => sdkType._getOrLoadTextureForPath(path, rend, runtimeSamplingHint))
 			: null;
 		const hasTextureError = sdkType && typeof sdkType._hasTextureErrorForPath === "function"
 			? sdkType._hasTextureErrorForPath.bind(sdkType)
@@ -1633,12 +1666,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		let options = undefined;
+		const samplingProp = this.runtime && typeof this.runtime.sampling === "string"
+			? this.runtime.sampling
+			: null;
 		const getSampling = this.runtime && typeof this.runtime.GetSampling === "function"
 			? this.runtime.GetSampling.bind(this.runtime)
 			: this.runtime && typeof this.runtime.getSampling === "function"
 				? this.runtime.getSampling.bind(this.runtime)
 				: null;
-		if (getSampling)
+		if (samplingProp != null)
+		{
+			options = { sampling: samplingProp };
+		}
+		else if (getSampling)
 		{
 			const sampling = getSampling();
 			if (sampling != null)
