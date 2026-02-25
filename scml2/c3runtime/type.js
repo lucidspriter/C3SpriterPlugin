@@ -57,10 +57,6 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			loggedFailure: false
 		};
 
-		this._samplingDebug = {
-			loggedAtlasFrameTextureLoad: false,
-			loggedProjectAtlasTextureCreate: false
-		};
 	}
 	
 	_onCreate()
@@ -339,14 +335,6 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 		if (sampling != null)
 		{
 			options = { sampling };
-		}
-
-		if (this._samplingDebug && !this._samplingDebug.loggedAtlasFrameTextureLoad)
-		{
-			this._samplingDebug.loggedAtlasFrameTextureLoad = true;
-			console.log(
-				`[Spriter] Sampling diag (atlas-frame LoadStaticTexture): prop=${samplingProp == null ? "null" : String(samplingProp)}, method=${getSamplingMethodName || "none"}, value=${sampling == null ? "null" : String(sampling)}, options=${options ? JSON.stringify(options) : "none"}`
-			);
 		}
 
 		try
@@ -694,38 +682,22 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 					: null;
 
 			let sampling = null;
-			let samplingSource = "none";
 			if (samplingProp != null)
 			{
 				sampling = samplingProp;
-				samplingSource = "runtime.sampling";
 			}
 			else if (getSampling)
 			{
 				sampling = getSampling();
-				samplingSource = getSamplingMethodName || "runtime";
 			}
 			else if (samplingHint != null)
 			{
 				sampling = samplingHint;
-				samplingSource = "instance-hint";
 			}
 
 			if (sampling != null)
 			{
 				textureOptions.sampling = sampling;
-			}
-
-			if (this._samplingDebug && !this._samplingDebug.loggedProjectAtlasTextureCreate)
-			{
-				this._samplingDebug.loggedProjectAtlasTextureCreate = true;
-				console.log(
-					`[Spriter] Sampling diag (project-file atlas createStaticTexture): prop=${samplingProp == null ? "null" : String(samplingProp)}, method=${getSamplingMethodName || "none"}, value=${sampling == null ? "null" : String(sampling)}, options=${JSON.stringify(textureOptions)}`
-				);
-				if (samplingSource === "instance-hint")
-				{
-					console.log("[Spriter] Sampling diag (project-file atlas createStaticTexture): using instance runtime sampling fallback.");
-				}
 			}
 
 			const texture = await createStaticTexture.call(renderer, imageBitmap, textureOptions);

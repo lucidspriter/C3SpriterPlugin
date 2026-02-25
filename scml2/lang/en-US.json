@@ -52,6 +52,11 @@
 							"false": "False",
 							"true": "True"
 						}
+					},
+					"repair-legacy-self-draw": {
+						"name": "Repair legacy self-draw",
+						"desc": "Extract embedded atlas frame images to Project Files so old self-draw projects can render in the SDK2 runtime path.",
+						"link-text": "Extract embedded atlas files"
 					}
 				},
 				"aceCategories": {

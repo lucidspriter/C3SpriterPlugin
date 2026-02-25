@@ -13,7 +13,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setAnimation(animationName, startFrom = 0, blendDuration = 0)
 	{
-		this.SetAnimation(animationName, startFrom, blendDuration);
+		C3.Plugins.Spriter.Acts.SetAnimation.call(this, animationName, startFrom, blendDuration);
 	},
 
 	SetPlaybackSpeedRatio(newSpeed)
@@ -27,7 +27,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setPlaybackSpeedRatio(newSpeed)
 	{
-		this.SetPlaybackSpeedRatio(newSpeed);
+		C3.Plugins.Spriter.Acts.SetPlaybackSpeedRatio.call(this, newSpeed);
 	},
 
 	SetAnimationLoop(loopOn)
@@ -41,7 +41,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setAnimationLoop(loopOn)
 	{
-		this.SetAnimationLoop(loopOn);
+		C3.Plugins.Spriter.Acts.SetAnimationLoop.call(this, loopOn);
 	},
 
 	SetAnimationTime(units, timeValue)
@@ -55,7 +55,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setAnimationTime(units, timeValue)
 	{
-		this.SetAnimationTime(units, timeValue);
+		C3.Plugins.Spriter.Acts.SetAnimationTime.call(this, units, timeValue);
 	},
 
 	PauseAnimation()
@@ -69,7 +69,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	pauseAnimation()
 	{
-		this.PauseAnimation();
+		C3.Plugins.Spriter.Acts.PauseAnimation.call(this);
 	},
 
 	ResumeAnimation()
@@ -83,7 +83,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	resumeAnimation()
 	{
-		this.ResumeAnimation();
+		C3.Plugins.Spriter.Acts.ResumeAnimation.call(this);
 	},
 
 	PlayAnimTo(units, targetValue)
@@ -97,7 +97,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	playAnimTo(units, targetValue)
 	{
-		this.PlayAnimTo(units, targetValue);
+		C3.Plugins.Spriter.Acts.PlayAnimTo.call(this, units, targetValue);
 	},
 
 	SetEntity(entityName, animationName)
@@ -111,7 +111,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setEnt(entityName, animationName)
 	{
-		this.SetEntity(entityName, animationName);
+		C3.Plugins.Spriter.Acts.SetEntity.call(this, entityName, animationName);
 	},
 
 	SetObjectScaleRatio(scaleRatio, xFlip, yFlip)
@@ -125,7 +125,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setObjectScaleRatio(scaleRatio, xFlip, yFlip)
 	{
-		this.SetObjectScaleRatio(scaleRatio, xFlip, yFlip);
+		C3.Plugins.Spriter.Acts.SetObjectScaleRatio.call(this, scaleRatio, xFlip, yFlip);
 	},
 
 	SetObjectXFlip(xFlip)
@@ -139,7 +139,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setObjectXFlip(xFlip)
 	{
-		this.SetObjectXFlip(xFlip);
+		C3.Plugins.Spriter.Acts.SetObjectXFlip.call(this, xFlip);
 	},
 
 	SetObjectYFlip(yFlip)
@@ -153,7 +153,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setObjectYFlip(yFlip)
 	{
-		this.SetObjectYFlip(yFlip);
+		C3.Plugins.Spriter.Acts.SetObjectYFlip.call(this, yFlip);
 	},
 
 	SetIgnoreGlobalTimeScale(ignore)
@@ -167,7 +167,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setIgnoreGlobalTimeScale(ignore)
 	{
-		this.SetIgnoreGlobalTimeScale(ignore);
+		C3.Plugins.Spriter.Acts.SetIgnoreGlobalTimeScale.call(this, ignore);
 	},
 
 	SetAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer)
@@ -181,7 +181,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer)
 	{
-		this.SetAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer);
+		C3.Plugins.Spriter.Acts.SetAutomaticPausing.call(this, newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer);
 	},
 
 	StopResumeSettingLayer(resume)
@@ -195,7 +195,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	stopResumeSettingLayer(resume)
 	{
-		this.StopResumeSettingLayer(resume);
+		C3.Plugins.Spriter.Acts.StopResumeSettingLayer.call(this, resume);
 	},
 
 	StopResumeSettingVisibilityForObjects(resume)
@@ -209,7 +209,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	stopResumeSettingVisibilityForObjects(resume)
 	{
-		this.StopResumeSettingVisibilityForObjects(resume);
+		C3.Plugins.Spriter.Acts.StopResumeSettingVisibilityForObjects.call(this, resume);
 	},
 
 	StopResumeSettingCollisionsForObjects(resume)
@@ -223,7 +223,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	stopResumeSettingCollisionsForObjects(resume)
 	{
-		this.StopResumeSettingCollisionsForObjects(resume);
+		C3.Plugins.Spriter.Acts.StopResumeSettingCollisionsForObjects.call(this, resume);
 	},
 
 	SetVisible(visible)
@@ -237,7 +237,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setVisible(visible)
 	{
-		this.SetVisible(visible);
+		C3.Plugins.Spriter.Acts.SetVisible.call(this, visible);
 	},
 
 	SetOpacity(opacityPercent)
@@ -251,7 +251,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setOpacity(opacityPercent)
 	{
-		this.SetOpacity(opacityPercent);
+		C3.Plugins.Spriter.Acts.SetOpacity.call(this, opacityPercent);
 	},
 
 	SetSecondAnim(animationName)
@@ -265,7 +265,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setSecondAnim(animationName)
 	{
-		this.SetSecondAnim(animationName);
+		C3.Plugins.Spriter.Acts.SetSecondAnim.call(this, animationName);
 	},
 
 	StopSecondAnim()
@@ -279,7 +279,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	stopSecondAnim()
 	{
-		this.StopSecondAnim();
+		C3.Plugins.Spriter.Acts.StopSecondAnim.call(this);
 	},
 
 	AppendCharMap(mapName)
@@ -293,7 +293,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	appendCharMap(mapName)
 	{
-		this.AppendCharMap(mapName);
+		C3.Plugins.Spriter.Acts.AppendCharMap.call(this, mapName);
 	},
 
 	RemoveCharMap(mapName)
@@ -307,7 +307,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	removeCharMap(mapName)
 	{
-		this.RemoveCharMap(mapName);
+		C3.Plugins.Spriter.Acts.RemoveCharMap.call(this, mapName);
 	},
 
 	RemoveAllCharMaps()
@@ -321,7 +321,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	removeAllCharMaps()
 	{
-		this.RemoveAllCharMaps();
+		C3.Plugins.Spriter.Acts.RemoveAllCharMaps.call(this);
 	},
 
 	OverrideObjectComponent(objectName, component, newValue)
@@ -335,7 +335,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	overrideObjectComponent(objectName, component, newValue)
 	{
-		this.OverrideObjectComponent(objectName, component, newValue);
+		C3.Plugins.Spriter.Acts.OverrideObjectComponent.call(this, objectName, component, newValue);
 	},
 
 	OverrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength)
@@ -349,7 +349,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	overrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength)
 	{
-		this.OverrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength);
+		C3.Plugins.Spriter.Acts.OverrideBonesWithIk.call(this, parentBoneName, childBoneName, targetX, targetY, additionalLength);
 	},
 
 	SetAnimBlendRatio(blendRatio)
@@ -363,7 +363,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setAnimBlendRatio(blendRatio)
 	{
-		this.SetAnimBlendRatio(blendRatio);
+		C3.Plugins.Spriter.Acts.SetAnimBlendRatio.call(this, blendRatio);
 	},
 
 	SetZElevation(zElevation)
@@ -377,7 +377,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setZElevation(zElevation)
 	{
-		this.SetZElevation(zElevation);
+		C3.Plugins.Spriter.Acts.SetZElevation.call(this, zElevation);
 	},
 
 	loadFromURL(url, crossOrigin, sconText)
@@ -401,7 +401,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	findSpriterObject(c2Object)
 	{
-		this.FindSpriterObject(c2Object);
+		C3.Plugins.Spriter.Acts.FindSpriterObject.call(this, c2Object);
 	},
 
 	AssociateTypeWithName(objectType, name)

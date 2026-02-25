@@ -95,7 +95,7 @@ C3.Plugins.Spriter.Cnds =
 
 	OutsidePaddedViewport()
 	{
-		return this.outsidePaddedViewport();
+		return C3.Plugins.Spriter.Cnds.outsidePaddedViewport.call(this);
 	},
 
 	tagActive(tagName, objectName)
@@ -161,7 +161,7 @@ C3.Plugins.Spriter.Cnds =
 	// Legacy ACE alias used by older projects.
 	actionPointExists(pointName)
 	{
-		return this.ActionPointExists(pointName);
+		return C3.Plugins.Spriter.Cnds.ActionPointExists.call(this, pointName);
 	},
 
 	ObjectExists(objectName)
@@ -174,7 +174,7 @@ C3.Plugins.Spriter.Cnds =
 	// Legacy ACE alias used by older projects.
 	objectExists(objectName)
 	{
-		return this.ObjectExists(objectName);
+		return C3.Plugins.Spriter.Cnds.ObjectExists.call(this, objectName);
 	},
 
 	CompareZElevation(which, cmp, zElevation)
@@ -206,7 +206,7 @@ C3.Plugins.Spriter.Cnds =
 	// Legacy ACE alias used by older projects.
 	isMirrored()
 	{
-		return this.IsMirrored();
+		return C3.Plugins.Spriter.Cnds.IsMirrored.call(this);
 	},
 
 	IsFlipped()
@@ -217,7 +217,7 @@ C3.Plugins.Spriter.Cnds =
 	// Legacy ACE alias used by older projects.
 	isFlipped()
 	{
-		return this.IsFlipped();
+		return C3.Plugins.Spriter.Cnds.IsFlipped.call(this);
 	},
 
 	OnSoundTriggered()

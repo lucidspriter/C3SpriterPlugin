@@ -153,6 +153,543 @@ function atlasNameToPngPath(atlasName)
 	return dot > 0 ? `${normalised.slice(0, dot)}.png` : `${normalised}.png`;
 }
 
+function normaliseScmlToSconPath(fileName)
+{
+	if (typeof fileName !== "string")
+	{
+		return "";
+	}
+
+	const trimmed = fileName.trim().replace(/\\/g, "/");
+	if (!trimmed)
+	{
+		return "";
+	}
+
+	return trimmed.toLowerCase().endsWith(".scml")
+		? `${trimmed.slice(0, -5)}.scon`
+		: trimmed;
+}
+
+function getFramesForObjectType(objectType)
+{
+	const firstAnim = getFirstAnim(objectType);
+	if (!firstAnim || typeof firstAnim.GetFrames !== "function")
+	{
+		return [];
+	}
+
+	const frames = firstAnim.GetFrames();
+	return Array.isArray(frames) ? frames : [];
+}
+
+function getAtlasEntriesFromScon(projectJson)
+{
+	if (!projectJson || typeof projectJson !== "object")
+	{
+		return [];
+	}
+
+	if (Array.isArray(projectJson.atlas))
+	{
+		return projectJson.atlas;
+	}
+
+	return [];
+}
+
+function getAtlasEntryName(atlasEntry)
+{
+	if (typeof atlasEntry === "string")
+	{
+		return atlasEntry;
+	}
+
+	if (!atlasEntry || typeof atlasEntry !== "object")
+	{
+		return "";
+	}
+
+	if (typeof atlasEntry.name === "string")
+	{
+		return atlasEntry.name;
+	}
+
+	if (typeof atlasEntry.file === "string")
+	{
+		return atlasEntry.file;
+	}
+
+	if (typeof atlasEntry.path === "string")
+	{
+		return atlasEntry.path;
+	}
+
+	return "";
+}
+
+function resolveLinkCallbackEditorInstance(args)
+{
+	if (!Array.isArray(args))
+	{
+		return null;
+	}
+
+	for (const arg of args)
+	{
+		if (!arg || typeof arg !== "object")
+		{
+			continue;
+		}
+
+		if (typeof arg.GetObjectType === "function" || (arg._inst && typeof arg._inst.GetObjectType === "function"))
+		{
+			return arg;
+		}
+	}
+
+	return null;
+}
+
+function resolveLinkCallbackEditorType(args)
+{
+	if (!Array.isArray(args))
+	{
+		return null;
+	}
+
+	for (const arg of args)
+	{
+		if (!arg || typeof arg !== "object")
+		{
+			continue;
+		}
+
+		const candidates = [arg, arg._type, arg._inst];
+		for (const candidate of candidates)
+		{
+			if (!candidate || typeof candidate !== "object")
+			{
+				continue;
+			}
+
+			const hasGetProject = typeof candidate.GetProject === "function";
+			const hasGetObjectType = typeof candidate.GetObjectType === "function";
+			const looksLikeObjectType = typeof candidate.GetName === "function"
+				&& (typeof candidate.CreateWorldInstance === "function" || typeof candidate.GetPlugin === "function");
+
+			if ((hasGetProject && hasGetObjectType) || (hasGetProject && looksLikeObjectType))
+			{
+				return arg;
+			}
+		}
+	}
+
+	return null;
+}
+
+function tryResolveObjectTypeFromEditorCallbackValue(value)
+{
+	if (!value || typeof value !== "object")
+	{
+		return null;
+	}
+
+	try
+	{
+		if (typeof value.GetObjectType === "function")
+		{
+			return value.GetObjectType() || null;
+		}
+	}
+	catch
+	{
+		// Ignore.
+	}
+
+	try
+	{
+		if (typeof value.GetName === "function"
+			&& (typeof value.CreateWorldInstance === "function" || typeof value.GetPlugin === "function"))
+		{
+			return value;
+		}
+	}
+	catch
+	{
+		// Ignore.
+	}
+
+	return null;
+}
+
+function tryResolveProjectFromEditorCallbackValue(value)
+{
+	if (!value || typeof value !== "object")
+	{
+		return null;
+	}
+
+	try
+	{
+		if (typeof value.GetProject === "function")
+		{
+			return value.GetProject() || null;
+		}
+	}
+	catch
+	{
+		// Ignore.
+	}
+
+	return null;
+}
+
+function resolveLinkCallbackTypeContext(args)
+{
+	const handle = resolveLinkCallbackEditorType(args);
+	if (!handle)
+	{
+		return { handle: null, objectType: null, project: null };
+	}
+
+	const candidates = [handle, handle._type, handle._inst];
+	for (const candidate of candidates)
+	{
+		const objectType = tryResolveObjectTypeFromEditorCallbackValue(candidate);
+		const project = tryResolveProjectFromEditorCallbackValue(candidate);
+		if (objectType && project)
+		{
+			return { handle, objectType, project };
+		}
+	}
+
+	for (const candidate of candidates)
+	{
+		const objectType = tryResolveObjectTypeFromEditorCallbackValue(candidate);
+		if (!objectType)
+		{
+			continue;
+		}
+
+		try
+		{
+			if (typeof objectType.GetProject === "function")
+			{
+				const project = objectType.GetProject();
+				if (project)
+				{
+					return { handle, objectType, project };
+				}
+			}
+		}
+		catch
+		{
+			// Ignore.
+		}
+	}
+
+	return { handle, objectType: null, project: null };
+}
+
+function getProjectObjectTypes(project)
+{
+	if (!project || typeof project !== "object")
+	{
+		return null;
+	}
+
+	const methodNames = [
+		"GetObjectTypes",
+		"GetAllObjectTypes"
+	];
+
+	for (const methodName of methodNames)
+	{
+		try
+		{
+			const fn = project[methodName];
+			if (typeof fn !== "function")
+			{
+				continue;
+			}
+
+			const result = fn.call(project);
+			if (Array.isArray(result))
+			{
+				return result;
+			}
+		}
+		catch
+		{
+			// Ignore.
+		}
+	}
+
+	return null;
+}
+
+async function inferSconFileNameForObjectType(objectType, project)
+{
+	const typeName = objectType && typeof objectType.GetName === "function"
+		? String(objectType.GetName() || "").trim()
+		: "";
+	if (!typeName)
+	{
+		return "";
+	}
+
+	const candidates = [];
+	const addCandidate = (value) =>
+	{
+		if (typeof value !== "string")
+		{
+			return;
+		}
+
+		const trimmed = value.trim().replace(/\\/g, "/");
+		if (!trimmed || candidates.includes(trimmed))
+		{
+			return;
+		}
+
+		candidates.push(trimmed);
+	};
+
+	// New importer uses the same detected base name for both object type and saved .scon.
+	addCandidate(`${typeName}.scon`);
+	addCandidate(normaliseScmlToSconPath(`${typeName}.scml`));
+
+	// Best-effort fallbacks for renamed types / older naming quirks.
+	addCandidate(`${typeName.replace(/\s+/g, "_")}.scon`);
+	addCandidate(`${typeName.replace(/\s+/g, "")}.scon`);
+	addCandidate(`${typeName.replace(/-/g, "_")}.scon`);
+	addCandidate(`${typeName.replace(/-/g, "")}.scon`);
+	addCandidate(`${typeName.replace(/[- ]/g, "_")}.scon`);
+	addCandidate(`${sanitiseTypeName(typeName)}.scon`);
+
+	if (!project || typeof project.GetProjectFileByName !== "function")
+	{
+		return candidates[0] || "";
+	}
+
+	for (const candidate of candidates)
+	{
+		const file = await awaitMaybePromise(project.GetProjectFileByName(candidate));
+		if (file)
+		{
+			return candidate;
+		}
+	}
+
+	return candidates[0] || "";
+}
+
+async function migrateLegacySelfDrawAssetsForObjectType(objectType, project, rawScmlFile, sourceLabel)
+{
+	if (!objectType || !project)
+	{
+		console.warn("[Spriter] Legacy self-draw migration: missing object type or project.", { objectType, project, sourceLabel });
+		return;
+	}
+
+	const pluginId = getObjectTypePluginId(objectType);
+	if (pluginId && pluginId !== PLUGIN_ID)
+	{
+		console.warn(`[Spriter] Legacy self-draw migration skipped: selected object type is plugin '${pluginId}', not '${PLUGIN_ID}'.`);
+		return;
+	}
+
+	const inferredScmlFile = rawScmlFile && String(rawScmlFile || "").trim()
+		? String(rawScmlFile || "").trim()
+		: await inferSconFileNameForObjectType(objectType, project);
+	const sconFileName = normaliseScmlToSconPath(inferredScmlFile);
+	if (!sconFileName)
+	{
+		console.warn("[Spriter] Legacy self-draw migration: could not determine .scon file for object type.", {
+			sourceLabel,
+			objectTypeName: typeof objectType.GetName === "function" ? objectType.GetName() : "(unknown)"
+		});
+		return;
+	}
+
+	if (typeof project.GetProjectFileByName !== "function" || typeof project.AddOrReplaceProjectFile !== "function")
+	{
+		console.warn("[Spriter] Legacy self-draw migration: project file APIs are unavailable.");
+		return;
+	}
+
+	let sconProjectFile = await awaitMaybePromise(project.GetProjectFileByName(sconFileName));
+	if (!sconProjectFile && inferredScmlFile && inferredScmlFile !== sconFileName)
+	{
+		sconProjectFile = await awaitMaybePromise(project.GetProjectFileByName(inferredScmlFile));
+	}
+
+	if (!sconProjectFile || typeof sconProjectFile.GetBlob !== "function")
+	{
+		console.warn(`[Spriter] Legacy self-draw migration: could not find project file '${sconFileName}' for object type '${objectType.GetName()}'.`);
+		return;
+	}
+
+	const sconBlob = await awaitMaybePromise(sconProjectFile.GetBlob());
+	const sconText = sconBlob ? await sconBlob.text() : "";
+	const projectJson = JSON.parse(sconText || "{}");
+	const atlasEntries = getAtlasEntriesFromScon(projectJson);
+	if (!atlasEntries.length)
+	{
+		console.warn(`[Spriter] Legacy self-draw migration: '${sconFileName}' has no atlas entries to extract.`);
+		return;
+	}
+
+	const frames = getFramesForObjectType(objectType);
+	if (!frames.length)
+	{
+		console.warn("[Spriter] Legacy self-draw migration: no object-type frames available to export.");
+		return;
+	}
+
+	let savedCount = 0;
+	for (let i = 0; i < atlasEntries.length; i++)
+	{
+		const atlasName = getAtlasEntryName(atlasEntries[i]);
+		let targetPath = atlasNameToPngPath(atlasName);
+		if (!targetPath && atlasEntries.length === 1)
+		{
+			targetPath = `${getBaseName(getPathLeafRaw(sconFileName))}.png`;
+		}
+
+		if (!targetPath)
+		{
+			console.warn(`[Spriter] Legacy self-draw migration: atlas entry ${i} has no usable name/path.`, atlasEntries[i]);
+			continue;
+		}
+
+		const frame = frames[i] || (i === 0 ? frames[0] : null);
+		if (!frame)
+		{
+			console.warn(`[Spriter] Legacy self-draw migration: missing frame ${i} for atlas '${targetPath}'.`);
+			continue;
+		}
+
+		const getBlob = typeof frame.GetBlob === "function"
+			? frame.GetBlob.bind(frame)
+			: typeof frame.getBlob === "function"
+				? frame.getBlob.bind(frame)
+				: null;
+
+		if (!getBlob)
+		{
+			console.warn(`[Spriter] Legacy self-draw migration: frame ${i} does not support GetBlob/getBlob.`);
+			continue;
+		}
+
+		const frameBlob = await awaitMaybePromise(getBlob());
+		if (!frameBlob)
+		{
+			console.warn(`[Spriter] Legacy self-draw migration: frame ${i} returned no blob.`);
+			continue;
+		}
+
+		await awaitMaybePromise(project.AddOrReplaceProjectFile(frameBlob, targetPath, "general"));
+		savedCount++;
+		console.log(`[Spriter] Legacy self-draw migration: wrote '${targetPath}' from embedded frame ${i}.`);
+	}
+
+	console.log(`[Spriter] Legacy self-draw migration complete for '${sconFileName}' (${objectType.GetName()}): wrote ${savedCount}/${atlasEntries.length} atlas file(s).`);
+}
+
+async function migrateLegacySelfDrawAssetsFromLinkCallback(...callbackArgs)
+{
+	try
+	{
+		const editorSdkInstance = resolveLinkCallbackEditorInstance(callbackArgs);
+		if (!editorSdkInstance)
+		{
+			console.warn("[Spriter] Legacy self-draw migration: could not resolve editor instance from link callback args.", callbackArgs);
+			return;
+		}
+
+		const editorInst = (editorSdkInstance && editorSdkInstance._inst) ? editorSdkInstance._inst : editorSdkInstance;
+
+		const getObjectType = typeof editorSdkInstance.GetObjectType === "function"
+			? editorSdkInstance.GetObjectType.bind(editorSdkInstance)
+			: typeof editorInst.GetObjectType === "function"
+				? editorInst.GetObjectType.bind(editorInst)
+				: null;
+		const getProject = typeof editorSdkInstance.GetProject === "function"
+			? editorSdkInstance.GetProject.bind(editorSdkInstance)
+			: typeof editorInst.GetProject === "function"
+				? editorInst.GetProject.bind(editorInst)
+				: null;
+		const getPropertyValue = typeof editorInst.GetPropertyValue === "function"
+			? editorInst.GetPropertyValue.bind(editorInst)
+			: typeof editorSdkInstance.GetPropertyValue === "function"
+				? editorSdkInstance.GetPropertyValue.bind(editorSdkInstance)
+				: null;
+
+		const objectType = getObjectType ? getObjectType() : null;
+		const project = getProject ? getProject() : null;
+
+		const rawScmlFile = getPropertyValue ? String(getPropertyValue("scml-file") || "").trim() : "";
+		if (!rawScmlFile)
+		{
+			console.warn("[Spriter] Legacy self-draw migration: instance has no 'scml-file' property value.");
+			return;
+		}
+
+		await migrateLegacySelfDrawAssetsForObjectType(objectType, project, rawScmlFile, "instance-link");
+	}
+	catch (error)
+	{
+		console.error("[Spriter] Legacy self-draw migration failed.", error);
+	}
+}
+
+async function migrateLegacySelfDrawAssetsByTypeFromLinkCallback(...callbackArgs)
+{
+	try
+	{
+		const { objectType, project } = resolveLinkCallbackTypeContext(callbackArgs);
+		if (!objectType || !project)
+		{
+			console.warn("[Spriter] Legacy self-draw type migration: could not resolve object type/project from link callback args.", callbackArgs);
+			return;
+		}
+
+		const pluginId = getObjectTypePluginId(objectType);
+		if (pluginId && pluginId !== PLUGIN_ID)
+		{
+			console.warn(`[Spriter] Legacy self-draw type migration skipped: selected type is plugin '${pluginId}', not '${PLUGIN_ID}'.`);
+			return;
+		}
+
+		const allObjectTypes = getProjectObjectTypes(project);
+		if (Array.isArray(allObjectTypes) && allObjectTypes.length)
+		{
+			const spriterTypes = allObjectTypes.filter((type) => getObjectTypePluginId(type) === PLUGIN_ID);
+			if (spriterTypes.length > 1)
+			{
+				console.log(`[Spriter] Legacy self-draw type migration: found ${spriterTypes.length} Spriter object types in project; processing all.`);
+				for (const type of spriterTypes)
+				{
+					await migrateLegacySelfDrawAssetsForObjectType(type, project, "", "type-link-project-scan");
+				}
+				return;
+			}
+		}
+		else
+		{
+			console.log("[Spriter] Legacy self-draw type migration: project object-type enumeration API is unavailable; processing selected type only.");
+		}
+
+		await migrateLegacySelfDrawAssetsForObjectType(objectType, project, "", "type-link");
+	}
+	catch (error)
+	{
+		console.error("[Spriter] Legacy self-draw type migration failed.", error);
+	}
+}
+
 function findAtlasPngEntry(zipFile, atlasPngPath)
 {
 	if (!zipFile || typeof zipFile.GetEntry !== "function")
@@ -1348,6 +1885,14 @@ const PLUGIN_CLASS = SDK.Plugins.Spriter = class Spriter extends SDK.IPluginBase
 			new SDK.PluginProperty("combo", "draw-debug", {
 				initialValue: "false",
 				items: ["false", "true"]
+			}),
+			new SDK.PluginProperty("link", "repair-legacy-self-draw", {
+				linkText: lang(".repair-legacy-self-draw.link-text"),
+				linkCallback: (...args) =>
+				{
+					void migrateLegacySelfDrawAssetsFromLinkCallback(...args);
+				},
+				linkCallbackType: "for-each-instance"
 			})
 		]);
 
