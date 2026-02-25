@@ -388,6 +388,25 @@ function toFiniteNumber(value, defaultValue)
 	return Number.isFinite(numberValue) ? numberValue : defaultValue;
 }
 
+function getSpriterChannelNumber(source, keyNames, defaultValue)
+{
+	if (!source || typeof source !== "object")
+	{
+		return defaultValue;
+	}
+
+	const names = Array.isArray(keyNames) ? keyNames : [keyNames];
+	for (const keyName of names)
+	{
+		if (Object.prototype.hasOwnProperty.call(source, keyName))
+		{
+			return toFiniteNumber(source[keyName], defaultValue);
+		}
+	}
+
+	return defaultValue;
+}
+
 function toBoolean(value, defaultValue = false)
 {
 	if (typeof value === "boolean")
@@ -899,11 +918,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			this._evaluatePose();
 			this._refreshMetaState(this._currentAdjustedTimeMs);
 
-			if (!this.drawSelf)
-			{
-				this._applyPoseToInstances();
-			}
-			else if (shouldAdvance)
+			// Legacy parity: apply associated helper objects (e.g. collision boxes) even in self-draw mode.
+			this._applyPoseToInstances();
+
+			if (this.drawSelf && shouldAdvance)
 			{
 				// Self-draw animation changes are internal to the addon, so request a redraw explicitly.
 				// Otherwise the runtime may skip rendering until another object changes.
@@ -4302,9 +4320,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				frameBySource.set(key, frameList.length - 1);
 			}
 
+			const spriterType = typeof objInfo.type === "string"
+				? objInfo.type.trim().toLowerCase()
+				: "sprite";
 			const entry = {
 				frames: frameList,
-				frameBySource
+				frameBySource,
+				spriterType,
+				width: toFiniteNumber(objInfo.w, 0),
+				height: toFiniteNumber(objInfo.h, 0)
 			};
 			const boneLength = toFiniteNumber(objInfo.w, NaN);
 
@@ -5773,6 +5797,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const spriterType = timeline && typeof timeline.object_type === "string"
 			? timeline.object_type.trim().toLowerCase()
 			: "sprite";
+		const objectInfo = this._getObjectInfoForTimelineName(timelineName);
+		const fallbackObjWidth = objectInfo ? toFiniteNumber(objectInfo.width, 0) : 0;
+		const fallbackObjHeight = objectInfo ? toFiniteNumber(objectInfo.height, 0) : 0;
 		const state = {
 			folder,
 			file,
@@ -5785,9 +5812,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			alpha: world.alpha,
 			pivotX: Number.isFinite(evaluated.pivotX) ? evaluated.pivotX : (fileInfo ? fileInfo.pivotX : 0),
 			pivotY: Number.isFinite(evaluated.pivotY) ? evaluated.pivotY : (fileInfo ? fileInfo.pivotY : 0),
-			width: fileInfo ? fileInfo.width : 0,
-			height: fileInfo ? fileInfo.height : 0,
-			name: fileInfo ? fileInfo.name : "",
+			width: fileInfo ? fileInfo.width : fallbackObjWidth,
+			height: fileInfo ? fileInfo.height : fallbackObjHeight,
+			name: fileInfo ? fileInfo.name : (timelineName || ""),
 			timelineName,
 			spriterType,
 			atlasIndex: fileInfo ? toFiniteNumber(fileInfo.atlasIndex, 0) : 0,
@@ -5854,19 +5881,29 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return null;
 		}
 
-		const startAngle = toFiniteNumber(startBone.angle, 0);
-		const endAngle = toFiniteNumber(endBone.angle, startAngle);
+		const startX = getSpriterChannelNumber(startBone, "x", 0);
+		const endX = getSpriterChannelNumber(endBone, "x", 0);
+		const startY = getSpriterChannelNumber(startBone, "y", 0);
+		const endY = getSpriterChannelNumber(endBone, "y", 0);
+		const startAngle = getSpriterChannelNumber(startBone, "angle", 0);
+		const endAngle = getSpriterChannelNumber(endBone, "angle", 0);
+		const startScaleX = getSpriterChannelNumber(startBone, ["scale_x", "scaleX"], 1);
+		const endScaleX = getSpriterChannelNumber(endBone, ["scale_x", "scaleX"], 1);
+		const startScaleY = getSpriterChannelNumber(startBone, ["scale_y", "scaleY"], 1);
+		const endScaleY = getSpriterChannelNumber(endBone, ["scale_y", "scaleY"], 1);
+		const startAlpha = getSpriterChannelNumber(startBone, "a", 1);
+		const endAlpha = getSpriterChannelNumber(endBone, "a", 1);
 		const spun = spinAngleDegrees(startAngle, endAngle, spin);
 		const angleDeg = typeof spun === "number" ? spun : lerp(spun.start, spun.end, t);
 
 		return {
-			x: lerp(toFiniteNumber(startBone.x, 0), toFiniteNumber(endBone.x, toFiniteNumber(startBone.x, 0)), t),
+			x: lerp(startX, endX, t),
 			// Spriter and Construct use opposite Y axis directions for timeline bone offsets.
-			y: -lerp(toFiniteNumber(startBone.y, 0), toFiniteNumber(endBone.y, toFiniteNumber(startBone.y, 0)), t),
+			y: -lerp(startY, endY, t),
 			angle: degreesToRadians(angleDeg),
-			scaleX: lerp(toFiniteNumber(startBone.scale_x, 1), toFiniteNumber(endBone.scale_x, toFiniteNumber(startBone.scale_x, 1)), t),
-			scaleY: lerp(toFiniteNumber(startBone.scale_y, 1), toFiniteNumber(endBone.scale_y, toFiniteNumber(startBone.scale_y, 1)), t),
-			alpha: lerp(toFiniteNumber(startBone.a, 1), toFiniteNumber(endBone.a, toFiniteNumber(startBone.a, 1)), t)
+			scaleX: lerp(startScaleX, endScaleX, t),
+			scaleY: lerp(startScaleY, endScaleY, t),
+			alpha: lerp(startAlpha, endAlpha, t)
 		};
 	}
 
@@ -5920,8 +5957,18 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return null;
 		}
 
-		const startAngle = toFiniteNumber(startObj.angle, 0);
-		const endAngle = toFiniteNumber(endObj.angle, startAngle);
+		const startX = getSpriterChannelNumber(startObj, "x", 0);
+		const endX = getSpriterChannelNumber(endObj, "x", 0);
+		const startY = getSpriterChannelNumber(startObj, "y", 0);
+		const endY = getSpriterChannelNumber(endObj, "y", 0);
+		const startAngle = getSpriterChannelNumber(startObj, "angle", 0);
+		const endAngle = getSpriterChannelNumber(endObj, "angle", 0);
+		const startScaleX = getSpriterChannelNumber(startObj, ["scale_x", "scaleX"], 1);
+		const endScaleX = getSpriterChannelNumber(endObj, ["scale_x", "scaleX"], 1);
+		const startScaleY = getSpriterChannelNumber(startObj, ["scale_y", "scaleY"], 1);
+		const endScaleY = getSpriterChannelNumber(endObj, ["scale_y", "scaleY"], 1);
+		const startAlpha = getSpriterChannelNumber(startObj, "a", 1);
+		const endAlpha = getSpriterChannelNumber(endObj, "a", 1);
 		const spun = spinAngleDegrees(startAngle, endAngle, spin);
 		const angleDeg = typeof spun === "number" ? spun : lerp(spun.start, spun.end, t);
 
@@ -5944,13 +5991,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			pivotX,
 			pivotY,
 			transform: {
-				x: lerp(toFiniteNumber(startObj.x, 0), toFiniteNumber(endObj.x, toFiniteNumber(startObj.x, 0)), t),
+				x: lerp(startX, endX, t),
 				// Spriter and Construct use opposite Y axis directions for timeline object offsets.
-				y: -lerp(toFiniteNumber(startObj.y, 0), toFiniteNumber(endObj.y, toFiniteNumber(startObj.y, 0)), t),
+				y: -lerp(startY, endY, t),
 				angle: degreesToRadians(angleDeg),
-				scaleX: lerp(toFiniteNumber(startObj.scale_x, 1), toFiniteNumber(endObj.scale_x, toFiniteNumber(startObj.scale_x, 1)), t),
-				scaleY: lerp(toFiniteNumber(startObj.scale_y, 1), toFiniteNumber(endObj.scale_y, toFiniteNumber(startObj.scale_y, 1)), t),
-				alpha: lerp(toFiniteNumber(startObj.a, 1), toFiniteNumber(endObj.a, toFiniteNumber(startObj.a, 1)), t)
+				scaleX: lerp(startScaleX, endScaleX, t),
+				scaleY: lerp(startScaleY, endScaleY, t),
+				alpha: lerp(startAlpha, endAlpha, t)
 			}
 		};
 	}
@@ -6527,6 +6574,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return -1;
 		}
 
+		const stateType = typeof state.spriterType === "string"
+			? state.spriterType.trim().toLowerCase()
+			: "sprite";
+		if (stateType !== "sprite")
+		{
+			return -1;
+		}
+
 		if (!(c2Entry.frameLookup instanceof Map) || !c2Entry.frameLookup.size)
 		{
 			c2Entry.frameLookup = this._buildFrameLookupForSpriterName(state.timelineName);
@@ -6808,6 +6863,28 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const instances = this._getInstancesOf(objectType);
 		const pairedInst = instances[myIID] || null;
 		const frameLookup = this._buildFrameLookupForSpriterName(resolvedName);
+		let spriterType = "sprite";
+		if (Array.isArray(this._objectArray))
+		{
+			for (const item of this._objectArray)
+			{
+				if (!item)
+				{
+					continue;
+				}
+
+				const itemName = normaliseSpriterObjectName(item.name);
+				if (itemName === resolvedName)
+				{
+					const typeValue = typeof item.spriterType === "string" ? item.spriterType.trim().toLowerCase() : "";
+					if (typeValue)
+					{
+						spriterType = typeValue;
+					}
+					break;
+				}
+			}
+		}
 
 		const apis = [
 			typeof objectType.GetInstances === "function" ? "GetInstances" : null,
@@ -6821,7 +6898,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._c2ObjectMap.set(resolvedName, {
 			type: objectType,
 			inst: pairedInst,
-			spriterType: "sprite",
+			spriterType,
 			frameLookup,
 			lastAppliedFrame: -1,
 			missingFrameKeys: new Set()
@@ -6951,8 +7028,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_applyPoseToInstances()
 	{
-		if (this.drawSelf) return;
-
 		if (!this._nonSelfDrawDiagDone)
 		{
 			this._nonSelfDrawDiagDone = true;
@@ -7019,6 +7094,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			const c2Entry = this._c2ObjectMap.get(state.timelineName);
 			if (!c2Entry || !c2Entry.inst) { skippedNoEntry++; continue; }
+			const stateType = typeof state.spriterType === "string" ? state.spriterType.trim().toLowerCase() : "sprite";
+			const isSpriteState = stateType === "sprite";
 
 			const inst = c2Entry.inst;
 			const wi = this._getWorldInfoOf(inst);
@@ -7083,11 +7160,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			this._applyPivotToInst(wi, state.pivotX, state.pivotY, newW, newH);
 
 			// Z-ordering
-			if (this.setLayersForSprites && previousZInst)
+			if (isSpriteState && this.setLayersForSprites && previousZInst)
 			{
 				wi.ZOrderMoveAdjacentToInstance(previousZInst, true);
 			}
-			previousZInst = inst;
+			if (isSpriteState)
+			{
+				previousZInst = inst;
+			}
 
 			wi.SetBboxChanged();
 		}

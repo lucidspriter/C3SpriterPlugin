@@ -1205,6 +1205,60 @@ function applySpriterObjectToInst(inst, spriterObject)
 	}
 }
 
+let gTransparentBoxBlobPromise = null;
+
+async function getTransparentBoxBlob()
+{
+	if (gTransparentBoxBlobPromise)
+	{
+		return gTransparentBoxBlobPromise;
+	}
+
+	gTransparentBoxBlobPromise = new Promise((resolve, reject) =>
+	{
+		try
+		{
+			const canvas = document.createElement("canvas");
+			canvas.width = 16;
+			canvas.height = 16;
+			canvas.toBlob((blob) =>
+			{
+				if (blob)
+				{
+					resolve(blob);
+					return;
+				}
+
+				reject(new Error("Spriter: failed to create transparent box blob."));
+			}, "image/png");
+		}
+		catch (error)
+		{
+			reject(error);
+		}
+	});
+
+	try
+	{
+		return await gTransparentBoxBlobPromise;
+	}
+	catch (error)
+	{
+		gTransparentBoxBlobPromise = null;
+		throw error;
+	}
+}
+
+function applyBoxPlaceholderToInst(inst, x, y)
+{
+	inst.SetXY(x, y);
+	inst.SetSize(16, 16);
+	if (typeof inst.SetAngle === "function")
+	{
+		inst.SetAngle(0);
+	}
+}
+
 function stripEntityPrefix(name, entityName)
 {
 	if (entityName && name.startsWith(entityName + "_"))
@@ -1349,6 +1403,77 @@ async function importSpriteData(zipFile, opts, objInfo, folders, objRefs, sprite
 	c2ObjectTypes.push(childObjectType);
 }
 
+async function importBoxData(opts, objInfo, spriterObjectType, c2ObjectTypes, objectTypeNamePairs, entityName)
+{
+	const layoutView = opts.layoutView;
+	const project = layoutView.GetProject();
+
+	const rawName = objInfo && typeof objInfo.name === "string" ? objInfo.name : "";
+	const name = stripEntityPrefix(rawName, entityName || "");
+	if (!name)
+	{
+		return;
+	}
+
+	const spriterTypeName = spriterObjectType.GetName();
+	const childTypeName = sanitiseTypeName(spriterTypeName + "_" + name);
+
+	let reimport = false;
+	let childObjectType = project.GetObjectTypeByName(childTypeName);
+	if (!childObjectType)
+	{
+		childObjectType = await project.CreateObjectType("Sprite", childTypeName);
+		console.log(`[Spriter] Created box helper type '${childTypeName}'.`);
+	}
+	else
+	{
+		reimport = true;
+		console.log(`[Spriter] Reimporting box helper type '${childTypeName}'.`);
+	}
+
+	objectTypeNamePairs.push({ objectType: childObjectType, name });
+
+	const animations = childObjectType.GetAnimations();
+	const firstAnim = animations[0];
+	firstAnim.SetSpeed(0);
+	firstAnim.SetLooping(false);
+	const frames = firstAnim.GetFrames();
+	const firstFrame = frames[0];
+
+	const transparentBlob = await getTransparentBoxBlob();
+	firstFrame.SetOriginX(0);
+	firstFrame.SetOriginY(0);
+	await firstFrame.ReplaceBlobAndDecode(transparentBlob);
+
+	// Box helpers only use a single transparent frame.
+	const existingFrames = firstAnim.GetFrames();
+	for (let i = existingFrames.length - 1; i >= 1; i--)
+	{
+		existingFrames[i].Delete();
+	}
+
+	if (reimport)
+	{
+		const wis = childObjectType.GetAllInstances();
+		for (const wi of wis)
+		{
+			applyBoxPlaceholderToInst(wi, opts.layoutX, opts.layoutY);
+		}
+		if (!wis.length)
+		{
+			const wi = childObjectType.CreateWorldInstance(layoutView.GetActiveLayer());
+			applyBoxPlaceholderToInst(wi, opts.layoutX, opts.layoutY);
+		}
+	}
+	else
+	{
+		const wi = childObjectType.CreateWorldInstance(layoutView.GetActiveLayer());
+		applyBoxPlaceholderToInst(wi, opts.layoutX, opts.layoutY);
+	}
+
+	c2ObjectTypes.push(childObjectType);
+}
+
 async function addAssociativeAction(eventBlock, pair, spriterObjectType)
 {
 	const paramObjectType = pair.objectType;
@@ -1356,6 +1481,215 @@ async function addAssociativeAction(eventBlock, pair, spriterObjectType)
 	console.log(`[Spriter] AddAction associate-type-with-name: objectType=${paramObjectType && paramObjectType.GetName ? paramObjectType.GetName() : paramObjectType}, spriterName=${paramName}`);
 	await eventBlock.AddAction(spriterObjectType, null, "associate-type-with-name",
 		[paramObjectType, paramName]);
+}
+
+async function getOldObjectNamesForReimport(project, sconFileName, detectedSconName)
+{
+	if (!project || typeof project.GetProjectFileByName !== "function")
+	{
+		return null;
+	}
+
+	const oldSconFile = await awaitMaybePromise(project.GetProjectFileByName(sconFileName));
+	if (!oldSconFile || typeof oldSconFile.GetBlob !== "function")
+	{
+		return null;
+	}
+
+	try
+	{
+		const oldBlob = await awaitMaybePromise(oldSconFile.GetBlob());
+		if (!oldBlob)
+		{
+			return null;
+		}
+
+		const oldText = await oldBlob.text();
+		const oldJson = JSON.parse(oldText);
+		return getObjectTypeNamesFromScon(oldJson, detectedSconName);
+	}
+	catch (e)
+	{
+		console.warn(`[Spriter] Could not parse old .scon for reimport cleanup.`, e);
+		return null;
+	}
+}
+
+async function importChildHelpersFromScon(zipFile, opts, projectJson, folders, objectType, detectedSconName, isReimport, eventSheet, includeSprites, oldObjectNames)
+{
+	const project = opts && opts.layoutView ? opts.layoutView.GetProject() : null;
+	const entities = Array.isArray(projectJson && projectJson.entity) ? projectJson.entity : [];
+
+	const c2ObjectTypes = [];
+	const objectTypeNamePairs = [];
+	const spriteImportQueue = [];
+	const boxImportQueue = [];
+
+	for (const entity of entities)
+	{
+		const objRefs = getFirstObjectRefsFromEntity(entity);
+		const objInfos = Array.isArray(entity && entity.obj_info) ? entity.obj_info : [];
+		const entityName = entity && typeof entity.name === "string" ? entity.name : "";
+
+		for (const objInfo of objInfos)
+		{
+			const objType = typeof (objInfo && objInfo.type) === "string"
+				? objInfo.type.trim().toLowerCase()
+				: "sprite";
+
+			if (includeSprites && objType === "sprite")
+			{
+				const strippedName = stripEntityPrefix(objInfo.name || "", entityName);
+				const realName = objInfo.realname || strippedName;
+				const refIndex = objRefs.findIndex(ref => ref.name === realName);
+				spriteImportQueue.push({
+					objInfo, folders, objRefs, entityName,
+					zOrder: refIndex >= 0 ? refIndex : 999999
+				});
+			}
+			else if (objType === "box")
+			{
+				boxImportQueue.push({ objInfo, entityName });
+			}
+
+			if (oldObjectNames && (includeSprites || objType === "box"))
+			{
+				const strippedName = stripEntityPrefix(objInfo.name || "", entityName);
+				const typeName = sanitiseTypeName(detectedSconName + "_" + strippedName);
+				let idx = oldObjectNames.indexOf(typeName);
+				while (idx !== -1)
+				{
+					oldObjectNames.splice(idx, 1);
+					idx = oldObjectNames.indexOf(typeName);
+				}
+			}
+		}
+	}
+
+	spriteImportQueue.sort((a, b) => a.zOrder - b.zOrder);
+
+	for (const item of spriteImportQueue)
+	{
+		await importSpriteData(
+			zipFile, opts, item.objInfo, item.folders, item.objRefs,
+			objectType, c2ObjectTypes, objectTypeNamePairs,
+			item.entityName
+		);
+	}
+
+	for (const item of boxImportQueue)
+	{
+		await importBoxData(
+			opts, item.objInfo, objectType, c2ObjectTypes, objectTypeNamePairs, item.entityName
+		);
+	}
+
+	console.log(`[Spriter] Created/updated ${c2ObjectTypes.length} helper type(s): sprites=${spriteImportQueue.length}, boxes=${boxImportQueue.length}.`);
+
+	if (eventSheet && objectTypeNamePairs.length > 0)
+	{
+		const eventBlock = await eventSheet.GetRoot().AddEventBlock();
+		eventBlock.AddCondition(objectType, null, "on-ready");
+		for (const pair of objectTypeNamePairs)
+		{
+			await addAssociativeAction(eventBlock, pair, objectType);
+		}
+		console.log(`[Spriter] Added event block with ${objectTypeNamePairs.length} associate action(s).`);
+	}
+
+	if (isReimport)
+	{
+		const oldContainer = objectType.GetContainer ? objectType.GetContainer() : null;
+		if (oldContainer)
+		{
+			try
+			{
+				const members = oldContainer.GetMembers();
+				for (const member of members)
+				{
+					oldContainer.RemoveObjectType(member);
+					if (!oldContainer.IsActive || !oldContainer.IsActive())
+					{
+						break;
+					}
+				}
+			}
+			catch (e)
+			{
+				console.warn(`[Spriter] Could not clean up old container.`, e);
+			}
+		}
+
+		if (oldObjectNames && oldObjectNames.length > 0)
+		{
+			for (const oldName of oldObjectNames)
+			{
+				const oldObj = project.GetObjectTypeByName(oldName);
+				if (oldObj)
+				{
+					oldObj.Delete();
+					console.log(`[Spriter] Deleted obsolete helper type '${oldName}'.`);
+				}
+			}
+		}
+
+		// Legacy/non-self-draw path clears default animation placeholders on the Spriter object when
+		// child sprite helpers are imported.
+		if (includeSprites && c2ObjectTypes.length > 0)
+		{
+			try
+			{
+				await objectType.AddAnimation("Animation 1");
+				objectType.GetAnimations()[0].Delete();
+			}
+			catch (e)
+			{
+				// Ignore - may not be needed.
+			}
+		}
+	}
+
+	const familyName = detectedSconName + "Family";
+	try
+	{
+		let family = typeof project.GetFamilyByName === "function"
+			? project.GetFamilyByName(familyName)
+			: null;
+		if (family)
+		{
+			if (c2ObjectTypes.length > 0)
+			{
+				family.SetMembers(c2ObjectTypes);
+			}
+			else
+			{
+				family.Delete();
+			}
+		}
+		else if (c2ObjectTypes.length > 0 && typeof project.CreateFamily === "function")
+		{
+			project.CreateFamily(familyName, c2ObjectTypes);
+		}
+	}
+	catch (e)
+	{
+		console.warn(`[Spriter] Family creation skipped or failed.`, e);
+	}
+
+	const allContainerTypes = [...c2ObjectTypes, objectType];
+	if (allContainerTypes.length > 1)
+	{
+		try
+		{
+			const container = objectType.CreateContainer(allContainerTypes);
+			container.SetSelectMode("wrap");
+			console.log(`[Spriter] Created container with ${allContainerTypes.length} member(s).`);
+		}
+		catch (e)
+		{
+			console.warn(`[Spriter] Container creation failed.`, e);
+		}
+	}
 }
 
 // ───── End non-self-draw import helpers ─────
@@ -1465,6 +1799,9 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 
 		const atlases = Array.isArray(projectJson.atlas) ? projectJson.atlas : null;
 		const isAtlased = !!(atlases && atlases.length);
+		const oldObjectNames = isReimport
+			? await getOldObjectNamesForReimport(project, sconFileName, detectedSconName)
+			: null;
 
 			if (isAtlased)
 			{
@@ -1568,203 +1905,25 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			{
 				console.log(`[Spriter] Saved normalized '${sconFileName}' to Project Files.`);
 			}
+
+			// Legacy parity: atlased/self-draw imports still create helper Sprite types for Spriter
+			// "box" objects so collision/association workflows continue to work.
+			await importChildHelpersFromScon(
+				zipFile, opts, projectJson, folders, objectType, detectedSconName,
+				isReimport, eventSheet, false, oldObjectNames ? [...oldObjectNames] : null
+			);
 		}
 		else
 		{
-			// Non-atlased import: create individual Sprite object types for each Spriter part.
+			// Non-atlased import: create individual Sprite object types for Spriter sprite parts
+			// and helper box objects.
 			await awaitMaybePromise(project.AddOrReplaceProjectFile(sconBlob, sconFileName, "general"));
 			console.log(`[Spriter] Non-atlased export. Saved '${sconFileName}' to Project Files.`);
 
-			// Read old SCON for reimport cleanup (track which sprite types existed before).
-			let oldObjectNames = null;
-			if (isReimport)
-			{
-				const oldSconFile = await project.GetProjectFileByName(sconFileName);
-				if (oldSconFile)
-				{
-					try
-					{
-						const oldBlob = oldSconFile.GetBlob();
-						if (oldBlob)
-						{
-							const oldText = await oldBlob.text();
-							const oldJson = JSON.parse(oldText);
-							oldObjectNames = getObjectTypeNamesFromScon(oldJson, detectedSconName);
-						}
-					}
-					catch (e)
-					{
-						console.warn(`[Spriter] Could not parse old .scon for reimport cleanup.`, e);
-					}
-				}
-			}
-
-			const entities = Array.isArray(projectJson.entity) ? projectJson.entity : [];
-
-			const c2ObjectTypes = [];
-			const objectTypeNamePairs = [];
-
-			// Collect all sprite obj_infos, then sort by object_ref z-order
-			// (object_ref list in mainline key 0 is ordered back-to-front).
-			const spriteImportQueue = [];
-
-			for (const entity of entities)
-			{
-				const objRefs = getFirstObjectRefsFromEntity(entity);
-				const objInfos = Array.isArray(entity.obj_info) ? entity.obj_info : [];
-				const entityName = entity.name || "";
-
-				for (const objInfo of objInfos)
-				{
-					const objType = objInfo.type || "sprite";
-					if (objType === "sprite")
-					{
-						const strippedName = stripEntityPrefix(objInfo.name || "", entityName);
-						const realName = objInfo.realname || strippedName;
-						const refIndex = objRefs.findIndex(ref => ref.name === realName);
-						spriteImportQueue.push({
-							objInfo, folders, objRefs, entityName,
-							zOrder: refIndex >= 0 ? refIndex : 999999
-						});
-					}
-
-					// Track for reimport cleanup: remove this name from old list
-					if (oldObjectNames)
-					{
-						const strippedName = stripEntityPrefix(objInfo.name || "", entityName);
-						const typeName = sanitiseTypeName(detectedSconName + "_" + strippedName);
-						let idx = oldObjectNames.indexOf(typeName);
-						while (idx !== -1)
-						{
-							oldObjectNames.splice(idx, 1);
-							idx = oldObjectNames.indexOf(typeName);
-						}
-					}
-				}
-			}
-
-			// Sort by z-order (back-to-front) so earlier-created sprites are behind later ones
-			spriteImportQueue.sort((a, b) => a.zOrder - b.zOrder);
-
-			// Create sprites sequentially to preserve z-order
-			for (const item of spriteImportQueue)
-			{
-				await importSpriteData(
-					zipFile, opts, item.objInfo, item.folders, item.objRefs,
-					objectType, c2ObjectTypes, objectTypeNamePairs,
-					item.entityName
-				);
-			}
-			console.log(`[Spriter] Created/updated ${c2ObjectTypes.length} sprite type(s).`);
-
-			// Auto-generate event block: "On ready" + associate actions.
-			if (eventSheet && objectTypeNamePairs.length > 0)
-			{
-				const eventBlock = await eventSheet.GetRoot().AddEventBlock();
-				eventBlock.AddCondition(objectType, null, "on-ready");
-				for (const pair of objectTypeNamePairs)
-				{
-					await addAssociativeAction(eventBlock, pair, objectType);
-				}
-				console.log(`[Spriter] Added event block with ${objectTypeNamePairs.length} associate action(s).`);
-			}
-
-			// Reimport cleanup: remove old container and delete obsolete sprite types.
-			if (isReimport)
-			{
-				const oldContainer = objectType.GetContainer ? objectType.GetContainer() : null;
-				if (oldContainer)
-				{
-					try
-					{
-						const members = oldContainer.GetMembers();
-						for (const member of members)
-						{
-							oldContainer.RemoveObjectType(member);
-							if (!oldContainer.IsActive || !oldContainer.IsActive())
-							{
-								break;
-							}
-						}
-					}
-					catch (e)
-					{
-						console.warn(`[Spriter] Could not clean up old container.`, e);
-					}
-				}
-
-				// Delete sprite types that no longer exist in the new SCON.
-				if (oldObjectNames && oldObjectNames.length > 0)
-				{
-					for (const oldName of oldObjectNames)
-					{
-						const oldObj = project.GetObjectTypeByName(oldName);
-						if (oldObj)
-						{
-							oldObj.Delete();
-							console.log(`[Spriter] Deleted obsolete sprite type '${oldName}'.`);
-						}
-					}
-				}
-
-				// On reimport, clear old default animation if needed.
-				if (c2ObjectTypes.length > 0)
-				{
-					try
-					{
-						const newAnim = await objectType.AddAnimation("Animation 1");
-						objectType.GetAnimations()[0].Delete();
-					}
-					catch (e)
-					{
-						// Ignore - may not be needed.
-					}
-				}
-			}
-
-			// Family: group child sprite types.
-			const familyName = detectedSconName + "Family";
-			try
-			{
-				let family = typeof project.GetFamilyByName === "function"
-					? project.GetFamilyByName(familyName)
-					: null;
-				if (family)
-				{
-					if (c2ObjectTypes.length > 0)
-					{
-						family.SetMembers(c2ObjectTypes);
-					}
-					else
-					{
-						family.Delete();
-					}
-				}
-				else if (c2ObjectTypes.length > 0 && typeof project.CreateFamily === "function")
-				{
-					project.CreateFamily(familyName, c2ObjectTypes);
-				}
-			}
-			catch (e)
-			{
-				console.warn(`[Spriter] Family creation skipped or failed.`, e);
-			}
-
-			// Container: group Spriter object + all child sprite types.
-			const allContainerTypes = [...c2ObjectTypes, objectType];
-			if (allContainerTypes.length > 1)
-			{
-				try
-				{
-					const container = objectType.CreateContainer(allContainerTypes);
-					container.SetSelectMode("wrap");
-					console.log(`[Spriter] Created container with ${allContainerTypes.length} member(s).`);
-				}
-				catch (e)
-				{
-					console.warn(`[Spriter] Container creation failed.`, e);
-				}
-			}
+			await importChildHelpersFromScon(
+				zipFile, opts, projectJson, folders, objectType, detectedSconName,
+				isReimport, eventSheet, true, oldObjectNames ? [...oldObjectNames] : null
+			);
 		}
 
 		const importedSounds = await loadSoundsFromFolders(folders, zipFile, project);
