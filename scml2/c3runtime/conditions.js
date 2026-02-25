@@ -69,10 +69,13 @@ C3.Plugins.Spriter.Cnds =
 
 	OnAnimFinished(animationName)
 	{
+		const triggerAnimationName = typeof this._triggeredFinishedAnimationName === "string"
+			? this._triggeredFinishedAnimationName
+			: "";
 		const currentAnimationName = this.animation && typeof this.animation.name === "string"
 			? this.animation.name
 			: "";
-		return lower(currentAnimationName) === lower(animationName);
+		return lower(triggerAnimationName || currentAnimationName) === lower(animationName);
 	},
 
 	OnAnyAnimFinished()

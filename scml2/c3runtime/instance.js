@@ -844,6 +844,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._boneIkOverridesByName = new Map();
 		this._eventLines = [];
 		this._triggeredEventName = "";
+		this._triggeredFinishedAnimationName = "";
+		this._inAnimTrigger = false;
+		this._pendingAnimationChange = null;
 		this._varDefsById = new Map();
 		this._varDefsByName = new Map();
 		this._varDefsByScope = new Map();
@@ -905,6 +908,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			if (this._advanceTime(dtSeconds))
 			{
 				this._triggerAnimationFinished();
+				if (this._pendingAnimationChange)
+				{
+					const pending = this._pendingAnimationChange;
+					this._pendingAnimationChange = null;
+					this._setAnimation(pending.animationIdentifier, pending.startFrom, pending.blendDuration);
+				}
 			}
 			this._advanceAutoBlend(dtSeconds);
 		}
@@ -2547,14 +2556,33 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_triggerAnimationFinished()
 	{
-		const cnds = C3.Plugins.Spriter.Cnds;
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnAnyAnimFinished === "function")
+		const finishedAnimationName = this.animation && typeof this.animation.name === "string"
+			? this.animation.name
+			: "";
+		this._triggeredFinishedAnimationName = finishedAnimationName;
+
+		if (this._inAnimTrigger)
 		{
-			this._trigger(cnds.OnAnyAnimFinished);
+			return;
 		}
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnAnimFinished === "function")
+
+		this._inAnimTrigger = true;
+		const cnds = C3.Plugins.Spriter.Cnds;
+		try
 		{
-			this._trigger(cnds.OnAnimFinished);
+			if (typeof this._trigger === "function" && cnds && typeof cnds.OnAnyAnimFinished === "function")
+			{
+				this._trigger(cnds.OnAnyAnimFinished);
+			}
+			if (typeof this._trigger === "function" && cnds && typeof cnds.OnAnimFinished === "function")
+			{
+				this._trigger(cnds.OnAnimFinished);
+			}
+		}
+		finally
+		{
+			this._inAnimTrigger = false;
+			this._triggeredFinishedAnimationName = "";
 		}
 	}
 
@@ -2635,6 +2663,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_setAnimation(animationIdentifier, startFrom = 0, blendDuration = 0)
 	{
+		if (this._inAnimTrigger)
+		{
+			this._pendingAnimationChange = {
+				animationIdentifier,
+				startFrom,
+				blendDuration
+			};
+			return true;
+		}
+
 		if (!this.entity)
 		{
 			if (typeof animationIdentifier === "string" && animationIdentifier.trim())
@@ -6296,14 +6334,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		this._didTriggerReady = true;
+		console.log(`[Spriter] Ready trigger fired: drawSelf=${this.drawSelf}, isReady=${!!this.isReady}, mapSize=${this._c2ObjectMap ? this._c2ObjectMap.size : 0}`);
 
 		const cnds = C3.Plugins.Spriter.Cnds;
 		if (typeof this._trigger === "function" && cnds && typeof cnds.OnReady === "function")
 		{
+			console.log("[Spriter] -> Triggering condition: OnReady");
 			this._trigger(cnds.OnReady);
 		}
 		if (typeof this._trigger === "function" && cnds && typeof cnds.readyForSetup === "function")
 		{
+			console.log("[Spriter] -> Triggering condition: readyForSetup (legacy)");
 			this._trigger(cnds.readyForSetup);
 		}
 	}
@@ -6464,15 +6505,94 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		// SDK v1: GetInstances() returns an array.
 		if (typeof objType.GetInstances === "function")
 			return Array.from(objType.GetInstances());
-		// SDK v2: getAllInstances() returns an array.
-		if (typeof objType.getAllInstances === "function")
-			return Array.from(objType.getAllInstances());
 		// SDK v2: instances() may return an iterator.
 		if (typeof objType.instances === "function")
 			return Array.from(objType.instances());
+		// SDK v2: getAllInstances() may include inactive instances from other layouts.
+		// Prefer `instances()` first for association pairing and per-layout updates.
+		if (typeof objType.getAllInstances === "function")
+			return Array.from(objType.getAllInstances());
 		if (Array.isArray(objType._instances))
 			return objType._instances;
 		return [];
+	}
+
+	_getIIDOfInstance(inst)
+	{
+		if (!inst)
+		{
+			return -1;
+		}
+
+		try
+		{
+			if (typeof inst.GetIID === "function")
+			{
+				const iid = Number(inst.GetIID());
+				if (Number.isInteger(iid) && iid >= 0)
+				{
+					return iid;
+				}
+			}
+
+			if (typeof inst.getIid === "function")
+			{
+				const iid = Number(inst.getIid());
+				if (Number.isInteger(iid) && iid >= 0)
+				{
+					return iid;
+				}
+			}
+		}
+		catch (err)
+		{
+			// Ignore and keep probing.
+		}
+
+		const sdkInst = this._getSdkInstanceOf(inst);
+		if (sdkInst && sdkInst !== inst)
+		{
+			return this._getIIDOfInstance(sdkInst);
+		}
+
+		if (inst._inst && inst._inst !== inst)
+		{
+			return this._getIIDOfInstance(inst._inst);
+		}
+
+		return -1;
+	}
+
+	_getPairedInstanceForIID(objectType, iid)
+	{
+		const instances = this._getInstancesOf(objectType);
+		if (!Array.isArray(instances) || !instances.length)
+		{
+			return null;
+		}
+
+		if (Number.isInteger(iid) && iid >= 0)
+		{
+			const indexed = instances[iid];
+			if (indexed)
+			{
+				const indexedIID = this._getIIDOfInstance(indexed);
+				if (indexedIID < 0 || indexedIID === iid)
+				{
+					return indexed;
+				}
+			}
+
+			for (const inst of instances)
+			{
+				if (this._getIIDOfInstance(inst) === iid)
+				{
+					return inst;
+				}
+			}
+		}
+
+		return instances[0] || null;
 	}
 
 	_getObjectTypeName(objType)
@@ -6486,7 +6606,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_buildFrameLookupForSpriterName(spriterName)
 	{
-		const name = normaliseSpriterObjectName(spriterName);
+		const rawName = normaliseSpriterObjectName(spriterName);
+		const name = stripEntityPrefix(
+			rawName,
+			this.entity && typeof this.entity.name === "string" ? this.entity.name : ""
+		);
 		if (!name)
 		{
 			return null;
@@ -6565,6 +6689,63 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			entry.missingFrameKeys = new Set();
 			entry.lastAppliedFrame = -1;
 		}
+	}
+
+	_getAssociationLookupKeysForTimelineName(timelineName)
+	{
+		const rawName = normaliseSpriterObjectName(timelineName);
+		if (!rawName)
+		{
+			return [];
+		}
+
+		const keys = [];
+		const entityName = this.entity && typeof this.entity.name === "string" ? this.entity.name : "";
+		const pushUnique = (value) =>
+		{
+			const text = toStringOrEmpty(value);
+			if (text && !keys.includes(text))
+			{
+				keys.push(text);
+			}
+		};
+
+		if (entityName)
+		{
+			pushUnique(`${entityName}_${rawName}`);
+		}
+
+		pushUnique(rawName);
+		pushUnique(stripEntityPrefix(rawName, entityName));
+
+		return keys;
+	}
+
+	_getAssociatedEntryForTimelineName(timelineName)
+	{
+		const triedKeys = this._getAssociationLookupKeysForTimelineName(timelineName);
+		for (const key of triedKeys)
+		{
+			const entry = this._c2ObjectMap.get(key);
+			if (entry)
+			{
+				return { entry, key, triedKeys };
+			}
+		}
+
+		const lowerTriedKeys = triedKeys.map(toLowerCaseSafe).filter(Boolean);
+		if (lowerTriedKeys.length)
+		{
+			for (const [key, entry] of this._c2ObjectMap)
+			{
+				if (lowerTriedKeys.includes(toLowerCaseSafe(key)))
+				{
+					return { entry, key, triedKeys };
+				}
+			}
+		}
+
+		return { entry: null, key: "", triedKeys };
 	}
 
 	_resolveFrameIndexForState(c2Entry, state)
@@ -6853,16 +7034,23 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_associateTypeWithName(objectType, spriterName)
 	{
-		const resolvedName = normaliseSpriterObjectName(spriterName);
+		const requestedName = normaliseSpriterObjectName(spriterName);
+		const resolvedName = stripEntityPrefix(
+			requestedName,
+			this.entity && typeof this.entity.name === "string" ? this.entity.name : ""
+		);
 		if (!resolvedName || !objectType)
 		{
+			console.warn(`[Spriter] _associateTypeWithName aborted: requestedName='${requestedName}', resolvedName='${resolvedName}', objectType=${objectType}`);
 			return;
 		}
 
 		const myIID = this._getIID();
 		const instances = this._getInstancesOf(objectType);
-		const pairedInst = instances[myIID] || null;
+		const pairedInst = this._getPairedInstanceForIID(objectType, myIID);
 		const frameLookup = this._buildFrameLookupForSpriterName(resolvedName);
+		const storeKey = requestedName || resolvedName;
+		const existingEntry = this._c2ObjectMap.get(storeKey) || this._c2ObjectMap.get(resolvedName) || null;
 		let spriterType = "sprite";
 		if (Array.isArray(this._objectArray))
 		{
@@ -6893,11 +7081,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			Array.isArray(objectType._instances) ? "_instances" : null
 		].filter(Boolean).join(",");
 		const frameCount = frameLookup instanceof Map ? frameLookup.size : 0;
-		console.log(`[Spriter] _associateTypeWithName: spriterName='${resolvedName}', typeName='${this._getObjectTypeName(objectType)}', myIID=${myIID}, instanceCount=${instances.length}, pairedInst=${pairedInst ? "found" : "NULL"}, frameMap=${frameCount}, apis=[${apis}]`);
+		console.log(`[Spriter] _associateTypeWithName: requestedName='${requestedName}', spriterName='${resolvedName}', storeKey='${storeKey}', typeName='${this._getObjectTypeName(objectType)}', spriterType='${spriterType}', myIID=${myIID}, instanceCount=${instances.length}, pairedInst=${pairedInst ? "found" : "NULL"}, frameMap=${frameCount}, replacingExisting=${existingEntry ? "yes" : "no"}, apis=[${apis}]`);
+		if (!pairedInst)
+		{
+			console.warn(`[Spriter] _associateTypeWithName: no paired instance found for '${resolvedName}' (IID=${myIID}). Association stored with type only.`);
+		}
 
-		this._c2ObjectMap.set(resolvedName, {
+		this._c2ObjectMap.set(storeKey, {
 			type: objectType,
 			inst: pairedInst,
+			pairIID: myIID,
 			spriterType,
 			frameLookup,
 			lastAppliedFrame: -1,
@@ -7043,9 +7236,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 			for (const name of poseNames)
 			{
-				if (!this._c2ObjectMap.has(name))
+				const assocLookup = this._getAssociatedEntryForTimelineName(name);
+				if (!assocLookup.entry)
 				{
-					console.warn(`[Spriter]   MISMATCH: pose timelineName '${name}' not found in c2ObjectMap`);
+					console.warn(`[Spriter]   MISMATCH: pose timelineName '${name}' not found in c2ObjectMap (tried=[${(assocLookup.triedKeys || []).join(", ")}])`);
 				}
 			}
 		}
@@ -7070,6 +7264,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const mirrorFactor = this._xFlip ? -1 : 1;
 		const flipFactor = this._yFlip ? -1 : 1;
 		const rootFlipSign = mirrorFactor * flipFactor;
+		if (!this._assocDebug)
+		{
+			this._assocDebug = {
+				missingPoseMap: new Set(),
+				missingInst: new Set(),
+				boxApplied: new Set()
+			};
+		}
+		const assocDebug = this._assocDebug;
 
 		// Per-tick diagnostic (every 60 frames)
 		this._diagTickCount = (this._diagTickCount || 0) + 1;
@@ -7089,92 +7292,154 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		let appliedCount = 0;
 		let skippedNoEntry = 0;
 		let skippedNoWi = 0;
+		let boxStateCount = 0;
+		let boxAppliedCount = 0;
+		let boxMissingEntryCount = 0;
+		let boxMissingInstCount = 0;
 
 		for (const state of poseObjects)
 		{
-			const c2Entry = this._c2ObjectMap.get(state.timelineName);
-			if (!c2Entry || !c2Entry.inst) { skippedNoEntry++; continue; }
 			const stateType = typeof state.spriterType === "string" ? state.spriterType.trim().toLowerCase() : "sprite";
 			const isSpriteState = stateType === "sprite";
+			if (!isSpriteState)
+			{
+				boxStateCount++;
+			}
+
+			const assocLookup = this._getAssociatedEntryForTimelineName(state.timelineName);
+			const c2Entry = assocLookup.entry;
+			if (!c2Entry || !c2Entry.inst)
+			{
+				skippedNoEntry++;
+				if (!isSpriteState)
+				{
+					if (!c2Entry)
+					{
+						boxMissingEntryCount++;
+						const key = `${stateType}:${state.timelineName}:no-map`;
+						if (!assocDebug.missingPoseMap.has(key))
+						{
+							assocDebug.missingPoseMap.add(key);
+							console.warn(`[Spriter] Box/helper apply missing association: timeline='${state.timelineName}', type='${stateType}', mapSize=${this._c2ObjectMap.size}, tried=[${(assocLookup.triedKeys || []).join(", ")}]`);
+						}
+					}
+					else
+					{
+						boxMissingInstCount++;
+						const key = `${stateType}:${state.timelineName}:no-inst`;
+						if (!assocDebug.missingInst.has(key))
+						{
+							assocDebug.missingInst.add(key);
+							console.warn(`[Spriter] Box/helper association has no paired instance: timeline='${state.timelineName}', type='${stateType}', mappedType='${this._getObjectTypeName(c2Entry.type)}'`);
+						}
+					}
+				}
+				continue;
+			}
 
 			const inst = c2Entry.inst;
 			const wi = this._getWorldInfoOf(inst);
 			if (!wi) { skippedNoWi++; continue; }
-
-			appliedCount++;
-
-			// Non-self-draw sprite swapping: map Spriter (folder,file) to child sprite frame index.
-			const targetFrame = this._resolveFrameIndexForState(c2Entry, state);
-			if (targetFrame >= 0 && c2Entry.lastAppliedFrame !== targetFrame)
+			try
 			{
-				if (this._setSpriteFrameByIndex(inst, targetFrame))
+				appliedCount++;
+				if (!isSpriteState)
 				{
-					c2Entry.lastAppliedFrame = targetFrame;
+					boxAppliedCount++;
+					const key = `${stateType}:${state.timelineName}`;
+					if (!assocDebug.boxApplied.has(key))
+					{
+						assocDebug.boxApplied.add(key);
+						console.log(`[Spriter] Box/helper apply active: timeline='${state.timelineName}', matchedKey='${assocLookup.key}', type='${stateType}', mappedType='${this._getObjectTypeName(c2Entry.type)}'`);
+					}
 				}
+
+				// Non-self-draw sprite swapping: map Spriter (folder,file) to child sprite frame index.
+				const targetFrame = this._resolveFrameIndexForState(c2Entry, state);
+				if (targetFrame >= 0 && c2Entry.lastAppliedFrame !== targetFrame)
+				{
+					if (this._setSpriteFrameByIndex(inst, targetFrame))
+					{
+						c2Entry.lastAppliedFrame = targetFrame;
+					}
+				}
+
+				// Visibility
+				if (this.setVisibilityForObjects)
+					wi.SetVisible(myVisible);
+
+				// Collision
+				if (this.setCollisionsForObjects)
+					wi.SetCollisionEnabled(true);
+
+				// Apply parent/root angle in non-self-draw mode (legacy behaviour).
+				const finalAngle = (rootFlipSign < 0)
+					? ((Math.PI * 2) - state.angle) + myAngle
+					: state.angle + myAngle;
+				wi.SetAngle(finalAngle);
+
+				// Opacity
+				wi.SetOpacity(state.alpha);
+
+				// Position: state.x/y are world-space offsets from the Spriter origin
+				const cosA = Math.cos(myAngle);
+				const sinA = Math.sin(myAngle);
+				const localX = state.x * globalScale * mirrorFactor;
+				const localY = state.y * globalScale * flipFactor;
+				const finalX = myX + localX * cosA - localY * sinA;
+				const finalY = myY + localX * sinA + localY * cosA;
+
+				wi.SetOriginX(0);
+				wi.SetOriginY(0);
+				wi.SetX(finalX);
+				wi.SetY(finalY);
+
+				if (doTickLog && appliedCount === 1)
+				{
+					console.log(`[Spriter]   applied[0]: ${state.timelineName} -> finalPos=(${finalX.toFixed(1)},${finalY.toFixed(1)}), wiMethods=[SetX=${typeof wi.SetX},SetAngle=${typeof wi.SetAngle},SetBboxChanged=${typeof wi.SetBboxChanged}]`);
+				}
+
+				// Size (apply scale to original image dimensions)
+				const trueW = state.width || 1;
+				const trueH = state.height || 1;
+				const newW = trueW * state.scaleX * globalScale * mirrorFactor;
+				const newH = trueH * state.scaleY * globalScale * flipFactor;
+				wi.SetWidth(newW);
+				wi.SetHeight(newH);
+
+				// Pivot offset
+				this._applyPivotToInst(wi, state.pivotX, state.pivotY, newW, newH);
+
+				// Z-ordering
+				if (isSpriteState && this.setLayersForSprites && previousZInst)
+				{
+					wi.ZOrderMoveAdjacentToInstance(previousZInst, true);
+				}
+				if (isSpriteState)
+				{
+					previousZInst = inst;
+				}
+
+				wi.SetBboxChanged();
 			}
-
-			// Visibility
-			if (this.setVisibilityForObjects)
-				wi.SetVisible(myVisible);
-
-			// Collision
-			if (this.setCollisionsForObjects)
-				wi.SetCollisionEnabled(true);
-
-			// Apply parent/root angle in non-self-draw mode (legacy behaviour).
-			const finalAngle = (rootFlipSign < 0)
-				? ((Math.PI * 2) - state.angle) + myAngle
-				: state.angle + myAngle;
-			wi.SetAngle(finalAngle);
-
-			// Opacity
-			wi.SetOpacity(state.alpha);
-
-			// Position: state.x/y are world-space offsets from the Spriter origin
-			const cosA = Math.cos(myAngle);
-			const sinA = Math.sin(myAngle);
-			const localX = state.x * globalScale * mirrorFactor;
-			const localY = state.y * globalScale * flipFactor;
-			const finalX = myX + localX * cosA - localY * sinA;
-			const finalY = myY + localX * sinA + localY * cosA;
-
-			wi.SetOriginX(0);
-			wi.SetOriginY(0);
-			wi.SetX(finalX);
-			wi.SetY(finalY);
-
-			if (doTickLog && appliedCount === 1)
+			catch (err)
 			{
-				console.log(`[Spriter]   applied[0]: ${state.timelineName} -> finalPos=(${finalX.toFixed(1)},${finalY.toFixed(1)}), wiMethods=[SetX=${typeof wi.SetX},SetAngle=${typeof wi.SetAngle},SetBboxChanged=${typeof wi.SetBboxChanged}]`);
+				const mappedTypeName = c2Entry && c2Entry.type ? this._getObjectTypeName(c2Entry.type) : "?";
+				console.warn(`[Spriter] Failed applying associated helper/sprite transform: timeline='${state.timelineName}', matchedKey='${assocLookup.key}', mappedType='${mappedTypeName}'.`, err);
+				const retryIID = Number.isInteger(c2Entry.pairIID) ? c2Entry.pairIID : this._getIID();
+				const repairedInst = c2Entry.type ? this._getPairedInstanceForIID(c2Entry.type, retryIID) : null;
+				c2Entry.inst = repairedInst || null;
+				if (!repairedInst)
+				{
+					console.warn(`[Spriter] Association instance cleared after apply failure: timeline='${state.timelineName}', matchedKey='${assocLookup.key}', pairIID=${retryIID}`);
+				}
+				continue;
 			}
-
-			// Size (apply scale to original image dimensions)
-			const trueW = state.width || 1;
-			const trueH = state.height || 1;
-			const newW = trueW * state.scaleX * globalScale * mirrorFactor;
-			const newH = trueH * state.scaleY * globalScale * flipFactor;
-			wi.SetWidth(newW);
-			wi.SetHeight(newH);
-
-			// Pivot offset
-			this._applyPivotToInst(wi, state.pivotX, state.pivotY, newW, newH);
-
-			// Z-ordering
-			if (isSpriteState && this.setLayersForSprites && previousZInst)
-			{
-				wi.ZOrderMoveAdjacentToInstance(previousZInst, true);
-			}
-			if (isSpriteState)
-			{
-				previousZInst = inst;
-			}
-
-			wi.SetBboxChanged();
 		}
 
 		if (doTickLog)
 		{
-			console.log(`[Spriter]   tick#${this._diagTickCount} summary: applied=${appliedCount}, skippedNoEntry=${skippedNoEntry}, skippedNoWi=${skippedNoWi}`);
+			console.log(`[Spriter]   tick#${this._diagTickCount} summary: applied=${appliedCount}, skippedNoEntry=${skippedNoEntry}, skippedNoWi=${skippedNoWi}, boxStates=${boxStateCount}, boxApplied=${boxAppliedCount}, boxMissingEntry=${boxMissingEntryCount}, boxMissingInst=${boxMissingInstCount}`);
 		}
 	}
 
