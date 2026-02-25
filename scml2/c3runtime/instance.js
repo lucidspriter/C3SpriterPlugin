@@ -6565,6 +6565,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_getPairedInstanceForIID(objectType, iid)
 	{
+		const pairedByContainer = this._getPairedInstanceByContainer(objectType);
+		if (pairedByContainer)
+		{
+			return pairedByContainer;
+		}
+
 		const instances = this._getInstancesOf(objectType);
 		if (!Array.isArray(instances) || !instances.length)
 		{
@@ -6593,6 +6599,119 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		return instances[0] || null;
+	}
+
+	_getPairedInstanceByContainer(objectType)
+	{
+		if (!objectType)
+		{
+			return null;
+		}
+
+		const selfCandidates = [];
+		const pushUnique = (value) =>
+		{
+			if (value && !selfCandidates.includes(value))
+			{
+				selfCandidates.push(value);
+			}
+		};
+
+		pushUnique(this);
+		pushUnique(this._inst);
+		pushUnique(typeof this.GetInstance === "function" ? this.GetInstance() : null);
+		pushUnique(typeof this.getInstance === "function" ? this.getInstance() : null);
+
+		for (const fnName of ["GetPairedInstance", "getPairedInstance"])
+		{
+			const fn = objectType && objectType[fnName];
+			if (typeof fn !== "function")
+			{
+				continue;
+			}
+
+			for (const selfInst of selfCandidates)
+			{
+				try
+				{
+					const paired = fn.call(objectType, selfInst);
+					if (paired)
+					{
+						return paired;
+					}
+				}
+				catch (err)
+				{
+					// Try other candidate calling conventions.
+				}
+			}
+
+			try
+			{
+				const paired = fn.call(objectType);
+				if (paired)
+				{
+					return paired;
+				}
+			}
+			catch (err)
+			{
+				// Ignore and fall back to IID-based pairing.
+			}
+		}
+
+		const getSiblings = callFirstMethod(this, ["GetSiblings", "getSiblings"]);
+		const siblings = Array.isArray(getSiblings)
+			? getSiblings
+			: Array.isArray(this._siblings)
+				? this._siblings
+				: null;
+		if (!siblings || !siblings.length)
+		{
+			return null;
+		}
+
+		const matchesObjectType = (inst) =>
+		{
+			if (!inst)
+			{
+				return false;
+			}
+
+			const instTypeCandidates = [];
+			const pushType = (value) =>
+			{
+				if (value && !instTypeCandidates.includes(value))
+				{
+					instTypeCandidates.push(value);
+				}
+			};
+
+			pushType(callFirstMethod(inst, ["GetObjectClass", "getObjectClass"]));
+			pushType(inst.type);
+			pushType(inst.objectType);
+			pushType(inst._objectType);
+
+			for (const candidate of instTypeCandidates)
+			{
+				if (candidate === objectType)
+				{
+					return true;
+				}
+			}
+
+			return false;
+		};
+
+		for (const sibling of siblings)
+		{
+			if (matchesObjectType(sibling))
+			{
+				return sibling;
+			}
+		}
+
+		return null;
 	}
 
 	_getObjectTypeName(objType)
