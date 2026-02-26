@@ -1,4 +1,5 @@
 const C3 = globalThis.C3;
+const spriterDebugLog = () => {};
 
 C3.Plugins.Spriter.Acts =
 {
@@ -406,14 +407,14 @@ C3.Plugins.Spriter.Acts =
 
 	AssociateTypeWithName(objectType, name)
 	{
-		console.log(`[Spriter] Action AssociateTypeWithName fired: type='${objectType && objectType.GetName ? objectType.GetName() : objectType && objectType.name ? objectType.name : objectType}', spriterName='${name}'`);
+		spriterDebugLog(`[Spriter] Action AssociateTypeWithName fired: type='${objectType && objectType.GetName ? objectType.GetName() : objectType && objectType.name ? objectType.name : objectType}', spriterName='${name}'`);
 		this._associateTypeWithName(objectType, name);
 	},
 
 	// Legacy ACE alias used by older projects.
 	associateTypeWithName(objectType, name)
 	{
-		console.log(`[Spriter] Action associateTypeWithName (legacy) fired: type='${objectType && objectType.GetName ? objectType.GetName() : objectType && objectType.name ? objectType.name : objectType}', spriterName='${name}'`);
+		spriterDebugLog(`[Spriter] Action associateTypeWithName (legacy) fired: type='${objectType && objectType.GetName ? objectType.GetName() : objectType && objectType.name ? objectType.name : objectType}', spriterName='${name}'`);
 		this._associateTypeWithName(objectType, name);
 	},
 

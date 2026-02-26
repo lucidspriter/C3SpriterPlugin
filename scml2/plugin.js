@@ -1,5 +1,6 @@
 const SDK = globalThis.SDK;
 const lang = globalThis.lang;
+const spriterDebugLog = () => {};
 
 // Keep the plugin ID stable: projects reference this ID to identify object types.
 const PLUGIN_ID = "Spriter";
@@ -592,10 +593,10 @@ async function migrateLegacySelfDrawAssetsForObjectType(objectType, project, raw
 
 		await awaitMaybePromise(project.AddOrReplaceProjectFile(frameBlob, targetPath, "general"));
 		savedCount++;
-		console.log(`[Spriter] Legacy self-draw migration: wrote '${targetPath}' from embedded frame ${i}.`);
+		spriterDebugLog(`[Spriter] Legacy self-draw migration: wrote '${targetPath}' from embedded frame ${i}.`);
 	}
 
-	console.log(`[Spriter] Legacy self-draw migration complete for '${sconFileName}' (${objectType.GetName()}): wrote ${savedCount}/${atlasEntries.length} atlas file(s).`);
+	spriterDebugLog(`[Spriter] Legacy self-draw migration complete for '${sconFileName}' (${objectType.GetName()}): wrote ${savedCount}/${atlasEntries.length} atlas file(s).`);
 }
 
 async function migrateLegacySelfDrawAssetsFromLinkCallback(...callbackArgs)
@@ -669,7 +670,7 @@ async function migrateLegacySelfDrawAssetsByTypeFromLinkCallback(...callbackArgs
 			const spriterTypes = allObjectTypes.filter((type) => getObjectTypePluginId(type) === PLUGIN_ID);
 			if (spriterTypes.length > 1)
 			{
-				console.log(`[Spriter] Legacy self-draw type migration: found ${spriterTypes.length} Spriter object types in project; processing all.`);
+				spriterDebugLog(`[Spriter] Legacy self-draw type migration: found ${spriterTypes.length} Spriter object types in project; processing all.`);
 				for (const type of spriterTypes)
 				{
 					await migrateLegacySelfDrawAssetsForObjectType(type, project, "", "type-link-project-scan");
@@ -679,7 +680,7 @@ async function migrateLegacySelfDrawAssetsByTypeFromLinkCallback(...callbackArgs
 		}
 		else
 		{
-			console.log("[Spriter] Legacy self-draw type migration: project object-type enumeration API is unavailable; processing selected type only.");
+			spriterDebugLog("[Spriter] Legacy self-draw type migration: project object-type enumeration API is unavailable; processing selected type only.");
 		}
 
 		await migrateLegacySelfDrawAssetsForObjectType(objectType, project, "", "type-link");
@@ -1283,16 +1284,16 @@ async function importSpriteData(zipFile, opts, objInfo, folders, objRefs, sprite
 	if (!childObjectType)
 	{
 		childObjectType = await project.CreateObjectType("Sprite", childTypeName);
-		console.log(`[Spriter] Created sprite type '${childTypeName}'.`);
+		spriterDebugLog(`[Spriter] Created sprite type '${childTypeName}'.`);
 	}
 	else
 	{
 		reimport = true;
-		console.log(`[Spriter] Reimporting sprite type '${childTypeName}'.`);
+		spriterDebugLog(`[Spriter] Reimporting sprite type '${childTypeName}'.`);
 	}
 
 	objectTypeNamePairs.push({ objectType: childObjectType, name: name });
-	console.log(`[Spriter] Associate pair: c3TypeName='${childTypeName}', spriterName='${name}', objInfo.name='${objInfo.name}'`);
+	spriterDebugLog(`[Spriter] Associate pair: c3TypeName='${childTypeName}', spriterName='${name}', objInfo.name='${objInfo.name}'`);
 
 	const animations = childObjectType.GetAnimations();
 	const firstAnim = animations[0];
@@ -1423,12 +1424,12 @@ async function importBoxData(opts, objInfo, spriterObjectType, c2ObjectTypes, ob
 	if (!childObjectType)
 	{
 		childObjectType = await project.CreateObjectType("Sprite", childTypeName);
-		console.log(`[Spriter] Created box helper type '${childTypeName}'.`);
+		spriterDebugLog(`[Spriter] Created box helper type '${childTypeName}'.`);
 	}
 	else
 	{
 		reimport = true;
-		console.log(`[Spriter] Reimporting box helper type '${childTypeName}'.`);
+		spriterDebugLog(`[Spriter] Reimporting box helper type '${childTypeName}'.`);
 	}
 
 	objectTypeNamePairs.push({ objectType: childObjectType, name });
@@ -1478,7 +1479,7 @@ async function addAssociativeAction(eventBlock, pair, spriterObjectType)
 {
 	const paramObjectType = pair.objectType;
 	const paramName = "\"" + pair.name + "\"";
-	console.log(`[Spriter] AddAction associate-type-with-name: objectType=${paramObjectType && paramObjectType.GetName ? paramObjectType.GetName() : paramObjectType}, spriterName=${paramName}`);
+	spriterDebugLog(`[Spriter] AddAction associate-type-with-name: objectType=${paramObjectType && paramObjectType.GetName ? paramObjectType.GetName() : paramObjectType}, spriterName=${paramName}`);
 	await eventBlock.AddAction(spriterObjectType, null, "associate-type-with-name",
 		[paramObjectType, paramName]);
 }
@@ -1584,7 +1585,7 @@ async function importChildHelpersFromScon(zipFile, opts, projectJson, folders, o
 		);
 	}
 
-	console.log(`[Spriter] Created/updated ${c2ObjectTypes.length} helper type(s): sprites=${spriteImportQueue.length}, boxes=${boxImportQueue.length}.`);
+	spriterDebugLog(`[Spriter] Created/updated ${c2ObjectTypes.length} helper type(s): sprites=${spriteImportQueue.length}, boxes=${boxImportQueue.length}.`);
 
 	if (eventSheet && objectTypeNamePairs.length > 0)
 	{
@@ -1594,7 +1595,7 @@ async function importChildHelpersFromScon(zipFile, opts, projectJson, folders, o
 		{
 			await addAssociativeAction(eventBlock, pair, objectType);
 		}
-		console.log(`[Spriter] Added event block with ${objectTypeNamePairs.length} associate action(s).`);
+		spriterDebugLog(`[Spriter] Added event block with ${objectTypeNamePairs.length} associate action(s).`);
 	}
 
 	if (isReimport)
@@ -1628,7 +1629,7 @@ async function importChildHelpersFromScon(zipFile, opts, projectJson, folders, o
 				if (oldObj)
 				{
 					oldObj.Delete();
-					console.log(`[Spriter] Deleted obsolete helper type '${oldName}'.`);
+					spriterDebugLog(`[Spriter] Deleted obsolete helper type '${oldName}'.`);
 				}
 			}
 		}
@@ -1683,7 +1684,7 @@ async function importChildHelpersFromScon(zipFile, opts, projectJson, folders, o
 		{
 			const container = objectType.CreateContainer(allContainerTypes);
 			container.SetSelectMode("wrap");
-			console.log(`[Spriter] Created container with ${allContainerTypes.length} member(s).`);
+			spriterDebugLog(`[Spriter] Created container with ${allContainerTypes.length} member(s).`);
 		}
 		catch (e)
 		{
@@ -1698,7 +1699,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 {
 	try
 	{
-		console.log(`[Spriter] Drop received: '${droppedFileName}'`);
+		spriterDebugLog(`[Spriter] Drop received: '${droppedFileName}'`);
 
 		const baseName = getBaseName(droppedFileName);
 		if (!baseName)
@@ -1774,7 +1775,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 
 		const entityCount = Array.isArray(projectJson.entity) ? projectJson.entity.length : 0;
 		const atlasCount = Array.isArray(projectJson.atlas) ? projectJson.atlas.length : 0;
-		console.log(`[Spriter] Parsed '${sconFileName}': entities=${entityCount}, atlases=${atlasCount}`);
+		spriterDebugLog(`[Spriter] Parsed '${sconFileName}': entities=${entityCount}, atlases=${atlasCount}`);
 		const folders = Array.isArray(projectJson.folder) ? projectJson.folder : [];
 		const eventSheet = layoutView.GetLayout().GetEventSheet();
 
@@ -1784,17 +1785,17 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 		if (!objectType)
 		{
 			objectType = await project.CreateObjectType("Spriter", detectedSconName);
-			console.log(`[Spriter] Created object type '${detectedSconName}'.`);
+			spriterDebugLog(`[Spriter] Created object type '${detectedSconName}'.`);
 		}
 		else
 		{
-			console.log(`[Spriter] Reimporting into existing object type '${detectedSconName}'.`);
+			spriterDebugLog(`[Spriter] Reimporting into existing object type '${detectedSconName}'.`);
 		}
 
 		const pluginId = getObjectTypePluginId(objectType);
 		if (pluginId)
 		{
-			console.log(`[Spriter] Object type plugin id: '${pluginId}'.`);
+			spriterDebugLog(`[Spriter] Object type plugin id: '${pluginId}'.`);
 		}
 
 		const atlases = Array.isArray(projectJson.atlas) ? projectJson.atlas : null;
@@ -1805,7 +1806,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 
 			if (isAtlased)
 			{
-				console.log(`[Spriter] Atlased export detected. Loading atlas PNGs into frames...`);
+				spriterDebugLog(`[Spriter] Atlased export detected. Loading atlas PNGs into frames...`);
 				// Reset any existing atlas frames on the first animation (keep frame 0, replace it).
 				const firstAnim = getFirstAnim(objectType);
 				if (firstAnim)
@@ -1830,13 +1831,13 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 						continue;
 					}
 
-					console.log(`[Spriter] Loading atlas ${i}: '${atlasPngLeaf || atlasPngPath}'`);
+					spriterDebugLog(`[Spriter] Loading atlas ${i}: '${atlasPngLeaf || atlasPngPath}'`);
 					await loadAtlasPngIntoFrames(objectType, zipFile, atlasPngPath, i > 0);
 
 					const added = await addAtlasPngToProjectFiles(project, zipFile, atlasPngPath);
 					if (added)
 					{
-						console.log(`[Spriter] Added atlas image to Project Files: '${atlasPngPath}'.`);
+						spriterDebugLog(`[Spriter] Added atlas image to Project Files: '${atlasPngPath}'.`);
 					}
 				}
 
@@ -1883,7 +1884,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 
 			if (atlasJsonLoadedCount > 0)
 			{
-				console.log(`[Spriter] Applied atlas metadata from ${atlasJsonLoadedCount} atlas JSON file(s) to ${updatedCount} file entry(ies).`);
+				spriterDebugLog(`[Spriter] Applied atlas metadata from ${atlasJsonLoadedCount} atlas JSON file(s) to ${updatedCount} file entry(ies).`);
 			}
 
 			if (atlasDataAfter <= 0)
@@ -1892,18 +1893,18 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			}
 			else if (atlasDataBefore <= 0 && atlasDataAfter > 0)
 			{
-				console.log(`[Spriter] Atlas metadata is now present in ${atlasDataAfter} file entry(ies).`);
+				spriterDebugLog(`[Spriter] Atlas metadata is now present in ${atlasDataAfter} file entry(ies).`);
 			}
 
 			// Always save the normalized JSON for atlased exports so runtime has consistent metadata.
 			await awaitMaybePromise(project.AddOrReplaceProjectFile(saveJsonToBlob(projectJson), sconFileName, "general"));
 			if (updatedCount > 0)
 			{
-				console.log(`[Spriter] Saved merged '${sconFileName}' to Project Files.`);
+				spriterDebugLog(`[Spriter] Saved merged '${sconFileName}' to Project Files.`);
 			}
 			else
 			{
-				console.log(`[Spriter] Saved normalized '${sconFileName}' to Project Files.`);
+				spriterDebugLog(`[Spriter] Saved normalized '${sconFileName}' to Project Files.`);
 			}
 
 			// Legacy parity: atlased/self-draw imports still create helper Sprite types for Spriter
@@ -1918,7 +1919,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			// Non-atlased import: create individual Sprite object types for Spriter sprite parts
 			// and helper box objects.
 			await awaitMaybePromise(project.AddOrReplaceProjectFile(sconBlob, sconFileName, "general"));
-			console.log(`[Spriter] Non-atlased export. Saved '${sconFileName}' to Project Files.`);
+			spriterDebugLog(`[Spriter] Non-atlased export. Saved '${sconFileName}' to Project Files.`);
 
 			await importChildHelpersFromScon(
 				zipFile, opts, projectJson, folders, objectType, detectedSconName,
@@ -1929,16 +1930,16 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 		const importedSounds = await loadSoundsFromFolders(folders, zipFile, project);
 		if (importedSounds.length > 0)
 		{
-			console.log(`[Spriter] Imported ${importedSounds.length} sound file(s).`);
+			spriterDebugLog(`[Spriter] Imported ${importedSounds.length} sound file(s).`);
 
 			if (eventSheet && !isReimport)
 			{
 				await addSoundEvents(eventSheet, objectType, project, detectedSconName);
-				console.log("[Spriter] Added default sound trigger event block.");
+				spriterDebugLog("[Spriter] Added default sound trigger event block.");
 			}
 			else if (eventSheet && isReimport)
 			{
-				console.log("[Spriter] Reimport detected; skipped auto-adding default sound event block.");
+				spriterDebugLog("[Spriter] Reimport detected; skipped auto-adding default sound event block.");
 			}
 
 			if (typeof project.ShowImportAudioDialog === "function")
@@ -1955,7 +1956,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 		if (isReimport)
 		{
 			const instances = objectType.GetAllInstances();
-			console.log(`[Spriter] Found ${instances.length} existing instance(s).`);
+			spriterDebugLog(`[Spriter] Found ${instances.length} existing instance(s).`);
 
 			for (const inst of instances)
 			{
@@ -1967,7 +1968,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			// Match legacy behaviour: if the type exists but has no instances, still create one on drop.
 			if (!instances.length)
 			{
-				console.log(`[Spriter] No instances existed; creating one at drop location.`);
+				spriterDebugLog(`[Spriter] No instances existed; creating one at drop location.`);
 				const wi = objectType.CreateWorldInstance(layoutView.GetActiveLayer());
 				wi.SetXY(opts.layoutX, opts.layoutY);
 				wi.SetPropertyValue("scml-file", scmlFileValue);
@@ -1982,7 +1983,7 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			wi.SetPropertyValue("scml-file", scmlFileValue);
 			wi.SetPropertyValue("draw-self", drawSelfValue);
 			wi.SetPropertyValue("draw-debug", drawDebugValue);
-			console.log(`[Spriter] Created new instance at (${opts.layoutX}, ${opts.layoutY}). scml-file='${scmlFileValue}', draw-self='${drawSelfValue}'.`);
+			spriterDebugLog(`[Spriter] Created new instance at (${opts.layoutX}, ${opts.layoutY}). scml-file='${scmlFileValue}', draw-self='${drawSelfValue}'.`);
 		}
 
 		return true;
@@ -2080,7 +2081,7 @@ const PLUGIN_CLASS = SDK.Plugins.Spriter = class Spriter extends SDK.IPluginBase
 		if (!globalThis.__spriterEditorInitLogged)
 		{
 			globalThis.__spriterEditorInitLogged = true;
-			console.log(`[Spriter] Editor plugin initialised. Drag-drop API: ${dragDropApiName}`);
+			spriterDebugLog(`[Spriter] Editor plugin initialised. Drag-drop API: ${dragDropApiName}`);
 		}
 
 		if (typeof addDragDropHandler === "function")

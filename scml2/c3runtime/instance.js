@@ -1,4 +1,5 @@
 const C3 = globalThis.C3;
+const spriterDebugLog = () => {};
 
 function normaliseProjectFileName(fileName)
 {
@@ -181,11 +182,11 @@ function debugLogProtoChain(label, obj, maxDepth = 5)
 				}
 			}
 
-			console.log(`[Spriter] Probe ${label} proto[${depth}] ctor=${ctorName} funcs=`, funcs.sort());
-			console.log(`[Spriter] Probe ${label} proto[${depth}] props=`, props.sort());
+			spriterDebugLog(`[Spriter] Probe ${label} proto[${depth}] ctor=${ctorName} funcs=`, funcs.sort());
+			spriterDebugLog(`[Spriter] Probe ${label} proto[${depth}] props=`, props.sort());
 			if (symbols.length)
 			{
-				console.log(`[Spriter] Probe ${label} proto[${depth}] symbols=`, symbols);
+				spriterDebugLog(`[Spriter] Probe ${label} proto[${depth}] symbols=`, symbols);
 			}
 
 			current = Object.getPrototypeOf(current);
@@ -212,7 +213,7 @@ function debugProbeCalls(label, obj, names)
 			const value = obj[name];
 			if (typeof value !== "function")
 			{
-				console.log(`[Spriter] Probe ${label} ${name}:`, safeDescribeValue(value));
+				spriterDebugLog(`[Spriter] Probe ${label} ${name}:`, safeDescribeValue(value));
 				continue;
 			}
 
@@ -223,15 +224,15 @@ function debugProbeCalls(label, obj, names)
 			}
 			catch (error)
 			{
-				console.log(`[Spriter] Probe ${label} ${name}() threw: ${error && error.message ? error.message : String(error)}`);
+				spriterDebugLog(`[Spriter] Probe ${label} ${name}() threw: ${error && error.message ? error.message : String(error)}`);
 				continue;
 			}
 
-			console.log(`[Spriter] Probe ${label} ${name}() ->`, safeDescribeValue(result), result);
+			spriterDebugLog(`[Spriter] Probe ${label} ${name}() ->`, safeDescribeValue(result), result);
 		}
 		catch (error)
 		{
-			console.log(`[Spriter] Probe ${label} ${name} access threw: ${error && error.message ? error.message : String(error)}`);
+			spriterDebugLog(`[Spriter] Probe ${label} ${name} access threw: ${error && error.message ? error.message : String(error)}`);
 		}
 	}
 }
@@ -1414,7 +1415,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 							if (this._atlasDebug && !this._atlasDebug.loggedTypeImageInfoProbe)
 							{
 								this._atlasDebug.loggedTypeImageInfoProbe = true;
-								console.log("[Spriter] Atlas compatibility probe via sdkType.getImageInfo():", typeImageInfo);
+								spriterDebugLog("[Spriter] Atlas compatibility probe via sdkType.getImageInfo():", typeImageInfo);
 							}
 
 							if (typeImageInfo)
@@ -1446,7 +1447,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 									if (this._atlasDebug && !this._atlasDebug.loggedTypeImageInfoFallbackUsed)
 									{
 										this._atlasDebug.loggedTypeImageInfoFallbackUsed = true;
-										console.log("[Spriter] Using sdkType.getImageInfo() embedded-atlas fallback for self-draw compatibility.");
+										spriterDebugLog("[Spriter] Using sdkType.getImageInfo() embedded-atlas fallback for self-draw compatibility.");
 									}
 								}
 								else
@@ -1482,7 +1483,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 								if (this._atlasDebug && !this._atlasDebug.loggedInstanceImageInfoProbe)
 								{
 									this._atlasDebug.loggedInstanceImageInfoProbe = true;
-									console.log("[Spriter] Atlas compatibility probe via sdkInstance.getImageInfo():", instanceImageInfo);
+									spriterDebugLog("[Spriter] Atlas compatibility probe via sdkInstance.getImageInfo():", instanceImageInfo);
 								}
 
 								if (instanceImageInfo)
@@ -1514,7 +1515,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 										if (this._atlasDebug && !this._atlasDebug.loggedInstanceImageInfoFallbackUsed)
 										{
 											this._atlasDebug.loggedInstanceImageInfoFallbackUsed = true;
-											console.log("[Spriter] Using sdkInstance.getImageInfo() embedded-atlas fallback for self-draw compatibility.");
+											spriterDebugLog("[Spriter] Using sdkInstance.getImageInfo() embedded-atlas fallback for self-draw compatibility.");
 										}
 									}
 									else
@@ -1549,7 +1550,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 								if (this._atlasDebug && !this._atlasDebug.loggedWorldInfoImageInfoProbe)
 								{
 									this._atlasDebug.loggedWorldInfoImageInfoProbe = true;
-									console.log("[Spriter] Atlas compatibility probe via worldInfo.getImageInfo():", worldImageInfo);
+									spriterDebugLog("[Spriter] Atlas compatibility probe via worldInfo.getImageInfo():", worldImageInfo);
 								}
 
 								if (worldImageInfo)
@@ -1581,7 +1582,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 										if (this._atlasDebug && !this._atlasDebug.loggedWorldInfoImageInfoFallbackUsed)
 										{
 											this._atlasDebug.loggedWorldInfoImageInfoFallbackUsed = true;
-											console.log("[Spriter] Using worldInfo.getImageInfo() embedded-atlas fallback for self-draw compatibility.");
+											spriterDebugLog("[Spriter] Using worldInfo.getImageInfo() embedded-atlas fallback for self-draw compatibility.");
 										}
 									}
 								}
@@ -1616,7 +1617,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 							probeObject = this.objectType || null;
 						}
 
-						console.log("[Spriter] Legacy atlas frame compatibility probe object (expand in devtools):", probeObject);
+						spriterDebugLog("[Spriter] Legacy atlas frame compatibility probe object (expand in devtools):", probeObject);
 						debugLogProtoChain("legacy-atlas-probe", probeObject, 6);
 						debugProbeCalls("legacy-atlas-probe", probeObject, [
 							"GetObjectClass",
@@ -1639,7 +1640,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 							try
 							{
 								const objectClassProbe = probeObject._getObjectClass();
-								console.log("[Spriter] Legacy atlas object-class probe via _getObjectClass():", objectClassProbe);
+								spriterDebugLog("[Spriter] Legacy atlas object-class probe via _getObjectClass():", objectClassProbe);
 								debugLogProtoChain("legacy-atlas-objectClass", objectClassProbe, 5);
 								debugProbeCalls("legacy-atlas-objectClass", objectClassProbe, [
 									"GetAnimations",
@@ -1693,7 +1694,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 							if (this._atlasDebug && !this._atlasDebug.loggedLegacyFrameFallbackUsed)
 							{
 								this._atlasDebug.loggedLegacyFrameFallbackUsed = true;
-								console.log("[Spriter] Using legacy embedded atlas-frame fallback for self-draw compatibility.");
+								spriterDebugLog("[Spriter] Using legacy embedded atlas-frame fallback for self-draw compatibility.");
 							}
 						}
 						else
@@ -2096,7 +2097,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupRecovered && objectClassSource)
 		{
 			this._atlasDebug.loggedFrameLookupRecovered = true;
-			console.log(`[Spriter] Atlas frame lookup: recovered object class from ${objectClassSource}.`);
+			spriterDebugLog(`[Spriter] Atlas frame lookup: recovered object class from ${objectClassSource}.`);
 		}
 
 		const getAnimations = typeof objectClass.GetAnimations === "function"
@@ -2250,44 +2251,135 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_getDtSeconds()
 	{
+		const wallDt = this._getWallDtSeconds();
 		const runtime = this.runtime;
-		if (runtime && Number.isFinite(runtime.dt))
+		const runtimeDt = runtime && Number.isFinite(runtime.dt) ? runtime.dt : null;
+
+		// Legacy parity: playback time is derived from wall-time and then multiplied by
+		// either the object's own time scale (if set) or the runtime/global time scale.
+		// This is important when global time scale is 0 and an object-specific time scale
+		// overrides it: runtime.dt will be 0, but the object should still advance.
+		const objectTimeScale = this._getObjectTimeScaleOverride();
+		if (objectTimeScale !== null)
 		{
-			let dt = runtime.dt;
-			if (this.ignoreGlobalTimeScale)
-			{
-				const getTimeScale = typeof runtime.GetTimeScale === "function"
-					? runtime.GetTimeScale.bind(runtime)
-					: typeof runtime.getTimeScale === "function"
-						? runtime.getTimeScale.bind(runtime)
-						: null;
-				if (getTimeScale)
-				{
-					const timeScale = toFiniteNumber(getTimeScale(), 1);
-					if (timeScale > 0)
-					{
-						dt /= timeScale;
-					}
-				}
-			}
-			return dt;
+			const baseDt = Number.isFinite(wallDt) ? wallDt : (runtimeDt || 0);
+			return baseDt * objectTimeScale;
 		}
 
-		const now = (typeof performance !== "undefined" && performance && typeof performance.now === "function")
-			? performance.now() / 1000
-			: Date.now() / 1000;
+		if (this.ignoreGlobalTimeScale)
+		{
+			return Number.isFinite(wallDt) ? wallDt : (runtimeDt || 0);
+		}
 
+		const runtimeTimeScale = this._getRuntimeTimeScaleValue();
+		if (runtimeTimeScale !== null)
+		{
+			const baseDt = Number.isFinite(wallDt) ? wallDt : (runtimeDt || 0);
+			return baseDt * runtimeTimeScale;
+		}
+
+		if (runtimeDt !== null)
+		{
+			return runtimeDt;
+		}
+
+		return Number.isFinite(wallDt) ? wallDt : 0;
+	}
+
+	_getWallNowSeconds()
+	{
+		const runtime = this.runtime;
+		const wallNow = callFirstMethod(runtime, ["GetWallTime", "getWallTime"]);
+		if (Number.isFinite(wallNow))
+		{
+			return wallNow;
+		}
+
+		if (typeof performance !== "undefined" && performance && typeof performance.now === "function")
+		{
+			return performance.now() / 1000;
+		}
+
+		return Date.now() / 1000;
+	}
+
+	_getWallDtSeconds()
+	{
+		const now = this._getWallNowSeconds();
 		const last = this._lastTickTimeSec;
 		this._lastTickTimeSec = now;
 
 		if (!Number.isFinite(last))
 		{
-			return 0;
+			return NaN;
 		}
 
 		const dt = now - last;
 		// Avoid giant steps when the tab is backgrounded.
 		return dt > 0 && dt < 0.5 ? dt : 0;
+	}
+
+	_getRuntimeTimeScaleValue()
+	{
+		const runtime = this.runtime;
+		if (!runtime)
+		{
+			return null;
+		}
+
+		const propValue = Number(runtime.timeScale);
+		if (Number.isFinite(propValue))
+		{
+			return propValue;
+		}
+
+		const methodValue = callFirstMethod(runtime, ["GetTimeScale", "getTimeScale"]);
+		if (Number.isFinite(methodValue))
+		{
+			return Number(methodValue);
+		}
+
+		return null;
+	}
+
+	_getObjectTimeScaleOverride()
+	{
+		const candidates = [
+			this,
+			this._inst,
+			callFirstMethod(this, ["GetInstance", "getInstance"]),
+			callFirstMethod(this, ["GetWorldInfo", "getWorldInfo"]),
+			this._sdkInstance,
+			this._sdkInst
+		];
+
+		for (const target of candidates)
+		{
+			if (!target)
+			{
+				continue;
+			}
+
+			const propValue = Number(target.timeScale);
+			if (Number.isFinite(propValue) && propValue !== -1)
+			{
+				return propValue;
+			}
+
+			const value = callFirstMethod(target, ["GetTimeScale", "getTimeScale"]);
+			if (!Number.isFinite(value))
+			{
+				continue;
+			}
+
+			const numeric = Number(value);
+			if (numeric !== -1)
+			{
+				return numeric;
+			}
+		}
+
+		return null;
 	}
 
 	_advanceTime(dtSeconds)
@@ -6334,17 +6426,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		this._didTriggerReady = true;
-		console.log(`[Spriter] Ready trigger fired: drawSelf=${this.drawSelf}, isReady=${!!this.isReady}, mapSize=${this._c2ObjectMap ? this._c2ObjectMap.size : 0}`);
+		spriterDebugLog(`[Spriter] Ready trigger fired: drawSelf=${this.drawSelf}, isReady=${!!this.isReady}, mapSize=${this._c2ObjectMap ? this._c2ObjectMap.size : 0}`);
 
 		const cnds = C3.Plugins.Spriter.Cnds;
 		if (typeof this._trigger === "function" && cnds && typeof cnds.OnReady === "function")
 		{
-			console.log("[Spriter] -> Triggering condition: OnReady");
+			spriterDebugLog("[Spriter] -> Triggering condition: OnReady");
 			this._trigger(cnds.OnReady);
 		}
 		if (typeof this._trigger === "function" && cnds && typeof cnds.readyForSetup === "function")
 		{
-			console.log("[Spriter] -> Triggering condition: readyForSetup (legacy)");
+			spriterDebugLog("[Spriter] -> Triggering condition: readyForSetup (legacy)");
 			this._trigger(cnds.readyForSetup);
 		}
 	}
@@ -7200,7 +7292,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			Array.isArray(objectType._instances) ? "_instances" : null
 		].filter(Boolean).join(",");
 		const frameCount = frameLookup instanceof Map ? frameLookup.size : 0;
-		console.log(`[Spriter] _associateTypeWithName: requestedName='${requestedName}', spriterName='${resolvedName}', storeKey='${storeKey}', typeName='${this._getObjectTypeName(objectType)}', spriterType='${spriterType}', myIID=${myIID}, instanceCount=${instances.length}, pairedInst=${pairedInst ? "found" : "NULL"}, frameMap=${frameCount}, replacingExisting=${existingEntry ? "yes" : "no"}, apis=[${apis}]`);
+		spriterDebugLog(`[Spriter] _associateTypeWithName: requestedName='${requestedName}', spriterName='${resolvedName}', storeKey='${storeKey}', typeName='${this._getObjectTypeName(objectType)}', spriterType='${spriterType}', myIID=${myIID}, instanceCount=${instances.length}, pairedInst=${pairedInst ? "found" : "NULL"}, frameMap=${frameCount}, replacingExisting=${existingEntry ? "yes" : "no"}, apis=[${apis}]`);
 		if (!pairedInst)
 		{
 			console.warn(`[Spriter] _associateTypeWithName: no paired instance found for '${resolvedName}' (IID=${myIID}). Association stored with type only.`);
@@ -7348,10 +7440,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			const mapEntries = Array.from(this._c2ObjectMap.entries()).map(([k, v]) =>
 				`${k} => inst=${v.inst ? "OK" : "NULL"}, type=${this._getObjectTypeName(v.type)}`
 			);
-			console.log(`[Spriter] NON-SELF-DRAW DIAG: drawSelf=${this.drawSelf}, mapSize=${this._c2ObjectMap.size}, poseCount=${this._poseObjectStates.length}`);
-			console.log(`[Spriter]   map keys: [${mapKeys.join(", ")}]`);
-			console.log(`[Spriter]   map entries: [${mapEntries.join(" | ")}]`);
-			console.log(`[Spriter]   pose timelineNames: [${poseNames.join(", ")}]`);
+			spriterDebugLog(`[Spriter] NON-SELF-DRAW DIAG: drawSelf=${this.drawSelf}, mapSize=${this._c2ObjectMap.size}, poseCount=${this._poseObjectStates.length}`);
+			spriterDebugLog(`[Spriter]   map keys: [${mapKeys.join(", ")}]`);
+			spriterDebugLog(`[Spriter]   map entries: [${mapEntries.join(" | ")}]`);
+			spriterDebugLog(`[Spriter]   pose timelineNames: [${poseNames.join(", ")}]`);
 
 			for (const name of poseNames)
 			{
@@ -7404,7 +7496,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			const sy = s0 && s0.y != null ? s0.y.toFixed(1) : "?";
 			const sa = s0 && s0.angle != null ? s0.angle.toFixed(3) : "?";
 			const t = this.localTimeMs != null ? this.localTimeMs.toFixed(1) : "?";
-			console.log(`[Spriter] tick#${this._diagTickCount}: myPos=(${myX},${myY}), poseCount=${poseObjects.length}, sample[0]: name=${s0 ? s0.timelineName : "?"}, x=${sx}, y=${sy}, angle=${sa}, time=${t}ms`);
+			spriterDebugLog(`[Spriter] tick#${this._diagTickCount}: myPos=(${myX},${myY}), poseCount=${poseObjects.length}, sample[0]: name=${s0 ? s0.timelineName : "?"}, x=${sx}, y=${sy}, angle=${sa}, time=${t}ms`);
 		}
 
 		let previousZInst = null; // null = skip first z-order (can't pass SDK inst to moveAdjacentToInstance)
@@ -7469,7 +7561,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					if (!assocDebug.boxApplied.has(key))
 					{
 						assocDebug.boxApplied.add(key);
-						console.log(`[Spriter] Box/helper apply active: timeline='${state.timelineName}', matchedKey='${assocLookup.key}', type='${stateType}', mappedType='${this._getObjectTypeName(c2Entry.type)}'`);
+						spriterDebugLog(`[Spriter] Box/helper apply active: timeline='${state.timelineName}', matchedKey='${assocLookup.key}', type='${stateType}', mappedType='${this._getObjectTypeName(c2Entry.type)}'`);
 					}
 				}
 
@@ -7515,7 +7607,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 				if (doTickLog && appliedCount === 1)
 				{
-					console.log(`[Spriter]   applied[0]: ${state.timelineName} -> finalPos=(${finalX.toFixed(1)},${finalY.toFixed(1)}), wiMethods=[SetX=${typeof wi.SetX},SetAngle=${typeof wi.SetAngle},SetBboxChanged=${typeof wi.SetBboxChanged}]`);
+					spriterDebugLog(`[Spriter]   applied[0]: ${state.timelineName} -> finalPos=(${finalX.toFixed(1)},${finalY.toFixed(1)}), wiMethods=[SetX=${typeof wi.SetX},SetAngle=${typeof wi.SetAngle},SetBboxChanged=${typeof wi.SetBboxChanged}]`);
 				}
 
 				// Size (apply scale to original image dimensions)
@@ -7558,7 +7650,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		if (doTickLog)
 		{
-			console.log(`[Spriter]   tick#${this._diagTickCount} summary: applied=${appliedCount}, skippedNoEntry=${skippedNoEntry}, skippedNoWi=${skippedNoWi}, boxStates=${boxStateCount}, boxApplied=${boxAppliedCount}, boxMissingEntry=${boxMissingEntryCount}, boxMissingInst=${boxMissingInstCount}`);
+			spriterDebugLog(`[Spriter]   tick#${this._diagTickCount} summary: applied=${appliedCount}, skippedNoEntry=${skippedNoEntry}, skippedNoWi=${skippedNoWi}, boxStates=${boxStateCount}, boxApplied=${boxAppliedCount}, boxMissingEntry=${boxMissingEntryCount}, boxMissingInst=${boxMissingInstCount}`);
 		}
 	}
 

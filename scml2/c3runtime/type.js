@@ -1,4 +1,5 @@
 const C3 = globalThis.C3;
+const spriterDebugLog = () => {};
 
 function normaliseProjectFileName(fileName)
 {
@@ -216,7 +217,7 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 				if (this._atlasLookupDebug && !this._atlasLookupDebug.loggedSource)
 				{
 					this._atlasLookupDebug.loggedSource = true;
-					console.log(`[Spriter] Atlas frame source resolved (frames=${frames.length}).`);
+					spriterDebugLog(`[Spriter] Atlas frame source resolved (frames=${frames.length}).`);
 				}
 				return frames;
 			}
