@@ -702,6 +702,30 @@ function normaliseComboValue(value, options, defaultIndex = 0)
 	return defaultIndex;
 }
 
+function getDebugInstanceLabel(inst)
+{
+	if (!inst)
+	{
+		return "?";
+	}
+
+	const objectType = inst.objectType || inst.type || inst._objectType || null;
+	const typeName = objectType
+		? (typeof objectType.GetName === "function"
+			? objectType.GetName()
+			: (typeof objectType.name === "string" ? objectType.name : "Spriter"))
+		: "Spriter";
+	const iid = typeof inst.GetIID === "function"
+		? inst.GetIID()
+		: (inst._inst && typeof inst._inst.GetIID === "function" ? inst._inst.GetIID() : "?");
+	const nickname = typeof inst.nicknameInC2 === "string" && inst.nicknameInC2.trim()
+		? inst.nicknameInC2.trim()
+		: "";
+	return nickname
+		? `${typeName}[IID=${iid}, nick='${nickname}']`
+		: `${typeName}[IID=${iid}]`;
+}
+
 function normaliseInitialProperties(initialProperties)
 {
 	const source = Array.isArray(initialProperties) ? initialProperties : [];
@@ -752,10 +776,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					? startupWorldInfo.getWidth.bind(startupWorldInfo)
 					: null
 			: null;
+		const startupGetHeight = startupWorldInfo
+			? (typeof startupWorldInfo.GetHeight === "function")
+				? startupWorldInfo.GetHeight.bind(startupWorldInfo)
+				: (typeof startupWorldInfo.getHeight === "function")
+					? startupWorldInfo.getHeight.bind(startupWorldInfo)
+					: null
+			: null;
 		const startupWidth = startupGetWidth ? startupGetWidth() : toFiniteNumber(this.width, 50);
+		const startupHeight = startupGetHeight ? startupGetHeight() : toFiniteNumber(this.height, 50);
 		const startupScaleRatio = toFiniteNumber(startupWidth, 50) / 50;
 		// Legacy behaviour: startup object width defines the global Spriter scale ratio.
 		this._globalScaleRatio = (Number.isFinite(startupScaleRatio) && startupScaleRatio !== 0) ? startupScaleRatio : 1;
+		this._originalWidthForBehaviors = toFiniteNumber(startupWidth, 0);
+		this._originalHeightForBehaviors = toFiniteNumber(startupHeight, 0);
 		this._xFlip = false;
 		this._yFlip = false;
 		this.ignoreGlobalTimeScale = false;
@@ -833,6 +867,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.setLayersForSprites = true;
 		this.setVisibilityForObjects = true;
 		this.setCollisionsForObjects = true;
+		this._deferAssociatedApplyToTick2 = false;
+		this._debugMainInstanceMotion = true;
+		this._debugMainInstanceMotionDone = false;
 
 		// Legacy compatibility state (character maps, overrides, events, vars/tags, viewport pausing).
 		this._characterMapsByName = new Map();
@@ -889,12 +926,65 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_release()
 	{
+		this._deferAssociatedApplyToTick2 = false;
+		this._cleanupAssociatedObjectsOnRelease();
 		this._isReleased = true;
 		super._release();
 	}
 
+	// Tween behavior compatibility: Construct expects world instances to provide
+	// original-size methods for some tween property setup paths.
+	IsOriginalSizeKnown()
+	{
+		return this.GetOriginalWidth() > 0 && this.GetOriginalHeight() > 0;
+	}
+
+	isOriginalSizeKnown()
+	{
+		return this.IsOriginalSizeKnown();
+	}
+
+	GetOriginalWidth()
+	{
+		if (this._originalWidthForBehaviors > 0)
+		{
+			return this._originalWidthForBehaviors;
+		}
+
+		const worldInfo = this._getWorldInfoOf(this);
+		return toFiniteNumber(callFirstMethod(worldInfo, ["GetWidth", "getWidth"]), 0);
+	}
+
+	getOriginalWidth()
+	{
+		return this.GetOriginalWidth();
+	}
+
+	GetOriginalHeight()
+	{
+		if (this._originalHeightForBehaviors > 0)
+		{
+			return this._originalHeightForBehaviors;
+		}
+
+		const worldInfo = this._getWorldInfoOf(this);
+		return toFiniteNumber(callFirstMethod(worldInfo, ["GetHeight", "getHeight"]), 0);
+	}
+
+	getOriginalHeight()
+	{
+		return this.GetOriginalHeight();
+	}
+
 	_tick()
 	{
+		if (this._isReleased)
+		{
+			return;
+		}
+		this._debugMainInstanceMotionDone = false;
+
+		this._deferAssociatedApplyToTick2 = false;
 		this._loadProjectDataIfNeeded();
 
 		if (!this.isReady || !this.animation)
@@ -927,9 +1017,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			this._evaluatePose();
 			this._refreshMetaState(this._currentAdjustedTimeMs);
-
-			// Legacy parity: apply associated helper objects (e.g. collision boxes) even in self-draw mode.
-			this._applyPoseToInstances();
+			// Apply associated helper objects in _tick2 (after events/actions) so they use the
+			// final object transform/animation state for this tick, matching legacy timing better.
+			this._deferAssociatedApplyToTick2 = true;
 
 			if (this.drawSelf && shouldAdvance)
 			{
@@ -956,7 +1046,32 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_tick2()
 	{
+		if (this._isReleased)
+		{
+			return;
+		}
+
+		if (this._deferAssociatedApplyToTick2)
+		{
+			this._deferAssociatedApplyToTick2 = false;
+			this._applyPoseToInstances();
+		}
+
 		this._applyObjectsToSet();
+
+		if (this._debugMainInstanceMotion && !this._debugMainInstanceMotionDone)
+		{
+			const worldInfo = this._getWorldInfoOf(this);
+			const x = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), NaN);
+			const y = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), NaN);
+			const label = getDebugInstanceLabel(this);
+			const touchedBySetTo = this._objectsToSet.some((instr) =>
+				Array.isArray(instr && instr.c2Instances) &&
+				instr.c2Instances.some((obj) => obj === this || obj === this._inst)
+			);
+			console.debug(`[Spriter] Main motion probe: ${label}, x=${x}, y=${y}, drawSelf=${this.drawSelf}, objectsToSet=${this._objectsToSet.length}, selfTouchedBySetTo=${touchedBySetTo}`);
+			this._debugMainInstanceMotionDone = true;
+		}
 	}
 
 	_requestRenderUpdate()
@@ -2562,6 +2677,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._refreshMetaState(this._currentAdjustedTimeMs);
 		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
 		this._evaluateEventLines(this._currentAdjustedTimeMs, true);
+		this._resetLineTriggerChecksToTime(this._currentAdjustedTimeMs);
 	}
 
 	_normaliseLoopTime(timeMs, lengthMs)
@@ -2852,6 +2968,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._refreshMetaState(this._currentAdjustedTimeMs);
 		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
 		this._evaluateEventLines(this._currentAdjustedTimeMs, true);
+		this._resetLineTriggerChecksToTime(this._currentAdjustedTimeMs);
 		return true;
 	}
 
@@ -3309,6 +3426,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._playToTimeMs = -1;
 		this._evaluatePose();
 		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
+		this._evaluateEventLines(this._currentAdjustedTimeMs, true);
+		this._resetLineTriggerChecksToTime(this._currentAdjustedTimeMs);
 	}
 
 	_pauseAnimation()
@@ -4216,6 +4335,40 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 			eventLine.lastTimeMs = now;
 			eventLine.hasTime = true;
+		}
+	}
+
+	_resetLineTriggerChecksToTime(timeMs)
+	{
+		const t = toFiniteNumber(timeMs, this._currentAdjustedTimeMs);
+		const resetTime = t - 1;
+
+		if (Array.isArray(this._soundLines))
+		{
+			for (const soundLine of this._soundLines)
+			{
+				if (!soundLine || typeof soundLine !== "object")
+				{
+					continue;
+				}
+
+				soundLine.lastTimeMs = resetTime;
+				soundLine.hasTime = true;
+			}
+		}
+
+		if (Array.isArray(this._eventLines))
+		{
+			for (const eventLine of this._eventLines)
+			{
+				if (!eventLine || typeof eventLine !== "object")
+				{
+					continue;
+				}
+
+				eventLine.lastTimeMs = resetTime;
+				eventLine.hasTime = true;
+			}
 		}
 	}
 
@@ -6335,6 +6488,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._refreshMetaState(this._currentAdjustedTimeMs);
 		this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
 		this._evaluateEventLines(this._currentAdjustedTimeMs, true);
+		this._resetLineTriggerChecksToTime(this._currentAdjustedTimeMs);
 	}
 
 	_loadProjectDataIfNeeded()
@@ -6539,6 +6693,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		// Return an adapter that maps WorldInfo method calls to direct property access.
 		if (typeof inst.x === "number" && typeof inst.y === "number")
 		{
+			const owner = this;
 			return {
 				GetX() { return inst.x; },
 				GetY() { return inst.y; },
@@ -6557,7 +6712,36 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				SetOriginX(v) { /* v2: origin managed differently */ },
 				SetOriginY(v) { /* v2: origin managed differently */ },
 				SetBboxChanged() { /* v2: automatic when properties change */ },
-				SetCollisionEnabled(v) { /* v2: not applicable via WorldInfo */ },
+				SetCollisionEnabled(v) {
+					const enabled = !!v;
+					const targets = [inst, inst._inst, owner ? owner._getSdkInstanceOf(inst) : null]
+						.filter((t, i, arr) => !!t && arr.indexOf(t) === i);
+
+					for (const target of targets)
+					{
+						const maybeResult = callFirstMethod(target, ["SetCollisionEnabled", "setCollisionEnabled"], enabled);
+						if (maybeResult !== undefined)
+						{
+							return;
+						}
+
+						for (const propName of ["isCollisionEnabled", "collisionEnabled", "_collisionEnabled", "collisionsEnabled"])
+						{
+							try
+							{
+								if (propName in target)
+								{
+									target[propName] = enabled;
+									return;
+								}
+							}
+							catch (err)
+							{
+								// Keep probing other candidates.
+							}
+						}
+					}
+				},
 				ZOrderMoveAdjacentToInstance(other, isAfter) {
 					if (typeof inst.moveAdjacentToInstance === "function")
 						inst.moveAdjacentToInstance(other, isAfter);
@@ -7318,6 +7502,32 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		try
 		{
+			// SDK v2 picking APIs on IObjectType.
+			const picked = callFirstMethod(c2Object, ["GetPickedInstances", "getPickedInstances"]);
+			if (picked)
+			{
+				const pickedList = Array.isArray(picked) ? picked : Array.from(picked);
+				if (pickedList.length)
+				{
+					return pickedList;
+				}
+			}
+
+			const firstPickedInst = callFirstMethod(c2Object, ["GetFirstPickedInstance", "getFirstPickedInstance"]);
+			if (firstPickedInst)
+			{
+				return [firstPickedInst];
+			}
+
+			// If this object type is in a container, prefer the paired instance for this Spriter
+			// instance when no explicit picks are available.
+			const selfInst = callFirstMethod(this, ["GetInstance", "getInstance"]) || this._inst || this;
+			const paired = callFirstMethod(c2Object, ["GetPairedInstance", "getPairedInstance"], selfInst);
+			if (paired)
+			{
+				return [paired];
+			}
+
 			if (typeof c2Object.GetSolStack === "function")
 			{
 				const sol = c2Object.GetSolStack()._current;
@@ -7430,6 +7640,89 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 	}
 
+	_preclearAssociatedObjectsState(parentVisible)
+	{
+		if (!this._c2ObjectMap || !this._c2ObjectMap.size)
+		{
+			return;
+		}
+
+		for (const [mapKey, c2Entry] of this._c2ObjectMap)
+		{
+			if (!c2Entry || !c2Entry.inst)
+			{
+				continue;
+			}
+
+			const wi = this._getWorldInfoOf(c2Entry.inst);
+			if (!wi)
+			{
+				continue;
+			}
+
+			try
+			{
+				if (this.setCollisionsForObjects)
+				{
+					wi.SetCollisionEnabled(false);
+				}
+
+				if (this.setVisibilityForObjects)
+				{
+					wi.SetVisible(false && !!parentVisible);
+				}
+			}
+			catch (err)
+			{
+				// If the paired instance became invalid (e.g. wrong layout / destroyed), clear it and allow rebind later.
+				c2Entry.inst = null;
+			}
+		}
+	}
+
+	_cleanupAssociatedObjectsOnRelease()
+	{
+		if (!this._c2ObjectMap || !this._c2ObjectMap.size)
+		{
+			return;
+		}
+
+		for (const [mapKey, c2Entry] of this._c2ObjectMap)
+		{
+			if (!c2Entry || !c2Entry.inst)
+			{
+				continue;
+			}
+
+			const wi = this._getWorldInfoOf(c2Entry.inst);
+			if (!wi)
+			{
+				c2Entry.inst = null;
+				continue;
+			}
+
+			try
+			{
+				if (typeof wi.SetCollisionEnabled === "function")
+				{
+					wi.SetCollisionEnabled(false);
+				}
+				if (typeof wi.SetVisible === "function")
+				{
+					wi.SetVisible(false);
+				}
+				if (typeof wi.SetBboxChanged === "function")
+				{
+					wi.SetBboxChanged();
+				}
+			}
+			catch (err)
+			{
+				// Ignore release-time cleanup errors.
+			}
+		}
+	}
+
 	_applyPoseToInstances()
 	{
 		if (!this._nonSelfDrawDiagDone)
@@ -7458,7 +7751,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!this._c2ObjectMap.size) return;
 
 		const poseObjects = this._poseObjectStates;
-		if (!poseObjects.length) return;
 
 		const worldInfo = this._getWorldInfoOf(this);
 		if (!worldInfo)
@@ -7471,6 +7763,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const myY = worldInfo.GetY();
 		const myAngle = worldInfo.GetAngle();
 		const myVisible = worldInfo.IsVisible();
+		this._preclearAssociatedObjectsState(myVisible);
+
+		if (!poseObjects.length) return;
+
 		const globalScale = toFiniteNumber(this._globalScaleRatio, 1);
 		const mirrorFactor = this._xFlip ? -1 : 1;
 		const flipFactor = this._yFlip ? -1 : 1;
@@ -7575,14 +7871,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					}
 				}
 
-				// Visibility
-				if (this.setVisibilityForObjects)
-					wi.SetVisible(myVisible);
-
-				// Collision
-				if (this.setCollisionsForObjects)
-					wi.SetCollisionEnabled(true);
-
 				// Apply parent/root angle in non-self-draw mode (legacy behaviour).
 				const finalAngle = (rootFlipSign < 0)
 					? ((Math.PI * 2) - state.angle) + myAngle
@@ -7631,7 +7919,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					previousZInst = inst;
 				}
 
+				// Visibility/collision are toggled after the transform is fully updated so we don't
+				// momentarily re-enable a stale hitbox at the previous frame position.
+				if (this.setVisibilityForObjects)
+					wi.SetVisible(myVisible);
+
 				wi.SetBboxChanged();
+
+				if (this.setCollisionsForObjects)
+				{
+					wi.SetCollisionEnabled(true);
+				}
 			}
 			catch (err)
 			{
@@ -7682,6 +7980,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			for (const c2Inst of instr.c2Instances)
 			{
 				if (!c2Inst) continue;
+				if (c2Inst === this || c2Inst === this._inst) continue;
 				const wi = this._getWorldInfoOf(c2Inst);
 				if (!wi) continue;
 

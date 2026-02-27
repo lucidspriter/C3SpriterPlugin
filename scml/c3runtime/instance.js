@@ -10,6 +10,12 @@
 		return angleInRadians / 0.0174533;
 	}
 
+	function ToFiniteNumber(value, fallback)
+	{
+		var num = Number(value);
+		return Number.isFinite(num) ? num : fallback;
+	}
+
 	function DoCmp(a, cmp, b)
 	{
 		switch(cmp)
@@ -63,6 +69,16 @@
 
 			this.drawSelf = false;
 			this.ignoreGlobalTimeScale = false;
+
+			var startupWorldInfo = this.GetWorldInfo();
+			var startupWidth = startupWorldInfo && typeof startupWorldInfo.GetWidth === "function"
+				? startupWorldInfo.GetWidth()
+				: this.width;
+			var startupHeight = startupWorldInfo && typeof startupWorldInfo.GetHeight === "function"
+				? startupWorldInfo.GetHeight()
+				: this.height;
+			this._originalWidthForBehaviors = ToFiniteNumber(startupWidth, 0);
+			this._originalHeightForBehaviors = ToFiniteNumber(startupHeight, 0);
 			
 			this.NoPremultiply = this.properties[6]==0;
 			
@@ -74,6 +90,57 @@
 		Release()
 		{
 			super.Release();
+		}
+
+		// Tween behavior compatibility: TweenState.Build queries original-size APIs.
+		IsOriginalSizeKnown()
+		{
+			return this.GetOriginalWidth() > 0 && this.GetOriginalHeight() > 0;
+		}
+
+		isOriginalSizeKnown()
+		{
+			return this.IsOriginalSizeKnown();
+		}
+
+		GetOriginalWidth()
+		{
+			if (this._originalWidthForBehaviors > 0)
+			{
+				return this._originalWidthForBehaviors;
+			}
+
+			var worldInfo = this.GetWorldInfo();
+			if (worldInfo && typeof worldInfo.GetWidth === "function")
+			{
+				return ToFiniteNumber(worldInfo.GetWidth(), 0);
+			}
+			return 0;
+		}
+
+		getOriginalWidth()
+		{
+			return this.GetOriginalWidth();
+		}
+
+		GetOriginalHeight()
+		{
+			if (this._originalHeightForBehaviors > 0)
+			{
+				return this._originalHeightForBehaviors;
+			}
+
+			var worldInfo = this.GetWorldInfo();
+			if (worldInfo && typeof worldInfo.GetHeight === "function")
+			{
+				return ToFiniteNumber(worldInfo.GetHeight(), 0);
+			}
+			return 0;
+		}
+
+		getOriginalHeight()
+		{
+			return this.GetOriginalHeight();
 		}
 		
 		Draw(renderer)
