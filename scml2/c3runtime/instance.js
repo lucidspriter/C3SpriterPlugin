@@ -702,6 +702,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._triggeredFinishedAnimationName = "";
 		this._inAnimTrigger = false;
 		this._pendingAnimationChange = null;
+		this._pendingPreReadyAnimationChange = null;
 		this._varDefsById = new Map();
 		this._varDefsByName = new Map();
 		this._varDefsByScope = new Map();
@@ -2630,6 +2631,72 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		return -1;
 	}
 
+	_resolveAnimationIdentifierToName(identifier)
+	{
+		if (identifier == null)
+		{
+			return "";
+		}
+
+		if (typeof identifier === "string")
+		{
+			return identifier.trim();
+		}
+
+		const asNumber = Number(identifier);
+		if (!Number.isInteger(asNumber))
+		{
+			return "";
+		}
+
+		const animations = this.entity && Array.isArray(this.entity.animation) ? this.entity.animation : [];
+		for (let i = 0, len = animations.length; i < len; i++)
+		{
+			const animation = animations[i];
+			if (animation && Number.isInteger(animation.id) && animation.id === asNumber)
+			{
+				return typeof animation.name === "string" ? animation.name : "";
+			}
+		}
+
+		if (asNumber >= 0 && asNumber < animations.length)
+		{
+			const animation = animations[asNumber];
+			return animation && typeof animation.name === "string" ? animation.name : "";
+		}
+
+		return "";
+	}
+
+	_getAnimationName()
+	{
+		if (this._pendingAnimationChange)
+		{
+			const pendingName = this._resolveAnimationIdentifierToName(this._pendingAnimationChange.animationIdentifier);
+			if (pendingName)
+			{
+				return pendingName;
+			}
+		}
+
+		const currentAnimation = this.animation;
+		if (currentAnimation && typeof currentAnimation.name === "string")
+		{
+			return currentAnimation.name;
+		}
+
+		if (this._pendingPreReadyAnimationChange)
+		{
+			const queuedName = this._resolveAnimationIdentifierToName(this._pendingPreReadyAnimationChange.animationIdentifier);
+			if (queuedName)
+			{
+				return queuedName;
+			}
+		}
+
+		return typeof this.startingAnimationName === "string" ? this.startingAnimationName.trim() : "";
+	}
+
 	_rebuildAnimationTimelineCache(animation)
 	{
 		this._timelineById.clear();
@@ -2666,12 +2733,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		if (!this.entity)
 		{
-			if (typeof animationIdentifier === "string" && animationIdentifier.trim())
+			this._pendingPreReadyAnimationChange = {
+				animationIdentifier,
+				startFrom,
+				blendDuration
+			};
+
+			const requestedName = this._resolveAnimationIdentifierToName(animationIdentifier);
+			if (requestedName)
 			{
-				this.startingAnimationName = animationIdentifier.trim();
+				this.startingAnimationName = requestedName;
 			}
-			return false;
+			return true;
 		}
+		this._pendingPreReadyAnimationChange = null;
 
 		const animationIndex = this._findAnimationByIdentifier(animationIdentifier);
 		if (animationIndex < 0)
@@ -6262,6 +6337,21 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._buildSoundLineCache();
 		this._buildEventLineCache();
 		this._applyAnimationBoundsToWorldInfo(animation);
+
+		const pendingPreReady = this._pendingPreReadyAnimationChange;
+		if (pendingPreReady)
+		{
+			this._pendingPreReadyAnimationChange = null;
+			const didApplyPending = this._setAnimation(
+				pendingPreReady.animationIdentifier,
+				pendingPreReady.startFrom,
+				pendingPreReady.blendDuration
+			);
+			if (didApplyPending)
+			{
+				return;
+			}
+		}
 
 		// Ensure we have an evaluated pose ready for the first draw.
 		this._evaluatePose();

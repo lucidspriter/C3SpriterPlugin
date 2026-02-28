@@ -243,15 +243,17 @@ C3.Plugins.Spriter.Exps =
 
 	AnimationName()
 	{
-		const animation = this.animation;
-		return animation && typeof animation.name === "string" ? animation.name : "";
+		return (typeof this._getAnimationName === "function")
+			? this._getAnimationName()
+			: (this.animation && typeof this.animation.name === "string" ? this.animation.name : "");
 	},
 
 	// Legacy ACE alias used by older projects.
 	animationName()
 	{
-		const animation = this.animation;
-		return animation && typeof animation.name === "string" ? animation.name : "";
+		return (typeof this._getAnimationName === "function")
+			? this._getAnimationName()
+			: (this.animation && typeof this.animation.name === "string" ? this.animation.name : "");
 	},
 
 	TriggeredSound()
