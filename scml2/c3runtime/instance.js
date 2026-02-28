@@ -100,143 +100,6 @@ function isPromiseLike(value)
 	return !!(value && typeof value.then === "function");
 }
 
-function safeDescribeValue(value)
-{
-	if (value == null)
-	{
-		return String(value);
-	}
-
-	const t = typeof value;
-	if (t === "string" || t === "number" || t === "boolean")
-	{
-		return `${t}:${String(value)}`;
-	}
-
-	if (Array.isArray(value))
-	{
-		return `Array(len=${value.length})`;
-	}
-
-	const ctor = value && value.constructor && value.constructor.name ? value.constructor.name : "Object";
-	return `${t}:${ctor}`;
-}
-
-function debugLogProtoChain(label, obj, maxDepth = 5)
-{
-	try
-	{
-		const seen = new Set();
-		let current = obj;
-		let depth = 0;
-
-		while (current && !seen.has(current) && depth < maxDepth)
-		{
-			seen.add(current);
-
-			const ctorName = current && current.constructor && current.constructor.name
-				? current.constructor.name
-				: "(no ctor)";
-
-			let names = [];
-			let symbols = [];
-			try
-			{
-				names = Object.getOwnPropertyNames(current);
-			}
-			catch (_)
-			{
-				names = [];
-			}
-
-			try
-			{
-				symbols = Object.getOwnPropertySymbols(current).map(s => String(s));
-			}
-			catch (_)
-			{
-				symbols = [];
-			}
-
-			const funcs = [];
-			const props = [];
-			for (const n of names)
-			{
-				let desc = null;
-				try
-				{
-					desc = Object.getOwnPropertyDescriptor(current, n);
-				}
-				catch (_)
-				{
-					desc = null;
-				}
-
-				if (desc && typeof desc.value === "function")
-				{
-					funcs.push(n);
-				}
-				else
-				{
-					props.push(n);
-				}
-			}
-
-			spriterDebugLog(`[Spriter] Probe ${label} proto[${depth}] ctor=${ctorName} funcs=`, funcs.sort());
-			spriterDebugLog(`[Spriter] Probe ${label} proto[${depth}] props=`, props.sort());
-			if (symbols.length)
-			{
-				spriterDebugLog(`[Spriter] Probe ${label} proto[${depth}] symbols=`, symbols);
-			}
-
-			current = Object.getPrototypeOf(current);
-			depth++;
-		}
-	}
-	catch (error)
-	{
-		console.warn(`[Spriter] Probe ${label} proto scan failed.`, error);
-	}
-}
-
-function debugProbeCalls(label, obj, names)
-{
-	if (!obj || !Array.isArray(names))
-	{
-		return;
-	}
-
-	for (const name of names)
-	{
-		try
-		{
-			const value = obj[name];
-			if (typeof value !== "function")
-			{
-				spriterDebugLog(`[Spriter] Probe ${label} ${name}:`, safeDescribeValue(value));
-				continue;
-			}
-
-			let result;
-			try
-			{
-				result = value.call(obj);
-			}
-			catch (error)
-			{
-				spriterDebugLog(`[Spriter] Probe ${label} ${name}() threw: ${error && error.message ? error.message : String(error)}`);
-				continue;
-			}
-
-			spriterDebugLog(`[Spriter] Probe ${label} ${name}() ->`, safeDescribeValue(result), result);
-		}
-		catch (error)
-		{
-			spriterDebugLog(`[Spriter] Probe ${label} ${name} access threw: ${error && error.message ? error.message : String(error)}`);
-		}
-	}
-}
-
 function clamp(value, min, max)
 {
 	return Math.min(max, Math.max(min, value));
@@ -702,30 +565,6 @@ function normaliseComboValue(value, options, defaultIndex = 0)
 	return defaultIndex;
 }
 
-function getDebugInstanceLabel(inst)
-{
-	if (!inst)
-	{
-		return "?";
-	}
-
-	const objectType = inst.objectType || inst.type || inst._objectType || null;
-	const typeName = objectType
-		? (typeof objectType.GetName === "function"
-			? objectType.GetName()
-			: (typeof objectType.name === "string" ? objectType.name : "Spriter"))
-		: "Spriter";
-	const iid = typeof inst.GetIID === "function"
-		? inst.GetIID()
-		: (inst._inst && typeof inst._inst.GetIID === "function" ? inst._inst.GetIID() : "?");
-	const nickname = typeof inst.nicknameInC2 === "string" && inst.nicknameInC2.trim()
-		? inst.nicknameInC2.trim()
-		: "";
-	return nickname
-		? `${typeName}[IID=${iid}, nick='${nickname}']`
-		: `${typeName}[IID=${iid}]`;
-}
-
 function normaliseInitialProperties(initialProperties)
 {
 	const source = Array.isArray(initialProperties) ? initialProperties : [];
@@ -848,11 +687,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.setLayersForSprites = true;
 		this.setVisibilityForObjects = true;
 		this.setCollisionsForObjects = true;
-		this._deferAssociatedApplyToTick2 = false;
-		this._deferAnimFinishedTriggerToTick2 = false;
-		this._deferLineTriggerEvalToTick2 = false;
-		this._debugMainInstanceMotion = true;
-		this._debugMainInstanceMotionDone = false;
 
 		// Legacy compatibility state (character maps, overrides, events, vars/tags, viewport pausing).
 		this._characterMapsByName = new Map();
@@ -909,9 +743,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_release()
 	{
-		this._deferAssociatedApplyToTick2 = false;
-		this._deferAnimFinishedTriggerToTick2 = false;
-		this._deferLineTriggerEvalToTick2 = false;
 		this._cleanupAssociatedObjectsOnRelease();
 		this._isReleased = true;
 		super._release();
@@ -1030,12 +861,18 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			return;
 		}
-		this._debugMainInstanceMotionDone = false;
-
-		this._deferAssociatedApplyToTick2 = false;
-		this._deferAnimFinishedTriggerToTick2 = false;
-		this._deferLineTriggerEvalToTick2 = false;
+		// Legacy parity: clear one-tick overrides before event sheets run.
+		this._objectOverridesByName.clear();
+		this._boneIkOverridesByName.clear();
 		this._loadProjectDataIfNeeded();
+	}
+
+	_tick2()
+	{
+		if (this._isReleased)
+		{
+			return;
+		}
 
 		if (!this.isReady || !this.animation)
 		{
@@ -1048,7 +885,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			if (this._advanceTime(dtSeconds))
 			{
-				this._deferAnimFinishedTriggerToTick2 = true;
+				this._triggerAnimationFinished();
+				if (this._pendingAnimationChange)
+				{
+					const pending = this._pendingAnimationChange;
+					this._pendingAnimationChange = null;
+					this._setAnimation(pending.animationIdentifier, pending.startFrom, pending.blendDuration);
+				}
 			}
 			this._advanceAutoBlend(dtSeconds);
 		}
@@ -1061,9 +904,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			this._evaluatePose();
 			this._refreshMetaState(this._currentAdjustedTimeMs);
-			// Apply associated helper objects in _tick2 (after events/actions) so they use the
-			// final object transform/animation state for this tick, matching legacy timing better.
-			this._deferAssociatedApplyToTick2 = true;
+			this._applyPoseToInstances();
 
 			if (this.drawSelf && shouldAdvance)
 			{
@@ -1078,62 +919,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		// Legacy timing parity: evaluate event/sound lines in Tick2.
-		this._deferLineTriggerEvalToTick2 = true;
+		this._evaluateSoundLines(this._currentAdjustedTimeMs);
+		this._evaluateEventLines(this._currentAdjustedTimeMs);
 
 		// Keep vars/tags in sync while paused by viewport optimization modes.
 		if (pauseAllButSound)
 		{
 			this._refreshMetaState(this._currentAdjustedTimeMs);
 		}
-	}
-
-	_tick2()
-	{
-		if (this._isReleased)
-		{
-			return;
-		}
-
-		if (this._deferAnimFinishedTriggerToTick2)
-		{
-			this._deferAnimFinishedTriggerToTick2 = false;
-			this._triggerAnimationFinished();
-			if (this._pendingAnimationChange)
-			{
-				const pending = this._pendingAnimationChange;
-				this._pendingAnimationChange = null;
-				this._setAnimation(pending.animationIdentifier, pending.startFrom, pending.blendDuration);
-			}
-		}
-
-		if (this._deferAssociatedApplyToTick2)
-		{
-			this._deferAssociatedApplyToTick2 = false;
-			this._applyPoseToInstances();
-		}
-
-		if (this._deferLineTriggerEvalToTick2)
-		{
-			this._deferLineTriggerEvalToTick2 = false;
-			this._evaluateSoundLines(this._currentAdjustedTimeMs);
-			this._evaluateEventLines(this._currentAdjustedTimeMs);
-		}
 
 		this._applyObjectsToSet();
-
-		if (this._debugMainInstanceMotion && !this._debugMainInstanceMotionDone)
-		{
-			const x = toFiniteNumber(this._getSelfX(), NaN);
-			const y = toFiniteNumber(this._getSelfY(), NaN);
-			const label = getDebugInstanceLabel(this);
-			const touchedBySetTo = this._objectsToSet.some((instr) =>
-				Array.isArray(instr && instr.c2Instances) &&
-				instr.c2Instances.some((obj) => obj === this || obj === this._inst)
-			);
-			console.debug(`[Spriter] Main motion probe: ${label}, x=${x}, y=${y}, drawSelf=${this.drawSelf}, objectsToSet=${this._objectsToSet.length}, selfTouchedBySetTo=${touchedBySetTo}`);
-			this._debugMainInstanceMotionDone = true;
-		}
 	}
 
 	_requestRenderUpdate()
@@ -1758,73 +1553,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 								}
 							}
 						}
-
-						if (this._atlasDebug && !this._atlasDebug.loggedLegacyFrameProbeObject)
-						{
-						this._atlasDebug.loggedLegacyFrameProbeObject = true;
-
-						const getObjectClass = typeof this.GetObjectClass === "function"
-							? this.GetObjectClass.bind(this)
-							: typeof this.getObjectClass === "function"
-								? this.getObjectClass.bind(this)
-								: null;
-						let probeObject = null;
-
-						if (getObjectClass)
-						{
-							try
-							{
-								probeObject = getObjectClass();
-							}
-							catch (_)
-							{
-								probeObject = null;
-							}
-						}
-
-						if (!probeObject)
-						{
-							probeObject = this.objectType || null;
-						}
-
-						spriterDebugLog("[Spriter] Legacy atlas frame compatibility probe object (expand in devtools):", probeObject);
-						debugLogProtoChain("legacy-atlas-probe", probeObject, 6);
-						debugProbeCalls("legacy-atlas-probe", probeObject, [
-							"GetObjectClass",
-							"getObjectClass",
-							"_getObjectClass",
-							"GetAnimations",
-							"getAnimations",
-							"GetImageInfo",
-							"getImageInfo",
-							"_getAtlasFrames",
-							"_getAtlasFrame",
-							"GetSdkType",
-							"getSdkType",
-							"GetType",
-							"getType"
-						]);
-
-						if (probeObject && typeof probeObject._getObjectClass === "function")
-						{
-							try
-							{
-								const objectClassProbe = probeObject._getObjectClass();
-								spriterDebugLog("[Spriter] Legacy atlas object-class probe via _getObjectClass():", objectClassProbe);
-								debugLogProtoChain("legacy-atlas-objectClass", objectClassProbe, 5);
-								debugProbeCalls("legacy-atlas-objectClass", objectClassProbe, [
-									"GetAnimations",
-									"getAnimations",
-									"GetFrames",
-									"getFrames"
-								]);
-							}
-							catch (error)
-							{
-								console.warn("[Spriter] Legacy atlas object-class probe via _getObjectClass() failed.", error);
-							}
-						}
-					}
 
 					const frame = this._getAtlasFrame(atlasIndex);
 					const imageInfo = frame && typeof frame.GetImageInfo === "function"
@@ -7444,36 +7172,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!this._didWarnSpriteFrameApiUnavailable)
 		{
 			this._didWarnSpriteFrameApiUnavailable = true;
-			const gatherAnimKeys = (obj) =>
-			{
-				if (!obj || (typeof obj !== "object" && typeof obj !== "function"))
-				{
-					return [];
-				}
-
-				const names = new Set();
-				let proto = obj;
-				let depth = 0;
-				while (proto && depth < 3)
-				{
-					for (const key of Object.getOwnPropertyNames(proto))
-					{
-						if (/anim|frame/i.test(key))
-						{
-							names.add(key);
-						}
-					}
-					proto = Object.getPrototypeOf(proto);
-					depth++;
-				}
-
-				return Array.from(names).sort();
-			};
-
-			const instKeys = gatherAnimKeys(inst).join(", ");
-			const sdkKeys = gatherAnimKeys(sdkInst).join(", ");
 			console.warn("[Spriter] Non-self-draw sprite frame API unavailable; image swaps may not work in this runtime.");
-			console.warn(`[Spriter] Frame API probe keys: inst=[${instKeys}], sdkInst=[${sdkKeys}]`);
 		}
 
 		return false;
