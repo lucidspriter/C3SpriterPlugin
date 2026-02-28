@@ -720,21 +720,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._enableTickingCallbacks("constructor");
 
 		// Recreate textures if the renderer context is lost (e.g. WebGL context loss).
-		if (typeof this._handleRendererContextLoss === "function")
-			this._handleRendererContextLoss();
+		this._handleRendererContextLoss();
 	}
 
 	_enableTickingCallbacks(source)
 	{
-		if (typeof this._setTicking === "function")
-		{
-			this._setTicking(true);
-		}
-
-		if (typeof this._setTicking2 === "function")
-		{
-			this._setTicking2(true);
-		}
+		this._setTicking(true);
+		this._setTicking2(true);
 	}
 
 	_onCreate()
@@ -2089,10 +2081,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		const loadAsset = imageInfo.LoadAsset || imageInfo.loadAsset || null;
-		if (typeof loadAsset === "function")
-		{
-			loadAsset.call(imageInfo, this.runtime);
-		}
+		loadAsset.call(imageInfo, this.runtime);
 
 		const loadStaticTexture = imageInfo.LoadStaticTexture || imageInfo.loadStaticTexture || null;
 		if (typeof loadStaticTexture !== "function")
@@ -3040,10 +3029,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		worldInfo.SetVisible(Number(visible) !== 0);
-		if (typeof worldInfo.SetBboxChanged === "function")
-		{
-			worldInfo.SetBboxChanged();
-		}
+		worldInfo.SetBboxChanged();
 	}
 
 	_setOpacity(opacityPercent)
@@ -3058,10 +3044,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		worldInfo.SetOpacity(percent / 100);
-		if (typeof worldInfo.SetBboxChanged === "function")
-		{
-			worldInfo.SetBboxChanged();
-		}
+		worldInfo.SetBboxChanged();
 	}
 
 	_setSecondAnim(animName)
@@ -6613,8 +6596,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					}
 				},
 				ZOrderMoveAdjacentToInstance(other, isAfter) {
-					if (typeof inst.moveAdjacentToInstance === "function")
-						inst.moveAdjacentToInstance(other, isAfter);
+					inst.moveAdjacentToInstance(other, isAfter);
 				}
 			};
 		}
@@ -7544,18 +7526,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 			try
 			{
-				if (typeof wi.SetCollisionEnabled === "function")
-				{
-					wi.SetCollisionEnabled(false);
-				}
-				if (typeof wi.SetVisible === "function")
-				{
-					wi.SetVisible(false);
-				}
-				if (typeof wi.SetBboxChanged === "function")
-				{
-					wi.SetBboxChanged();
-				}
+				wi.SetCollisionEnabled(false);
+				wi.SetVisible(false);
+				wi.SetBboxChanged();
 			}
 			catch (err)
 			{
