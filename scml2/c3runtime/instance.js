@@ -764,27 +764,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.noPremultiply = this.properties[PROPERTY_INDEX.BLEND_MODE] === 0;
 		this.drawDebug = this.properties[PROPERTY_INDEX.DRAW_DEBUG] === 1;
 
-		const startupWorldInfo = (typeof this.GetWorldInfo === "function")
-			? this.GetWorldInfo()
-			: (typeof this.getWorldInfo === "function")
-				? this.getWorldInfo()
-				: null;
-		const startupGetWidth = startupWorldInfo
-			? (typeof startupWorldInfo.GetWidth === "function")
-				? startupWorldInfo.GetWidth.bind(startupWorldInfo)
-				: (typeof startupWorldInfo.getWidth === "function")
-					? startupWorldInfo.getWidth.bind(startupWorldInfo)
-					: null
-			: null;
-		const startupGetHeight = startupWorldInfo
-			? (typeof startupWorldInfo.GetHeight === "function")
-				? startupWorldInfo.GetHeight.bind(startupWorldInfo)
-				: (typeof startupWorldInfo.getHeight === "function")
-					? startupWorldInfo.getHeight.bind(startupWorldInfo)
-					: null
-			: null;
-		const startupWidth = startupGetWidth ? startupGetWidth() : toFiniteNumber(this.width, 50);
-		const startupHeight = startupGetHeight ? startupGetHeight() : toFiniteNumber(this.height, 50);
+		const startupWidth = toFiniteNumber(this.width, 50);
+		const startupHeight = toFiniteNumber(this.height, 50);
 		const startupScaleRatio = toFiniteNumber(startupWidth, 50) / 50;
 		// Legacy behaviour: startup object width defines the global Spriter scale ratio.
 		this._globalScaleRatio = (Number.isFinite(startupScaleRatio) && startupScaleRatio !== 0) ? startupScaleRatio : 1;
@@ -868,6 +849,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.setVisibilityForObjects = true;
 		this.setCollisionsForObjects = true;
 		this._deferAssociatedApplyToTick2 = false;
+		this._deferAnimFinishedTriggerToTick2 = false;
+		this._deferLineTriggerEvalToTick2 = false;
 		this._debugMainInstanceMotion = true;
 		this._debugMainInstanceMotionDone = false;
 
@@ -927,9 +910,76 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_release()
 	{
 		this._deferAssociatedApplyToTick2 = false;
+		this._deferAnimFinishedTriggerToTick2 = false;
+		this._deferLineTriggerEvalToTick2 = false;
 		this._cleanupAssociatedObjectsOnRelease();
 		this._isReleased = true;
 		super._release();
+	}
+
+	_getSelfWorldInfo()
+	{
+		return this._getWorldInfoOf(this);
+	}
+
+	_getSelfX()
+	{
+		const x = Number(this.x);
+		if (Number.isFinite(x))
+		{
+			return x;
+		}
+
+		const worldInfo = this._getSelfWorldInfo();
+		return toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
+	}
+
+	_getSelfY()
+	{
+		const y = Number(this.y);
+		if (Number.isFinite(y))
+		{
+			return y;
+		}
+
+		const worldInfo = this._getSelfWorldInfo();
+		return toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
+	}
+
+	_getSelfAngle()
+	{
+		const angle = Number(this.angle);
+		if (Number.isFinite(angle))
+		{
+			return angle;
+		}
+
+		const worldInfo = this._getSelfWorldInfo();
+		return toFiniteNumber(callFirstMethod(worldInfo, ["GetAngle", "getAngle"]), 0);
+	}
+
+	_getSelfWidth()
+	{
+		const width = Number(this.width);
+		if (Number.isFinite(width))
+		{
+			return width;
+		}
+
+		const worldInfo = this._getSelfWorldInfo();
+		return toFiniteNumber(callFirstMethod(worldInfo, ["GetWidth", "getWidth"]), 0);
+	}
+
+	_getSelfHeight()
+	{
+		const height = Number(this.height);
+		if (Number.isFinite(height))
+		{
+			return height;
+		}
+
+		const worldInfo = this._getSelfWorldInfo();
+		return toFiniteNumber(callFirstMethod(worldInfo, ["GetHeight", "getHeight"]), 0);
 	}
 
 	// Tween behavior compatibility: Construct expects world instances to provide
@@ -951,8 +1001,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return this._originalWidthForBehaviors;
 		}
 
-		const worldInfo = this._getWorldInfoOf(this);
-		return toFiniteNumber(callFirstMethod(worldInfo, ["GetWidth", "getWidth"]), 0);
+		return this._getSelfWidth();
 	}
 
 	getOriginalWidth()
@@ -967,8 +1016,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return this._originalHeightForBehaviors;
 		}
 
-		const worldInfo = this._getWorldInfoOf(this);
-		return toFiniteNumber(callFirstMethod(worldInfo, ["GetHeight", "getHeight"]), 0);
+		return this._getSelfHeight();
 	}
 
 	getOriginalHeight()
@@ -985,6 +1033,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._debugMainInstanceMotionDone = false;
 
 		this._deferAssociatedApplyToTick2 = false;
+		this._deferAnimFinishedTriggerToTick2 = false;
+		this._deferLineTriggerEvalToTick2 = false;
 		this._loadProjectDataIfNeeded();
 
 		if (!this.isReady || !this.animation)
@@ -998,13 +1048,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			if (this._advanceTime(dtSeconds))
 			{
-				this._triggerAnimationFinished();
-				if (this._pendingAnimationChange)
-				{
-					const pending = this._pendingAnimationChange;
-					this._pendingAnimationChange = null;
-					this._setAnimation(pending.animationIdentifier, pending.startFrom, pending.blendDuration);
-				}
+				this._deferAnimFinishedTriggerToTick2 = true;
 			}
 			this._advanceAutoBlend(dtSeconds);
 		}
@@ -1034,8 +1078,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		this._evaluateSoundLines(this._currentAdjustedTimeMs);
-		this._evaluateEventLines(this._currentAdjustedTimeMs);
+		// Legacy timing parity: evaluate event/sound lines in Tick2.
+		this._deferLineTriggerEvalToTick2 = true;
 
 		// Keep vars/tags in sync while paused by viewport optimization modes.
 		if (pauseAllButSound)
@@ -1051,19 +1095,37 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
+		if (this._deferAnimFinishedTriggerToTick2)
+		{
+			this._deferAnimFinishedTriggerToTick2 = false;
+			this._triggerAnimationFinished();
+			if (this._pendingAnimationChange)
+			{
+				const pending = this._pendingAnimationChange;
+				this._pendingAnimationChange = null;
+				this._setAnimation(pending.animationIdentifier, pending.startFrom, pending.blendDuration);
+			}
+		}
+
 		if (this._deferAssociatedApplyToTick2)
 		{
 			this._deferAssociatedApplyToTick2 = false;
 			this._applyPoseToInstances();
 		}
 
+		if (this._deferLineTriggerEvalToTick2)
+		{
+			this._deferLineTriggerEvalToTick2 = false;
+			this._evaluateSoundLines(this._currentAdjustedTimeMs);
+			this._evaluateEventLines(this._currentAdjustedTimeMs);
+		}
+
 		this._applyObjectsToSet();
 
 		if (this._debugMainInstanceMotion && !this._debugMainInstanceMotionDone)
 		{
-			const worldInfo = this._getWorldInfoOf(this);
-			const x = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), NaN);
-			const y = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), NaN);
+			const x = toFiniteNumber(this._getSelfX(), NaN);
+			const y = toFiniteNumber(this._getSelfY(), NaN);
 			const label = getDebugInstanceLabel(this);
 			const touchedBySetTo = this._objectsToSet.some((instr) =>
 				Array.isArray(instr && instr.c2Instances) &&
@@ -1106,19 +1168,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		const worldInfo = (typeof this.GetWorldInfo === "function")
-			? this.GetWorldInfo()
-			: (typeof this.getWorldInfo === "function")
-				? this.getWorldInfo()
-				: null;
+		const worldInfo = this._getWorldInfoOf(this);
 
-		// Blend mode: match existing C3 behaviour where possible.
-		const getBlendMode = worldInfo
-			? (typeof worldInfo.GetBlendMode === "function")
-				? worldInfo.GetBlendMode.bind(worldInfo)
-				: (typeof worldInfo.getBlendMode === "function")
-					? worldInfo.getBlendMode.bind(worldInfo)
-					: null
+		// Blend mode: use the documented world-instance property when available.
+		const blendModeValue = Number(this.blendMode);
+		const getBlendMode = Number.isFinite(blendModeValue)
+			? (() => blendModeValue)
 			: null;
 
 		if (this.noPremultiply && typeof renderer.SetNoPremultiplyAlphaBlend === "function")
@@ -4873,10 +4928,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_worldToPoseLocal(worldX, worldY)
 	{
-		const worldInfo = this._getWorldInfoOf(this);
-		const myX = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
-		const myY = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
-		const myAngle = toFiniteNumber(callFirstMethod(worldInfo, ["GetAngle", "getAngle"]), 0);
+		const myX = this._getSelfX();
+		const myY = this._getSelfY();
+		const myAngle = this._getSelfAngle();
 		const cosA = Math.cos(myAngle);
 		const sinA = Math.sin(myAngle);
 		const dx = toFiniteNumber(worldX, myX) - myX;
@@ -4943,9 +4997,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			{
 				case OVERRIDE_COMPONENT.ANGLE:
 				{
-					const worldInfo = this._getWorldInfoOf(this);
 					const objectAngle = degreesToRadians(toFiniteNumber(value, 0));
-					const myAngle = toFiniteNumber(callFirstMethod(worldInfo, ["GetAngle", "getAngle"]), 0);
+					const myAngle = this._getSelfAngle();
 					const flipSign = (this._xFlip ? -1 : 1) * (this._yFlip ? -1 : 1);
 					state.angle = flipSign < 0
 						? (Math.PI * 2) - (objectAngle - myAngle)
@@ -5055,13 +5108,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_isOutsideViewportBox()
 	{
+		// SDK2 official path: world instances expose `layer` directly.
+		// Keep worldInfo.GetLayer() only as legacy fallback.
 		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo)
-		{
-			return false;
-		}
-
-		const layer = callFirstMethod(worldInfo, ["GetLayer", "getLayer"]);
+		const layer = this.layer || (worldInfo && typeof worldInfo.GetLayer === "function"
+			? worldInfo.GetLayer()
+			: null);
 		if (!layer)
 		{
 			return false;
@@ -5073,8 +5125,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return false;
 		}
 
-		const x = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
-		const y = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
+		const x = this._getSelfX();
+		const y = this._getSelfY();
 
 		return (
 			x < bounds.left - toFiniteNumber(this._autoPauseLeftBuffer, 0) ||
@@ -8067,9 +8119,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			};
 		}
 
-		const myX = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
-		const myY = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
-		const myAngle = toFiniteNumber(callFirstMethod(worldInfo, ["GetAngle", "getAngle"]), 0);
+		const myX = this._getSelfX();
+		const myY = this._getSelfY();
+		const myAngle = this._getSelfAngle();
 		const cosA = Math.cos(myAngle);
 		const sinA = Math.sin(myAngle);
 		const globalScale = toFiniteNumber(this._globalScaleRatio, 1);
@@ -8165,10 +8217,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
-		const x = toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
-		const y = toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
-		const width = Math.abs(toFiniteNumber(callFirstMethod(worldInfo, ["GetWidth", "getWidth"]), 0));
-		const height = Math.abs(toFiniteNumber(callFirstMethod(worldInfo, ["GetHeight", "getHeight"]), 0));
+		const x = this._getSelfX();
+		const y = this._getSelfY();
+		const width = Math.abs(this._getSelfWidth());
+		const height = Math.abs(this._getSelfHeight());
 		const halfW = width * 0.5;
 		const halfH = height * 0.5;
 
