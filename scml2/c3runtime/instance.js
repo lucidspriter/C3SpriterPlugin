@@ -3239,6 +3239,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_setAnimationLoop(loopOn)
 	{
 		const shouldLoop = Number(loopOn) !== 0;
+
+		// Legacy parity: if an animation change is queued during a trigger, apply loop mode
+		// to the queued target animation (legacy used changeAnimTo for this).
+		if (this._pendingAnimationChange && this.entity && this.entityIndex >= 0)
+		{
+			const pendingIndex = this._findAnimationByIdentifier(this._pendingAnimationChange.animationIdentifier);
+			if (pendingIndex >= 0)
+			{
+				const pendingKey = `${this.entityIndex}:${pendingIndex}`;
+				this._loopOverrideByAnimationIndex.set(pendingKey, shouldLoop);
+				return;
+			}
+		}
+
 		if (!this.animation || this.animationIndex < 0)
 		{
 			this._pendingLoopOverride = shouldLoop;
@@ -6547,6 +6561,60 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (typeof inst.x === "number" && typeof inst.y === "number")
 		{
 			const owner = this;
+			const setOriginAxis = (axis, value) =>
+			{
+				const numeric = toFiniteNumber(value, 0);
+				const methodNames = axis === "x"
+					? ["SetOriginX", "setOriginX"]
+					: ["SetOriginY", "setOriginY"];
+				const propNames = axis === "x"
+					? ["originX", "hotspotX", "pivotX", "_originX"]
+					: ["originY", "hotspotY", "pivotY", "_originY"];
+
+				const targets = [inst, inst._inst, owner ? owner._getSdkInstanceOf(inst) : null]
+					.filter((t, i, arr) => !!t && arr.indexOf(t) === i);
+
+				let wrote = false;
+
+				for (const target of targets)
+				{
+					let calledMethod = false;
+					for (const methodName of methodNames)
+					{
+						if (typeof target[methodName] === "function")
+						{
+							target[methodName](numeric);
+							calledMethod = true;
+							wrote = true;
+							break;
+						}
+					}
+
+					for (const propName of propNames)
+					{
+						try
+						{
+							if (propName in target)
+							{
+								target[propName] = numeric;
+								wrote = true;
+							}
+						}
+						catch (_)
+						{
+							// Keep probing writable origin representations.
+						}
+					}
+
+					if (!calledMethod && wrote)
+					{
+						callFirstMethod(target, ["SetBboxChanged", "setBboxChanged"]);
+					}
+				}
+
+				return wrote;
+			};
+
 			return {
 				GetX() { return inst.x; },
 				GetY() { return inst.y; },
@@ -6562,8 +6630,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				SetVisible(v) { inst.isVisible = v; },
 				GetOpacity() { return inst.opacity != null ? inst.opacity : 1; },
 				SetOpacity(v) { inst.opacity = v; },
-				SetOriginX(v) { /* v2: origin managed differently */ },
-				SetOriginY(v) { /* v2: origin managed differently */ },
+				GetOriginX() { return toFiniteNumber(inst.originX ?? inst.hotspotX ?? inst.pivotX, 0); },
+				GetOriginY() { return toFiniteNumber(inst.originY ?? inst.hotspotY ?? inst.pivotY, 0); },
+				SetOriginX(v) { setOriginAxis("x", v); },
+				SetOriginY(v) { setOriginAxis("y", v); },
 				SetBboxChanged() { /* v2: automatic when properties change */ },
 				SetCollisionEnabled(v) {
 					const enabled = !!v;
