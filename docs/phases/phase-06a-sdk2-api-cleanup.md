@@ -124,6 +124,38 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
     - Compare `pointX/pointY`, `objectX/objectY`, and angle expressions against visible helper placement.
     - Check bbox expressions while moving/scaling the Spriter object.
 
+#### Pass 2 API translation map
+- Context: reading the Spriter instance position, angle, and size.
+  - Current pattern: read `this.x`/`this.y`/`this.angle`/`this.width`/`this.height` first, then fall back to world-info getter probing.
+  - Documented SDK2 call: `this.x`, `this.y`, `this.angle`, `this.width`, `this.height`.
+  - Notes: `IWorldInstance` exposes these directly as layout-coordinate properties.
+  - Source: `IWorldInstance` scripting reference.
+- Context: reading the current layer and viewport.
+  - Current pattern: probe `GetLayer/getLayer` from world info and `GetViewport/getViewport` from layer, then probe left/right/top/bottom from the viewport object.
+  - Documented SDK2 call: `this.layer` and `this.layer.getViewport()`.
+  - Notes: `getViewport()` returns a `DOMRect`, so read `left`, `right`, `top`, and `bottom` directly from the returned rectangle.
+  - Source: `IWorldInstance` scripting reference (`layer`) and `ILayer` scripting reference (`getViewport()`).
+- Context: reading bounding-box values for expressions and viewport culling.
+  - Current pattern: probe `GetBoundingBox/getBoundingBox` and then probe edge getters from the returned box.
+  - Documented SDK2 call: `this.getBoundingBox()`.
+  - Notes: this returns a `DOMRect`, so read `left`, `right`, `top`, and `bottom` directly.
+  - Source: `IWorldInstance` scripting reference (`getBoundingBox()`).
+- Context: reading visibility and opacity.
+  - Current pattern: probe world-info getters like `GetOpacity/getOpacity` and `IsVisible`.
+  - Documented SDK2 call: `this.opacity` and `this.isVisible`.
+  - Notes: opacity is in the range `[0, 1]`.
+  - Source: `IWorldInstance` scripting reference (`opacity`, `isVisible`).
+- Context: reading blend mode.
+  - Current pattern: mixed direct-property and world-info access.
+  - Documented SDK2 call: `this.blendMode`.
+  - Notes: `blendMode` is a string in the scripting API; where renderer calls need a different format, keep that conversion local and explicit.
+  - Source: `IWorldInstance` scripting reference (`blendMode`).
+- Context: reading Z elevation.
+  - Current pattern: probe `GetZElevation/getZElevation` and `GetTotalZElevation/getTotalZElevation`.
+  - Documented SDK2 call: `this.zElevation` and `this.totalZElevation`.
+  - Notes: use the direct property that matches the expression being evaluated.
+  - Source: `IWorldInstance` scripting reference (`zElevation`, `totalZElevation`).
+
 ### Pass 3 — World transform writes
 - [ ] Write the world-transform-write API translation map from the official SDK v2 docs before editing code.
 - [ ] Write the manual break-detector checklist for transform writes before editing code.

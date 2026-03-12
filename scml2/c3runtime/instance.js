@@ -740,69 +740,29 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		super._release();
 	}
 
-	_getSelfWorldInfo()
-	{
-		return this._getWorldInfoOf(this);
-	}
-
 	_getSelfX()
 	{
-		const x = Number(this.x);
-		if (Number.isFinite(x))
-		{
-			return x;
-		}
-
-		const worldInfo = this._getSelfWorldInfo();
-		return toFiniteNumber(callFirstMethod(worldInfo, ["GetX", "getX"]), 0);
+		return toFiniteNumber(this.x, 0);
 	}
 
 	_getSelfY()
 	{
-		const y = Number(this.y);
-		if (Number.isFinite(y))
-		{
-			return y;
-		}
-
-		const worldInfo = this._getSelfWorldInfo();
-		return toFiniteNumber(callFirstMethod(worldInfo, ["GetY", "getY"]), 0);
+		return toFiniteNumber(this.y, 0);
 	}
 
 	_getSelfAngle()
 	{
-		const angle = Number(this.angle);
-		if (Number.isFinite(angle))
-		{
-			return angle;
-		}
-
-		const worldInfo = this._getSelfWorldInfo();
-		return toFiniteNumber(callFirstMethod(worldInfo, ["GetAngle", "getAngle"]), 0);
+		return toFiniteNumber(this.angle, 0);
 	}
 
 	_getSelfWidth()
 	{
-		const width = Number(this.width);
-		if (Number.isFinite(width))
-		{
-			return width;
-		}
-
-		const worldInfo = this._getSelfWorldInfo();
-		return toFiniteNumber(callFirstMethod(worldInfo, ["GetWidth", "getWidth"]), 0);
+		return toFiniteNumber(this.width, 0);
 	}
 
 	_getSelfHeight()
 	{
-		const height = Number(this.height);
-		if (Number.isFinite(height))
-		{
-			return height;
-		}
-
-		const worldInfo = this._getSelfWorldInfo();
-		return toFiniteNumber(callFirstMethod(worldInfo, ["GetHeight", "getHeight"]), 0);
+		return toFiniteNumber(this.height, 0);
 	}
 
 	// Tween behavior compatibility: Construct expects world instances to provide
@@ -1003,31 +963,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			fillMode = "color";
 		}
 
-		const getX = worldInfo
-			? (typeof worldInfo.GetX === "function")
-				? worldInfo.GetX.bind(worldInfo)
-				: (typeof worldInfo.getX === "function")
-					? worldInfo.getX.bind(worldInfo)
-					: null
-			: null;
-		const getY = worldInfo
-			? (typeof worldInfo.GetY === "function")
-				? worldInfo.GetY.bind(worldInfo)
-				: (typeof worldInfo.getY === "function")
-					? worldInfo.getY.bind(worldInfo)
-					: null
-			: null;
-		const getAngle = worldInfo
-			? (typeof worldInfo.GetAngle === "function")
-				? worldInfo.GetAngle.bind(worldInfo)
-				: (typeof worldInfo.getAngle === "function")
-					? worldInfo.getAngle.bind(worldInfo)
-					: null
-			: null;
-
-		const instX = getX ? getX() : toFiniteNumber(this.x, 0);
-		const instY = getY ? getY() : toFiniteNumber(this.y, 0);
-		const instAngle = getAngle ? getAngle() : toFiniteNumber(this.angle, 0);
+		const instX = this._getSelfX();
+		const instY = this._getSelfY();
+		const instAngle = this._getSelfAngle();
 
 		const mirrorFactor = this._xFlip ? -1 : 1;
 		const flipFactor = this._yFlip ? -1 : 1;
@@ -4784,16 +4722,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_getViewportBoundsFromLayer(layer)
 	{
-		const viewport = callFirstMethod(layer, ["GetViewport", "getViewport"]);
+		const viewport = layer ? layer.getViewport() : null;
 		if (!viewport)
 		{
 			return null;
 		}
 
-		const left = toFiniteNumber(callFirstMethod(viewport, ["GetLeft", "getLeft"]), toFiniteNumber(viewport.left, NaN));
-		const right = toFiniteNumber(callFirstMethod(viewport, ["GetRight", "getRight"]), toFiniteNumber(viewport.right, NaN));
-		const top = toFiniteNumber(callFirstMethod(viewport, ["GetTop", "getTop"]), toFiniteNumber(viewport.top, NaN));
-		const bottom = toFiniteNumber(callFirstMethod(viewport, ["GetBottom", "getBottom"]), toFiniteNumber(viewport.bottom, NaN));
+		const left = toFiniteNumber(viewport.left, NaN);
+		const right = toFiniteNumber(viewport.right, NaN);
+		const top = toFiniteNumber(viewport.top, NaN);
+		const bottom = toFiniteNumber(viewport.bottom, NaN);
 		if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(top) || !Number.isFinite(bottom))
 		{
 			return null;
@@ -4809,12 +4747,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_isOutsideViewportBox()
 	{
-		// SDK2 official path: world instances expose `layer` directly.
-		// Keep worldInfo.GetLayer() only as legacy fallback.
-		const worldInfo = this._getWorldInfoOf(this);
-		const layer = this.layer || (worldInfo && typeof worldInfo.GetLayer === "function"
-			? worldInfo.GetLayer()
-			: null);
+		const layer = this.layer;
 		if (!layer)
 		{
 			return false;
@@ -7543,10 +7476,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		const myX = worldInfo.GetX();
-		const myY = worldInfo.GetY();
-		const myAngle = worldInfo.GetAngle();
-		const myVisible = worldInfo.IsVisible();
+		const myX = this._getSelfX();
+		const myY = this._getSelfY();
+		const myAngle = this._getSelfAngle();
+		const myVisible = this.isVisible !== false;
 		this._preclearAssociatedObjectsState(myVisible);
 
 		if (!poseObjects.length) return;
@@ -7904,45 +7837,24 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_getWorldOpacityPercent()
 	{
-		const worldInfo = this._getWorldInfoOf(this);
-		const opacity = toFiniteNumber(callFirstMethod(worldInfo, ["GetOpacity", "getOpacity"]), 1);
+		const opacity = toFiniteNumber(this.opacity, 1);
 		return clamp(opacity * 100, 0, 100);
 	}
 
 	_getWorldZElevation(includeTotal = false)
 	{
-		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo)
-		{
-			return 0;
-		}
-
-		const methodNames = includeTotal
-			? ["GetTotalZElevation", "getTotalZElevation"]
-			: ["GetZElevation", "getZElevation"];
-		return toFiniteNumber(callFirstMethod(worldInfo, methodNames), 0);
+		return toFiniteNumber(includeTotal ? this.totalZElevation : this.zElevation, 0);
 	}
 
 	_getWorldBoundingRect()
 	{
-		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo)
-		{
-			return {
-				left: 0,
-				top: 0,
-				right: 0,
-				bottom: 0
-			};
-		}
-
-		const bbox = callFirstMethod(worldInfo, ["GetBoundingBox", "getBoundingBox"]);
+		const bbox = this.getBoundingBox();
 		if (bbox)
 		{
-			const left = toFiniteNumber(callFirstMethod(bbox, ["GetLeft", "getLeft"]), toFiniteNumber(bbox.left, NaN));
-			const top = toFiniteNumber(callFirstMethod(bbox, ["GetTop", "getTop"]), toFiniteNumber(bbox.top, NaN));
-			const right = toFiniteNumber(callFirstMethod(bbox, ["GetRight", "getRight"]), toFiniteNumber(bbox.right, NaN));
-			const bottom = toFiniteNumber(callFirstMethod(bbox, ["GetBottom", "getBottom"]), toFiniteNumber(bbox.bottom, NaN));
+			const left = toFiniteNumber(bbox.left, NaN);
+			const top = toFiniteNumber(bbox.top, NaN);
+			const right = toFiniteNumber(bbox.right, NaN);
+			const bottom = toFiniteNumber(bbox.bottom, NaN);
 			if (Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(right) && Number.isFinite(bottom))
 			{
 				return { left, top, right, bottom };
