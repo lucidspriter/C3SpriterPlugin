@@ -10,6 +10,8 @@ Replace ad-hoc defensive API probing in `scml2/` with documented Construct Addon
 
 ## Ground rules
 - Base each replacement on the official docs first, not on guesswork.
+- For runtime code in `scml2/c3runtime/`, follow the Addon SDK runtime API reference first. It explicitly states that runtime APIs are the same as Construct's scripting APIs.
+- Use the Addon SDK editor/reference pages as the primary source only for editor-side code, not for runtime-side method names.
 - Clean one subsystem at a time so regressions are easy to localize.
 - Prefer direct SDK v2 calls when the docs are clear.
 - Keep fallbacks only when the docs do not expose what the plugin needs.
@@ -64,6 +66,9 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
 ## Primary references
 - Porting guide: <https://www.construct.net/en/make-games/manuals/addon-sdk/guide/porting-addon-sdk-v2>
 - Addon SDK manual root: <https://www.construct.net/en/make-games/manuals/addon-sdk>
+- Runtime API reference: <https://www.construct.net/en/make-games/manuals/addon-sdk/runtime-reference>
+- For runtime code, the Addon SDK runtime reference and the linked scripting-reference pages take priority.
+- For editor code, the Addon SDK editor/reference pages take priority.
 
 ## Ordered cleanup passes
 
@@ -128,18 +133,18 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
 - Context: reading the Spriter instance position, angle, and size.
   - Current pattern: read `this.x`/`this.y`/`this.angle`/`this.width`/`this.height` first, then fall back to world-info getter probing.
   - Documented SDK2 call: `this.x`, `this.y`, `this.angle`, `this.width`, `this.height`.
-  - Notes: `IWorldInstance` exposes these directly as layout-coordinate properties.
-  - Source: `IWorldInstance` scripting reference.
+  - Notes: this is correct for runtime code because the Addon SDK runtime reference says runtime APIs are the same as Construct's scripting APIs.
+  - Source: Addon SDK runtime API reference + `IWorldInstance` scripting reference.
 - Context: reading the current layer and viewport.
   - Current pattern: probe `GetLayer/getLayer` from world info and `GetViewport/getViewport` from layer, then probe left/right/top/bottom from the viewport object.
   - Documented SDK2 call: `this.layer` and `this.layer.getViewport()`.
-  - Notes: `getViewport()` returns a `DOMRect`, so read `left`, `right`, `top`, and `bottom` directly from the returned rectangle.
-  - Source: `IWorldInstance` scripting reference (`layer`) and `ILayer` scripting reference (`getViewport()`).
+  - Notes: `getViewport()` returns a `DOMRect`, so read `left`, `right`, `top`, and `bottom` directly from the returned rectangle. This is correct for runtime code per the Addon SDK runtime reference.
+  - Source: Addon SDK runtime API reference + `IWorldInstance` scripting reference (`layer`) and `ILayer` scripting reference (`getViewport()`).
 - Context: reading bounding-box values for expressions and viewport culling.
   - Current pattern: probe `GetBoundingBox/getBoundingBox` and then probe edge getters from the returned box.
   - Documented SDK2 call: `this.getBoundingBox()`.
-  - Notes: this returns a `DOMRect`, so read `left`, `right`, `top`, and `bottom` directly.
-  - Source: `IWorldInstance` scripting reference (`getBoundingBox()`).
+  - Notes: this returns a `DOMRect`, so read `left`, `right`, `top`, and `bottom` directly. This is correct for runtime code per the Addon SDK runtime reference.
+  - Source: Addon SDK runtime API reference + `IWorldInstance` scripting reference (`getBoundingBox()`).
 - Context: reading visibility and opacity.
   - Current pattern: probe world-info getters like `GetOpacity/getOpacity` and `IsVisible`.
   - Documented SDK2 call: `this.opacity` and `this.isVisible`.
@@ -168,6 +173,33 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
     - `Set position to object`, `Pin to object`, and `Set angle to object angle`.
     - Visibility/collision toggles on associated boxes during attack animations.
     - Self-draw shader/effect cutoff after animation changes.
+
+#### Pass 3 API translation map
+- Context: writing the Spriter instance size for animation bounds.
+  - Current pattern: route width/height writes through world-info style setters.
+  - Documented SDK2 call: assign `this.width = ...` and `this.height = ...`.
+  - Notes: this is correct for runtime code because the Addon SDK runtime reference says runtime APIs are the same as Construct's scripting APIs.
+  - Source: Addon SDK runtime API reference + `IWorldInstance` scripting reference.
+- Context: writing self visibility, opacity, and Z elevation.
+  - Current pattern: route writes through the resolved world-info/self-instance compatibility path (`SetVisible`, `SetOpacity`, `SetZElevation`).
+  - Documented SDK2 call: the scripting docs indicate direct `IWorldInstance` properties (`this.isVisible`, `this.opacity`, `this.zElevation`), but direct writes to those members regressed runtime behaviour during validation of this pass.
+  - Notes: keep the resolved world-info path for now until the addon-runtime setter behaviour is pinned down more confidently.
+  - Source: `IWorldInstance` scripting reference plus runtime validation during this cleanup pass.
+- Context: bbox invalidation after documented world-instance writes.
+  - Current pattern: call `SetBboxChanged/setBboxChanged` after nearly every transform write.
+  - Documented SDK2 call: no explicit documented bbox-invalidating call identified for the self instance write path.
+  - Notes: for documented direct property writes, treat bounds updates as automatic unless a documented SDK2 invalidation API is found later.
+  - Source: Addon SDK v2 scripting/manual surface reviewed for this pass; no documented self-instance bbox invalidation call identified.
+- Context: origin/hotspot writes used by animation bounds and per-part pivot math.
+  - Current pattern: probe `SetOriginX/SetOriginY` and several origin-like properties (`originX`, `hotspotX`, `pivotX`, etc.).
+  - Documented SDK2 call: not yet pinned down from the official docs.
+  - Notes: keep the existing compatibility path in place for now instead of guessing.
+  - Source: official docs review for this pass did not yet surface a documented SDK2 origin-write API for world instances.
+- Context: collision enable/disable writes on associated helper objects.
+  - Current pattern: probe `SetCollisionEnabled/setCollisionEnabled` and several collision-related properties.
+  - Documented SDK2 call: not yet pinned down from the official docs.
+  - Notes: keep the current compatibility path in place for now instead of guessing.
+  - Source: official docs review for this pass did not yet surface a documented SDK2 collision-enable API for world instances.
 
 ### Pass 4 — Renderer API surface
 - [ ] Write the renderer API translation map from the official SDK v2 docs before editing code.

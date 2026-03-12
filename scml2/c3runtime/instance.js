@@ -731,6 +731,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_onCreate()
 	{
 		this._enableTickingCallbacks("onCreate");
+		this._applySelfOpacityScalar(this.startingOpacity / 100);
 	}
 
 	_release()
@@ -763,6 +764,23 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_getSelfHeight()
 	{
 		return toFiniteNumber(this.height, 0);
+	}
+
+	_getSelfOpacityScalar()
+	{
+		const fallback = clamp01(toFiniteNumber(this.startingOpacity / 100, 1));
+		return clamp01(toFiniteNumber(this.opacity, fallback));
+	}
+
+	_applySelfOpacityScalar(opacity)
+	{
+		const alpha = clamp01(toFiniteNumber(opacity, 1));
+		this.opacity = alpha;
+
+		if (this.drawSelf)
+		{
+			this._requestRenderUpdate();
+		}
 	}
 
 	// Tween behavior compatibility: Construct expects world instances to provide
@@ -975,7 +993,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			angle: Number.isFinite(instAngle) ? instAngle : 0,
 			scaleX: toFiniteNumber(this._globalScaleRatio, 1) * mirrorFactor,
 			scaleY: toFiniteNumber(this._globalScaleRatio, 1) * flipFactor,
-			alpha: 1
+			alpha: this._getSelfOpacityScalar()
 		};
 
 		// In SDK v2 runtime, renderer.quad(...) expects a DOMQuad-like object (p1..p4).
@@ -1107,8 +1125,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			? sdkType._getTextureSizeForPath.bind(sdkType)
 			: null;
 
-		const baseOpacity = clamp01(this.startingOpacity / 100);
-
 		for (let i = 0, len = poseObjects.length; i < len; i++)
 		{
 			const state = poseObjects[i];
@@ -1184,7 +1200,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				p4: { x: baseX + dx4 * cos - dy4 * sin, y: baseY + dx4 * sin + dy4 * cos, z: 0, w: 1 }
 			};
 
-			const alpha = clamp01(toFiniteNumber(world.alpha, 1) * baseOpacity);
+			const alpha = clamp01(toFiniteNumber(world.alpha, 1));
 			if (alpha <= 0)
 			{
 				continue;
@@ -2868,22 +2884,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		worldInfo.SetVisible(Number(visible) !== 0);
-		worldInfo.SetBboxChanged();
+		if (this.drawSelf)
+		{
+			this._requestRenderUpdate();
+		}
 	}
 
 	_setOpacity(opacityPercent)
 	{
 		const percent = clamp(toFiniteNumber(opacityPercent, this.startingOpacity), 0, 100);
 		this.startingOpacity = percent;
-
-		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo || typeof worldInfo.SetOpacity !== "function")
-		{
-			return;
-		}
-
-		worldInfo.SetOpacity(percent / 100);
-		worldInfo.SetBboxChanged();
+		this._applySelfOpacityScalar(percent / 100);
 	}
 
 	_setSecondAnim(animName)
@@ -4702,7 +4713,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	{
 		const worldInfo = this._getWorldInfoOf(this);
 		const bounds = this._getAnimationBounds(animation);
-		if (!worldInfo || !bounds)
+		if (!bounds)
 		{
 			return;
 		}
@@ -4710,14 +4721,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const scale = Math.abs(toFiniteNumber(this._globalScaleRatio, 1)) || 1;
 		const width = bounds.width * scale;
 		const height = bounds.height * scale;
-		callFirstMethod(worldInfo, ["SetWidth", "setWidth"], width);
-		callFirstMethod(worldInfo, ["SetHeight", "setHeight"], height);
+		this.width = width;
+		this.height = height;
 
 		const originX = -((this._xFlip ? -bounds.right : bounds.left) / bounds.width);
 		const originY = -((this._yFlip ? -bounds.bottom : bounds.top) / bounds.height);
-		callFirstMethod(worldInfo, ["SetOriginX", "setOriginX"], originX);
-		callFirstMethod(worldInfo, ["SetOriginY", "setOriginY"], originY);
-		callFirstMethod(worldInfo, ["SetBboxChanged", "setBboxChanged"]);
+		if (worldInfo)
+		{
+			callFirstMethod(worldInfo, ["SetOriginX", "setOriginX"], originX);
+			callFirstMethod(worldInfo, ["SetOriginY", "setOriginY"], originY);
+			callFirstMethod(worldInfo, ["SetBboxChanged", "setBboxChanged"]);
+		}
 	}
 
 	_getViewportBoundsFromLayer(layer)
@@ -4869,13 +4883,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_setZElevation(zElevation)
 	{
 		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo)
+		if (!worldInfo || typeof worldInfo.SetZElevation !== "function")
 		{
 			return;
 		}
 
-		callFirstMethod(worldInfo, ["SetZElevation", "setZElevation"], toFiniteNumber(zElevation, 0));
-		callFirstMethod(worldInfo, ["SetBboxChanged", "setBboxChanged"]);
+		worldInfo.SetZElevation(toFiniteNumber(zElevation, 0));
+		if (this.drawSelf)
+		{
+			this._requestRenderUpdate();
+		}
 	}
 
 	_triggerOnURLLoaded()
@@ -6463,6 +6480,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				SetVisible(v) { inst.isVisible = v; },
 				GetOpacity() { return inst.opacity != null ? inst.opacity : 1; },
 				SetOpacity(v) { inst.opacity = v; },
+				GetZElevation() { return toFiniteNumber(inst.zElevation, 0); },
+				GetTotalZElevation() { return toFiniteNumber(inst.totalZElevation ?? inst.zElevation, 0); },
+				SetZElevation(v) { inst.zElevation = v; },
 				GetOriginX() { return toFiniteNumber(inst.originX ?? inst.hotspotX ?? inst.pivotX, 0); },
 				GetOriginY() { return toFiniteNumber(inst.originY ?? inst.hotspotY ?? inst.pivotY, 0); },
 				SetOriginX(v) { setOriginAxis("x", v); },
@@ -7479,6 +7499,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const myX = this._getSelfX();
 		const myY = this._getSelfY();
 		const myAngle = this._getSelfAngle();
+		const myOpacity = this._getSelfOpacityScalar();
+		const myZElevation = this._getWorldZElevation(false);
 		const myVisible = this.isVisible !== false;
 		this._preclearAssociatedObjectsState(myVisible);
 
@@ -7595,7 +7617,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				wi.SetAngle(finalAngle);
 
 				// Opacity
-				wi.SetOpacity(state.alpha);
+				wi.SetOpacity(clamp01(toFiniteNumber(state.alpha, 1) * myOpacity));
+				wi.SetZElevation(myZElevation);
 
 				// Position: state.x/y are world-space offsets from the Spriter origin
 				const cosA = Math.cos(myAngle);
@@ -7837,7 +7860,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_getWorldOpacityPercent()
 	{
-		const opacity = toFiniteNumber(this.opacity, 1);
+		const opacity = this._getSelfOpacityScalar();
 		return clamp(opacity * 100, 0, 100);
 	}
 

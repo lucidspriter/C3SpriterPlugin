@@ -17,3 +17,33 @@ Each entry should note:
   - ISDKWorldInstanceBase docs (no documented `GetObjectClass/getObjectClass`): https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkinstancebase
   - Runtime `IObjectType` script interface docs (no animation list methods documented): https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/object-interfaces/iobjecttype
   - Editor Addon SDK `IObjectType` interface does expose `GetAnimations()` (editor-side only, not runtime): https://www.construct.net/en/make-games/manuals/addon-sdk/reference/objecttype
+
+## SDK2 world-instance origin/hotspot write API
+- The Spriter runtime still needs to move the effective origin/hotspot of the main instance and associated instances to match animation bounds (`l/t/r/b`) and per-part pivot application.
+- During SDK2 cleanup we could not find a documented runtime `IWorldInstance` API for setting origin/hotspot values directly, so the current code still uses a compatibility path that probes origin-like properties/methods (`originX`, `hotspotX`, `pivotX`, etc.).
+- Question: what is the supported SDK2 runtime API for changing a world instance's origin/hotspot, if any?
+- References:
+  - IWorldInstance scripting reference reviewed for transform properties and `getBoundingBox()`: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/world-interfaces/iworldinstance
+  - Addon SDK v2 porting guide: https://www.construct.net/en/make-games/manuals/addon-sdk/guide/porting-addon-sdk-v2
+
+## SDK2 world-instance collision enable/disable API
+- The Spriter runtime needs to enable and disable collisions on associated box/helper instances at precise animation frames.
+- During SDK2 cleanup we could not find a documented runtime `IWorldInstance` property or method for toggling collisions directly, so the current code still uses a compatibility path that probes `SetCollisionEnabled/setCollisionEnabled` and several collision-related properties.
+- Question: what is the supported SDK2 runtime API for enabling/disabling collisions on a world instance, if any?
+- References:
+  - IWorldInstance scripting reference reviewed for world-instance state properties/methods: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/world-interfaces/iworldinstance
+  - Addon SDK v2 porting guide: https://www.construct.net/en/make-games/manuals/addon-sdk/guide/porting-addon-sdk-v2
+
+## ISDKWorldInstanceBase direct property setter parity vs. resolved world-info path
+- During SDK2 cleanup, direct self-instance writes like `this.opacity = ...`, `this.isVisible = ...`, and `this.zElevation = ...` looked like the intended path from the scripting docs, but runtime validation in the Spriter addon regressed compared to routing through the resolved world-info/self-instance compatibility path.
+- The docs now look more like two different official contexts:
+  - Addon SDK runtime reference says runtime APIs are the same as Construct's scripting APIs
+  - Addon SDK editor/reference pages expose method-style interfaces such as `GetX()`, `SetOpacity()`, `SetOriginX()`
+- The remaining uncertainty is not "which doc family should runtime use" (the runtime reference answers that); it is why some documented runtime-style direct property writes did not behave as expected in this addon runtime context.
+- Question: for Addon SDK v2 runtime instances, should direct `IWorldInstance` property setters always update the underlying engine state the same way as the resolved world-info path, or are there cases where addon runtime code should prefer another official setter route?
+- References:
+  - ISDKWorldInstanceBase docs (states it derives from `IWorldInstance`): https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkworldinstancebase
+  - IWorldInstance scripting reference: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/world-interfaces/iworldinstance
+  - Addon SDK runtime API reference: https://www.construct.net/en/make-games/manuals/addon-sdk/runtime-reference
+  - Addon-SDK `IWorldInstance` reference (method-style API): https://www.construct.net/en/make-games/manuals/addon-sdk/reference/object-interfaces/iworldinstance
+  - Addon SDK v2 porting guide: https://www.construct.net/en/make-games/manuals/addon-sdk/guide/porting-addon-sdk-v2
