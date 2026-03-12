@@ -647,7 +647,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._playToTimeMs = -1;
 		this._loopOverrideByAnimationIndex = new Map();
 		this._pendingLoopOverride = null;
-		this._lastTickTimeSec = null;
 
 		this._fileLookup = new Map();
 		this._timelineById = new Map();
@@ -932,14 +931,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		const sdkUtils = runtime.sdk || null;
-		if (sdkUtils && typeof sdkUtils.updateRender === "function")
-		{
-			sdkUtils.updateRender();
-			return;
-		}
-
-		callFirstMethod(runtime, ["UpdateRender", "updateRender"]);
+		runtime.sdk.updateRender();
 	}
 	
 	_draw(renderer)
@@ -2139,31 +2131,30 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_getDtSeconds()
 	{
-		const wallDt = this._getWallDtSeconds();
 		const runtime = this.runtime;
+		const rawDt = runtime && Number.isFinite(runtime.dtRaw) ? runtime.dtRaw : null;
 		const runtimeDt = runtime && Number.isFinite(runtime.dt) ? runtime.dt : null;
+		const instanceDt = Number(this.dt);
 
-		// Legacy parity: playback time is derived from wall-time and then multiplied by
-		// either the object's own time scale (if set) or the runtime/global time scale.
-		// This is important when global time scale is 0 and an object-specific time scale
-		// overrides it: runtime.dt will be 0, but the object should still advance.
+		// Legacy parity: when an instance has its own time scale, it must still advance
+		// even if the runtime/global time scale is 0. Use raw dt for that path.
 		const objectTimeScale = this._getObjectTimeScaleOverride();
-		if (objectTimeScale !== null)
+		if (objectTimeScale !== null && rawDt !== null)
 		{
-			const baseDt = Number.isFinite(wallDt) ? wallDt : (runtimeDt || 0);
-			return baseDt * objectTimeScale;
+			return rawDt * objectTimeScale;
 		}
 
 		if (this.ignoreGlobalTimeScale)
 		{
-			return Number.isFinite(wallDt) ? wallDt : (runtimeDt || 0);
+			if (rawDt !== null)
+			{
+				return rawDt;
+			}
 		}
 
-		const runtimeTimeScale = this._getRuntimeTimeScaleValue();
-		if (runtimeTimeScale !== null)
+		if (Number.isFinite(instanceDt))
 		{
-			const baseDt = Number.isFinite(wallDt) ? wallDt : (runtimeDt || 0);
-			return baseDt * runtimeTimeScale;
+			return instanceDt;
 		}
 
 		if (runtimeDt !== null)
@@ -2171,103 +2162,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return runtimeDt;
 		}
 
-		return Number.isFinite(wallDt) ? wallDt : 0;
-	}
-
-	_getWallNowSeconds()
-	{
-		const runtime = this.runtime;
-		const wallNow = callFirstMethod(runtime, ["GetWallTime", "getWallTime"]);
-		if (Number.isFinite(wallNow))
-		{
-			return wallNow;
-		}
-
-		if (typeof performance !== "undefined" && performance && typeof performance.now === "function")
-		{
-			return performance.now() / 1000;
-		}
-
-		return Date.now() / 1000;
-	}
-
-	_getWallDtSeconds()
-	{
-		const now = this._getWallNowSeconds();
-		const last = this._lastTickTimeSec;
-		this._lastTickTimeSec = now;
-
-		if (!Number.isFinite(last))
-		{
-			return NaN;
-		}
-
-		const dt = now - last;
-		// Avoid giant steps when the tab is backgrounded.
-		return dt > 0 && dt < 0.5 ? dt : 0;
-	}
-
-	_getRuntimeTimeScaleValue()
-	{
-		const runtime = this.runtime;
-		if (!runtime)
-		{
-			return null;
-		}
-
-		const propValue = Number(runtime.timeScale);
-		if (Number.isFinite(propValue))
-		{
-			return propValue;
-		}
-
-		const methodValue = callFirstMethod(runtime, ["GetTimeScale", "getTimeScale"]);
-		if (Number.isFinite(methodValue))
-		{
-			return Number(methodValue);
-		}
-
-		return null;
+		return rawDt !== null ? rawDt : 0;
 	}
 
 	_getObjectTimeScaleOverride()
 	{
-		const candidates = [
-			this,
-			this._inst,
-			callFirstMethod(this, ["GetInstance", "getInstance"]),
-			callFirstMethod(this, ["GetWorldInfo", "getWorldInfo"]),
-			this._sdkInstance,
-			this._sdkInst
-		];
-
-		for (const target of candidates)
-		{
-			if (!target)
-			{
-				continue;
-			}
-
-			const propValue = Number(target.timeScale);
-			if (Number.isFinite(propValue) && propValue !== -1)
-			{
-				return propValue;
-			}
-
-			const value = callFirstMethod(target, ["GetTimeScale", "getTimeScale"]);
-			if (!Number.isFinite(value))
-			{
-				continue;
-			}
-
-			const numeric = Number(value);
-			if (numeric !== -1)
-			{
-				return numeric;
-			}
-		}
-
-		return null;
+		const value = Number(this.timeScale);
+		return Number.isFinite(value) && value !== -1 ? value : null;
 	}
 
 	_advanceTime(dtSeconds)
@@ -6231,7 +6132,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		this.localTimeMs = 0;
 		this.playing = true;
-		this._lastTickTimeSec = null;
 		this._triggeredEventName = "";
 		this._activeTagsByScope.clear();
 		this._varValuesByScope.clear();

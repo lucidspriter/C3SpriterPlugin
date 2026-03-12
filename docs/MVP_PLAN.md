@@ -22,6 +22,7 @@ Status note: this roadmap now tracks the active `scml2/` restart effort. Legacy/
 - [ ] [Phase 4 — Render to the screen](phases/phase-04-rendering.md)
 - [ ] [Phase 5 — Harden the MVP](phases/phase-05-mvp-hardening.md)
 - [ ] [Phase 6 — Parity and polish](phases/phase-06-parity-and-polish.md)
+  - Active sub-phase: [Phase 6a — SDK2 API cleanup](phases/phase-06a-sdk2-api-cleanup.md)
 
 Only mark a phase complete after all checkboxes in its dedicated file are checked.
 

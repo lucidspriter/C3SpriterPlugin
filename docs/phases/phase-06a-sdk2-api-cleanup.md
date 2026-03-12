@@ -1,0 +1,249 @@
+# Phase 6a — SDK2 API cleanup
+
+## Goal
+Replace ad-hoc defensive API probing in `scml2/` with documented Construct Addon SDK v2 calls, without regressing the behaviour that is now working.
+
+## Why this phase exists
+- The restart in `scml2/` solved the hard runtime/parity problems first.
+- That left a large amount of temporary defensive code (`callFirstMethod`, `typeof ... === "function"`, mixed casing probes, synthetic wrappers, etc.).
+- The next risk is not missing features; it is silent drift away from the documented SDK surface and making future regressions harder to diagnose.
+
+## Ground rules
+- Base each replacement on the official docs first, not on guesswork.
+- Clean one subsystem at a time so regressions are easy to localize.
+- Prefer direct SDK v2 calls when the docs are clear.
+- Keep fallbacks only when the docs do not expose what the plugin needs.
+- When a required capability is still not exposed cleanly, record it in `requests for ashley.txt`.
+- Do not mix cleanup across unrelated subsystems in the same pass.
+
+## Required workflow for every pass
+Before editing code for a pass:
+1. Re-open the relevant official SDK v2 docs for that subsystem.
+2. Write out the exact translation map for the calls being replaced.
+3. Include enough context that the translation is unambiguous:
+   - object/context (`this`, `worldInfo`, `renderer`, `runtime`, child instance, object type, etc.)
+   - current pattern in the codebase
+   - documented SDK v2 replacement
+   - doc/source reference used to justify it
+4. Only then perform the code changes for that pass.
+5. Before removing old code paths, define the manual "break detectors" for that pass: the concrete actions, conditions, expressions, and gameplay scenarios that would fail immediately if the translation is wrong.
+6. If the pass is high-risk, add a temporary parity probe that logs old-path vs. new-path values for one controlled instance or event, then remove that probe once the pass is verified.
+
+Use this format when documenting a pass:
+- Context:
+- Current pattern:
+- Documented SDK2 call:
+- Notes:
+- Source:
+
+If a pass needs many translations, add them under a short "API translation map" heading in this file or in a linked sub-note before changing code.
+
+## Temporary parity probes
+- Use probes only as short-lived verification tools during an active pass.
+- Scope them narrowly:
+  - one object type
+  - one animation or event
+  - one expression/action/condition path
+- Prefer logging both values in one line, for example:
+  - prior path result
+  - new documented path result
+  - whether they match
+- Remove the probe as soon as the pass is validated.
+- Do not leave probe logging in release code unless it is a real warning/error.
+
+## Manual break-detector checklist template
+For each pass, write the specific things that should break if the translation is wrong. Use this format:
+- Action to try:
+- Condition/expression to check:
+- Expected result:
+- Failure symptom if translation is wrong:
+- Test layout/project note:
+
+The goal is to make every pass testable by direct C3 interaction, not just by code inspection.
+
+## Primary references
+- Porting guide: <https://www.construct.net/en/make-games/manuals/addon-sdk/guide/porting-addon-sdk-v2>
+- Addon SDK manual root: <https://www.construct.net/en/make-games/manuals/addon-sdk>
+
+## Ordered cleanup passes
+
+### Pass 1 — Runtime clock + tick lifecycle
+- [ ] Write the runtime/tick API translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for runtime/tick timing before editing code.
+- [ ] Verify the documented SDK v2 calls used for runtime time access, ticking registration, and trigger timing.
+- [ ] Replace defensive runtime/tick helpers with direct documented calls where available.
+- [ ] Keep the current legacy-parity behaviour of doing playback/event work from `_tick2()`.
+- [ ] If needed, add a temporary parity probe for runtime time/tick values on one controlled instance, then remove it after validation.
+- [ ] Re-test: animation finished triggers, event line triggers, pre-ready animation requests, and global/per-instance time scale interactions.
+  - Break detectors:
+    - `Set animation` -> `On animation finished` -> `Set animation` chain.
+    - First-frame event trigger firing immediately after animation change/resume.
+    - Global time scale `0` with per-object override restoring playback.
+
+#### Pass 1 API translation map
+- Context: Spriter runtime instance tick registration.
+  - Current pattern: enable `_tick()` / `_tick2()` from wrapper helpers and older defensive checks.
+  - Documented SDK2 call: `this._setTicking(true)` and `this._setTicking2(true)`.
+  - Notes: `_tick()` runs before events and `_tick2()` runs after events.
+  - Source: `ISDKInstanceBase` docs in the Addon SDK manual.
+- Context: requesting a redraw for self-draw animation updates.
+  - Current pattern: probe `runtime.sdk.updateRender` and then fall back to `runtime.UpdateRender()`/`runtime.updateRender()`.
+  - Documented SDK2 call: `this.runtime.sdk.updateRender()`.
+  - Notes: this should be the direct SDK2 redraw path; mixed-case runtime probing is legacy cleanup debt.
+  - Source: `ISDKUtils.updateRender()` docs in the Addon SDK manual.
+- Context: per-frame raw delta time unaffected by time scaling.
+  - Current pattern: derive it from `GetWallTime/getWallTime`, `performance.now()`, or `Date.now()`.
+  - Documented SDK2 call: `this.runtime.dtRaw`.
+  - Notes: use this for ignore-global-time-scale paths and for object-specific time-scale override math.
+  - Source: `IRuntime` scripting reference (`dtRaw`).
+- Context: regular delta time for this instance.
+  - Current pattern: manually combine wall-time deltas, runtime dt, runtime time scale, and object time scale.
+  - Documented SDK2 call: `this.dt`.
+  - Notes: this is the documented per-instance delta time and should remain the default path when global time scale is respected.
+  - Source: `IInstance` scripting reference (`dt`).
+- Context: runtime/global time scale.
+  - Current pattern: read `runtime.timeScale` or probe `GetTimeScale/getTimeScale`.
+  - Documented SDK2 call: `this.runtime.timeScale`.
+  - Notes: use as the direct runtime time-scale source when needed.
+  - Source: `IRuntime` scripting reference (`timeScale`).
+- Context: instance-specific time scale override.
+  - Current pattern: probe multiple targets for `timeScale` and `GetTimeScale/getTimeScale`.
+  - Documented SDK2 call: `this.timeScale`, with `restoreTimeScale()` restoring follow-runtime behaviour.
+  - Notes: cleanup must preserve the existing gameplay behaviour where an instance can keep animating when global time scale is `0`.
+  - Source: `IInstance` scripting reference (`timeScale`, `restoreTimeScale()`).
+
+### Pass 2 — World transform reads
+- [ ] Write the world-transform-read API translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for transform reads before editing code.
+- [ ] Verify the documented way to read `x`, `y`, `angle`, `width`, `height`, opacity, blend mode, layer, and bounding boxes from SDK v2 world instances.
+- [ ] Replace read-side helper probing with direct calls/property access backed by docs.
+- [ ] If needed, add a temporary parity probe comparing old read path vs. documented read path for one instance, then remove it after validation.
+- [ ] Re-test: `ObjectX/ObjectY`, point/object angle expressions, bounding-box expressions, and spawn-at-point workflows.
+  - Break detectors:
+    - Spawn a Sprite at `Spriter.ObjectX("point_000"), Spriter.ObjectY("point_000")`.
+    - Compare `pointX/pointY`, `objectX/objectY`, and angle expressions against visible helper placement.
+    - Check bbox expressions while moving/scaling the Spriter object.
+
+### Pass 3 — World transform writes
+- [ ] Write the world-transform-write API translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for transform writes before editing code.
+- [ ] Verify the documented way to set position, size, angle, origin, visibility, collision state, and bbox invalidation.
+- [ ] Replace write-side probing with direct documented calls.
+- [ ] Preserve the `l/t/r/b` animation-bounds behaviour and the SDK2 fallback-origin fix that was added for self-draw bounds parity.
+- [ ] If needed, add a temporary parity probe for one write path (e.g. position/origin/collision toggle), then remove it after validation.
+- [ ] Re-test: associated sprites/boxes/points, collision boxes, pin/set-to actions, and animation-bound shader/effect clipping.
+  - Break detectors:
+    - `Set position to object`, `Pin to object`, and `Set angle to object angle`.
+    - Visibility/collision toggles on associated boxes during attack animations.
+    - Self-draw shader/effect cutoff after animation changes.
+
+### Pass 4 — Renderer API surface
+- [ ] Write the renderer API translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for renderer calls before editing code.
+- [ ] Verify the documented renderer calls for texture binding, blend mode, fill mode, opacity, color, and quad drawing.
+- [ ] Replace mixed-case renderer probing with the documented SDK v2 calls.
+- [ ] Keep legacy-compatible rendering behaviour intact for self-draw and atlas rendering.
+- [ ] If needed, add a temporary parity probe for one renderer path (texture bind or quad draw), then remove it after validation.
+- [ ] Re-test: self-draw playback, project sampling, integer scaling interaction, and effect/shader clipping.
+  - Break detectors:
+    - Self-draw character visibly animates with actual atlas art, not gray fallback quads.
+    - Sampling/project setting changes affect output as expected.
+    - Effects/shaders do not clip unexpectedly at object bounds.
+
+### Pass 5 — Asset + texture loading
+- [ ] Write the asset/texture API translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for asset/texture loading before editing code.
+- [ ] Verify the documented SDK v2 path for image info, asset loading, and runtime texture creation.
+- [ ] Replace temporary probes where the docs provide a stable surface.
+- [ ] Keep unsupported legacy-frame access isolated as a compatibility fallback only where still required.
+- [ ] If needed, add a temporary parity probe for one asset/texture load path, then remove it after validation.
+- [ ] Re-test: drag-drop import, atlased imports, packed addon import, and legacy-project repair/reimport flow.
+  - Break detectors:
+    - Import a new atlased `.zip` into an empty project and verify immediate animation.
+    - Load a packed `.c3addon` build and verify the same import path works.
+    - Repair/reimport a legacy project and verify red-box fallback does not appear.
+
+### Pass 6 — Animation state + playback core
+- [ ] Write the animation/playback API translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for animation/playback before editing code.
+- [ ] Verify the documented instance/type APIs used by playback state, animation switching, blending, and readiness.
+- [ ] Replace defensive calls that are only there to guess method casing.
+- [ ] Keep working behaviour for queued pre-ready animation changes, loop overrides, blend timing, and trigger-at-start handling.
+- [ ] If needed, add a temporary parity probe for one animation-state transition, then remove it after validation.
+- [ ] Re-test: set animation, blend duration, second animation, forced non-looping on looping animations, and immediate `AnimationName` reads after creation.
+  - Break detectors:
+    - Create instance -> immediately `Set animation` -> immediately read `AnimationName`.
+    - Force a looping animation to play once and confirm `On animation finished` fires.
+    - Test second animation + blend ratio + blend duration transition.
+
+### Pass 7 — Trigger + condition dispatch
+- [ ] Write the trigger/condition API translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for trigger/condition dispatch before editing code.
+- [ ] Verify the documented trigger path for SDK v2 conditions.
+- [ ] Replace defensive trigger dispatch only where the docs provide an explicit path.
+- [ ] Preserve current tick/tick2 ordering that now matches legacy behaviour more closely.
+- [ ] If needed, add a temporary parity probe for one trigger path, then remove it after validation.
+- [ ] Re-test: `OnReady`, `On animation finished`, event triggers, sound triggers, and first-frame trigger behaviour.
+  - Break detectors:
+    - `OnReady` association setup for non-self-draw and collision boxes.
+    - Trigger at time `0` or immediately after resume/change.
+    - Event line spawning from a point during a fast animation transition.
+
+### Pass 8 — SOL / picking / instance resolution
+- [ ] Write the SOL/picking API translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for SOL/picking before editing code.
+- [ ] Verify the documented SDK v2 APIs for enumerating instances, picked instances, paired instances, and object-type lookup.
+- [ ] Replace broad probing with direct documented calls where possible.
+- [ ] Keep any undocumented but still-required compatibility fallback isolated to one helper.
+- [ ] If needed, add a temporary parity probe for one instance-resolution path, then remove it after validation.
+- [ ] Re-test: multiple instances of the same Spriter type, container/paired-instance scenarios, and legacy association flows.
+  - Break detectors:
+    - Multiple enemies of the same Spriter type with independent hitboxes.
+    - Container/paired-instance behaviour using helper sprites or linked objects.
+    - `Find Spriter object` and object-name lookup workflows.
+
+### Pass 9 — Associated object application
+- [ ] Write the associated-object API translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for associated-object application before editing code.
+- [ ] Verify the documented way child sprite/box/helper instances should be updated each tick.
+- [ ] Simplify world-info lookup, association bookkeeping, and collision/visibility syncing where docs now cover the access path.
+- [ ] Preserve the fixes for helper disable-on-clear and destroy-time cleanup.
+- [ ] If needed, add a temporary parity probe for one associated-object update path, then remove it after validation.
+- [ ] Re-test: collision boxes, helper points, image swaps in non-self-draw mode, and per-instance association correctness under heavy combat scenes.
+  - Break detectors:
+    - Attack box turns on/off at the correct frames and does not linger after animation swap or destroy.
+    - Non-self-draw image swaps follow frame changes.
+    - Points/helpers track the correct instance under multiple simultaneous actors.
+
+### Pass 10 — ACE surface cleanup
+- [ ] Write the ACE-to-runtime helper translation map from the official SDK v2 docs before editing code.
+- [ ] Write the manual break-detector checklist for the ACE group being cleaned before editing code.
+- [ ] Ensure actions, conditions, and expressions call stable runtime helpers only, not ad-hoc API probes.
+- [ ] Remove duplicated logic between runtime helpers and ACE files.
+- [ ] If needed, add a temporary parity probe for one high-risk ACE path, then remove it after validation.
+- [ ] Re-test high-risk ACE groups first: animation control, object/point expressions, blend controls, and association actions.
+  - Break detectors:
+    - For each ACE group touched, make one event sheet that reads the expression immediately after the paired action.
+    - Verify legacy ACE aliases still produce the same gameplay result as the non-legacy version.
+
+### Pass 11 — Fallback isolation
+- [ ] Write the fallback inventory/justification list before moving or deleting compatibility code.
+- [ ] Write the manual break-detector checklist for each fallback being isolated or removed.
+- [ ] Move every remaining undocumented or compatibility-only access path behind small, explicit helper functions.
+- [ ] Document why each fallback still exists and what SDK gap it covers.
+- [ ] Add/update `requests for ashley.txt` for any fallback that should become unnecessary with an SDK addition.
+- [ ] If needed, add a temporary parity probe around a fallback boundary, then remove it after validation.
+
+### Pass 12 — Final cleanup + guardrails
+- [ ] Write the final approved SDK2 surface list before deleting the last temporary helpers.
+- [ ] Write the final regression checklist before deleting the last temporary helpers.
+- [ ] Remove dead helpers, dead probes, and obsolete compatibility branches made unnecessary by earlier passes.
+- [ ] Add a short developer note listing the approved SDK2 call surfaces we intentionally rely on.
+- [ ] Add grep-based guardrails/checklist notes so future edits do not reintroduce the same mixed-case probing patterns.
+- [ ] Perform a final regression pass covering self-draw, non-self-draw, legacy import/repair, and key gameplay timing cases.
+
+## Exit criteria
+- The working `scml2/` runtime still behaves like the current good build in manual C3 testing.
+- Direct documented SDK v2 calls are the default path in cleaned subsystems.
+- Remaining fallbacks are deliberate, isolated, and documented.
+- Any still-missing SDK functionality is captured in `requests for ashley.txt`.

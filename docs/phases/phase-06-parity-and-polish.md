@@ -3,6 +3,10 @@
 ## Goal
 Achieve feature parity with the legacy addon, optimize performance, and finalize documentation and samples.
 
+## Current snapshot
+- Runtime parity work in `scml2/` is far enough along that the next active task is SDK v2 API cleanup.
+- Use [Phase 6a — SDK2 API cleanup](phase-06a-sdk2-api-cleanup.md) for the ordered cleanup passes before doing broader polish.
+
 ## Checklist
 - [ ] Port the remaining actions, conditions, and expressions from the README roadmap, validating against legacy behaviour. _(Sound import + sound trigger ACEs are now present in `scml2`; legacy ACE alias IDs have been started for migration compatibility, broader parity remains.)_
   - Added this pass: animation blending ACEs (`SetSecondAnim`, `SetAnimBlendRatio`, `StopSecondAnim`, `CompareSecondAnimation`, blend/second-animation expressions), object/action-point query ACEs, legacy visibility/opacity actions, misc time-scale/layer/visibility/collision toggles, and Z-elevation/bounding-box expressions.
@@ -16,4 +20,4 @@ Achieve feature parity with the legacy addon, optimize performance, and finalize
 - Note any external dependencies or release criteria (e.g., Construct store submission requirements).
 
 ## Sub-phases
-_None yet. Add bullet links here when you split out deeper work._
+- [Phase 6a — SDK2 API cleanup](phase-06a-sdk2-api-cleanup.md)
