@@ -329,6 +329,23 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
     - Trigger at time `0` or immediately after resume/change.
     - Event line spawning from a point during a fast animation transition.
 
+#### Pass 7 API translation map
+- Context: runtime trigger dispatch from `scml2/c3runtime/instance.js`.
+  - Current pattern: guard `_trigger(...)` behind `typeof this._trigger === "function"` and also probe condition method presence before firing.
+  - Documented SDK2 call: `this._trigger(C3.Plugins.Spriter.Cnds.SomeTrigger)`.
+  - Notes: `_trigger()` is a documented `ISDKInstanceBase` API for firing trigger conditions. In this plugin, `C3.Plugins.Spriter.Cnds` is statically defined, so trigger condition references should be called directly.
+  - Source: `ISDKInstanceBase` scripting reference (`_trigger(method)`), Addon SDK runtime reference, and SDK2 porting guide Step 5.
+- Context: trigger ordering in runtime playback.
+  - Current pattern: fire triggers from plugin-owned helper methods like `_triggerAnimationFinished()`, `_triggerEvent()`, `_triggerSound()`, `_triggerOnReady()`, and `_triggerOnLoadFailed()`.
+  - Documented SDK2 call: keep those plugin-local helper methods, but inside them use the documented `_trigger(...)` runtime call directly.
+  - Notes: this pass does not change timing order; it only removes defensive runtime probing around the documented trigger API.
+  - Source: existing runtime implementation in `scml2/c3runtime/instance.js` plus `ISDKInstanceBase._trigger()`.
+- Context: async trigger dispatch.
+  - Current pattern: only synchronous `_trigger(...)` is used.
+  - Documented SDK2 call: keep synchronous `_trigger(...)` for now.
+  - Notes: `_triggerAsync(...)` is documented, but there is no current need to change semantics or event ordering in this pass.
+  - Source: `ISDKInstanceBase` scripting reference (`_triggerAsync(method)`).
+
 ### Pass 8 — SOL / picking / instance resolution
 - [ ] Write the SOL/picking API translation map from the official SDK v2 docs before editing code.
 - [ ] Write the manual break-detector checklist for SOL/picking before editing code.

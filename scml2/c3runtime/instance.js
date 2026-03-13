@@ -2261,14 +2261,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const cnds = C3.Plugins.Spriter.Cnds;
 		try
 		{
-			if (typeof this._trigger === "function" && cnds && typeof cnds.OnAnyAnimFinished === "function")
-			{
-				this._trigger(cnds.OnAnyAnimFinished);
-			}
-			if (typeof this._trigger === "function" && cnds && typeof cnds.OnAnimFinished === "function")
-			{
-				this._trigger(cnds.OnAnimFinished);
-			}
+			this._trigger(cnds.OnAnyAnimFinished);
+			this._trigger(cnds.OnAnimFinished);
 		}
 		finally
 		{
@@ -3694,10 +3688,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._triggeredSoundTag = soundTag || "";
 
 		const cnds = C3.Plugins.Spriter.Cnds;
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnSoundTriggered === "function")
-		{
-			this._trigger(cnds.OnSoundTriggered);
-		}
+		this._trigger(cnds.OnSoundTriggered);
 	}
 
 	_triggerSoundVolumeChange(soundTag)
@@ -3706,10 +3697,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._triggeredSoundTag = soundTag || "";
 
 		const cnds = C3.Plugins.Spriter.Cnds;
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnSoundVolumeChangeTriggered === "function")
-		{
-			this._trigger(cnds.OnSoundVolumeChangeTriggered);
-		}
+		this._trigger(cnds.OnSoundVolumeChangeTriggered);
 	}
 
 	_triggerSoundPanningChange(soundTag)
@@ -3718,10 +3706,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._triggeredSoundTag = soundTag || "";
 
 		const cnds = C3.Plugins.Spriter.Cnds;
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnSoundPanningChangeTriggered === "function")
-		{
-			this._trigger(cnds.OnSoundPanningChangeTriggered);
-		}
+		this._trigger(cnds.OnSoundPanningChangeTriggered);
 	}
 
 	_evaluateSoundLines(currentTimeMs, suppressTriggers = false)
@@ -3858,10 +3843,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	{
 		this._triggeredEventName = eventName || "";
 		const cnds = C3.Plugins.Spriter.Cnds;
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnEventTriggered === "function")
-		{
-			this._trigger(cnds.OnEventTriggered);
-		}
+		this._trigger(cnds.OnEventTriggered);
 	}
 
 	_evaluateEventLines(currentTimeMs, suppressTriggers = false)
@@ -4753,19 +4735,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_triggerOnURLLoaded()
 	{
 		const cnds = C3.Plugins.Spriter.Cnds;
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnURLLoaded === "function")
-		{
-			this._trigger(cnds.OnURLLoaded);
-		}
+		this._trigger(cnds.OnURLLoaded);
 	}
 
 	_triggerOnURLFailed()
 	{
 		const cnds = C3.Plugins.Spriter.Cnds;
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnURLFailed === "function")
-		{
-			this._trigger(cnds.OnURLFailed);
-		}
+		this._trigger(cnds.OnURLFailed);
 	}
 
 	async _loadFromURL(url, crossOrigin, sconText)
@@ -6157,16 +6133,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		spriterDebugLog(`[Spriter] Ready trigger fired: drawSelf=${this.drawSelf}, isReady=${!!this.isReady}, mapSize=${this._c2ObjectMap ? this._c2ObjectMap.size : 0}`);
 
 		const cnds = C3.Plugins.Spriter.Cnds;
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnReady === "function")
-		{
-			spriterDebugLog("[Spriter] -> Triggering condition: OnReady");
-			this._trigger(cnds.OnReady);
-		}
-		if (typeof this._trigger === "function" && cnds && typeof cnds.readyForSetup === "function")
-		{
-			spriterDebugLog("[Spriter] -> Triggering condition: readyForSetup (legacy)");
-			this._trigger(cnds.readyForSetup);
-		}
+		spriterDebugLog("[Spriter] -> Triggering condition: OnReady");
+		this._trigger(cnds.OnReady);
+		spriterDebugLog("[Spriter] -> Triggering condition: readyForSetup (legacy)");
+		this._trigger(cnds.readyForSetup);
 	}
 
 	_triggerOnLoadFailed()
@@ -6179,10 +6149,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._didTriggerLoadFailed = true;
 
 		const cnds = C3.Plugins.Spriter.Cnds;
-		if (typeof this._trigger === "function" && cnds && typeof cnds.OnLoadFailed === "function")
-		{
-			this._trigger(cnds.OnLoadFailed);
-		}
+		this._trigger(cnds.OnLoadFailed);
 	}
 
 	_onRendererContextLost()
