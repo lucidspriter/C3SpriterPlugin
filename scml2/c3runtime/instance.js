@@ -1027,31 +1027,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		};
 
 		const sdkType = this.objectType;
-		const runtimeSamplingProp = this.runtime && typeof this.runtime.sampling === "string"
+		const runtimeSamplingHint = this.runtime && typeof this.runtime.sampling === "string"
 			? this.runtime.sampling
 			: null;
-		const getRuntimeSamplingMethodName = this.runtime && typeof this.runtime.GetSampling === "function"
-			? "GetSampling"
-			: this.runtime && typeof this.runtime.getSampling === "function"
-				? "getSampling"
-				: "";
-		const getRuntimeSampling = getRuntimeSamplingMethodName === "GetSampling"
-			? this.runtime.GetSampling.bind(this.runtime)
-			: getRuntimeSamplingMethodName === "getSampling"
-				? this.runtime.getSampling.bind(this.runtime)
-				: null;
-		let runtimeSamplingHint = runtimeSamplingProp;
-		if (runtimeSamplingHint == null && getRuntimeSampling)
-		{
-			try
-			{
-				runtimeSamplingHint = getRuntimeSampling();
-			}
-			catch (_)
-			{
-				runtimeSamplingHint = null;
-			}
-		}
 		const getOrLoadTexture = sdkType && typeof sdkType._getOrLoadTextureForPath === "function"
 			? ((path, rend) => sdkType._getOrLoadTextureForPath(path, rend, runtimeSamplingHint))
 			: null;
@@ -1916,40 +1894,22 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		const loadAsset = imageInfo.LoadAsset || imageInfo.loadAsset || null;
-		loadAsset.call(imageInfo, this.runtime);
+		imageInfo.loadAsset(this.runtime);
 
-		const loadStaticTexture = imageInfo.LoadStaticTexture || imageInfo.loadStaticTexture || null;
-		if (typeof loadStaticTexture !== "function")
+		if (typeof imageInfo.loadStaticTexture !== "function")
 		{
 			return;
 		}
 
 		let options = undefined;
-		const samplingProp = this.runtime && typeof this.runtime.sampling === "string"
-			? this.runtime.sampling
-			: null;
-		const getSampling = this.runtime && typeof this.runtime.GetSampling === "function"
-			? this.runtime.GetSampling.bind(this.runtime)
-			: this.runtime && typeof this.runtime.getSampling === "function"
-				? this.runtime.getSampling.bind(this.runtime)
-				: null;
-		if (samplingProp != null)
+		if (this.runtime && typeof this.runtime.sampling === "string")
 		{
-			options = { sampling: samplingProp };
-		}
-		else if (getSampling)
-		{
-			const sampling = getSampling();
-			if (sampling != null)
-			{
-				options = { sampling };
-			}
+			options = { sampling: this.runtime.sampling };
 		}
 
 		try
 		{
-			const maybePromise = loadStaticTexture.call(imageInfo, renderer, options);
+			const maybePromise = imageInfo.loadStaticTexture(renderer, options);
 			if (maybePromise && typeof maybePromise.then === "function")
 			{
 				entry.promise = maybePromise

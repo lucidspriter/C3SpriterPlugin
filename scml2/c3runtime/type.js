@@ -25,11 +25,6 @@ function getAssetManager(runtime)
 		return null;
 	}
 
-	if (typeof runtime.GetAssetManager === "function")
-	{
-		return runtime.GetAssetManager();
-	}
-
 	return runtime.assets || null;
 }
 
@@ -289,13 +284,11 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			return;
 		}
 
-		const imageInfo = frame && typeof frame.GetImageInfo === "function"
-			? frame.GetImageInfo()
-			: frame && typeof frame.getImageInfo === "function"
-				? frame.getImageInfo()
-				: frame && frame._imageInfo
-					? frame._imageInfo
-					: null;
+		const imageInfo = frame && typeof frame.getImageInfo === "function"
+			? frame.getImageInfo()
+			: frame && frame._imageInfo
+				? frame._imageInfo
+				: null;
 
 		if (!imageInfo)
 		{
@@ -304,14 +297,12 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 		}
 
 		// Already has a texture (or will be handled by the engine).
-		const getTexture = imageInfo.GetTexture || imageInfo.getTexture || null;
-		if (typeof getTexture === "function" && getTexture.call(imageInfo))
+		if (typeof imageInfo.getTexture === "function" && imageInfo.getTexture())
 		{
 			return;
 		}
 
-		const loadStaticTexture = imageInfo.LoadStaticTexture || imageInfo.loadStaticTexture || null;
-		if (typeof loadStaticTexture !== "function")
+		if (typeof imageInfo.loadStaticTexture !== "function")
 		{
 			// Some runtimes handle atlas textures automatically; don't treat as an error.
 			return;
@@ -319,20 +310,9 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 
 		let options = undefined;
 		const runtime = this.runtime;
-		const samplingProp = runtime && typeof runtime.sampling === "string"
+		const sampling = runtime && typeof runtime.sampling === "string"
 			? runtime.sampling
 			: null;
-		const getSamplingMethodName = runtime && typeof runtime.GetSampling === "function"
-			? "GetSampling"
-			: runtime && typeof runtime.getSampling === "function"
-				? "getSampling"
-				: "";
-		const getSampling = getSamplingMethodName === "GetSampling"
-			? runtime.GetSampling.bind(runtime)
-			: getSamplingMethodName === "getSampling"
-				? runtime.getSampling.bind(runtime)
-				: null;
-		const sampling = samplingProp != null ? samplingProp : (getSampling ? getSampling() : null);
 		if (sampling != null)
 		{
 			options = { sampling };
@@ -340,7 +320,7 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 
 		try
 		{
-			const maybePromise = loadStaticTexture.call(imageInfo, renderer, options);
+			const maybePromise = imageInfo.loadStaticTexture(renderer, options);
 			if (maybePromise && typeof maybePromise.then === "function")
 			{
 				entry.promise = maybePromise
@@ -424,40 +404,25 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			throw new Error("Spriter: runtime asset manager is unavailable.");
 		}
 
-		const getUrl =
-			assetManager.GetProjectFileUrl ||
-			assetManager.getProjectFileUrl ||
-			null;
-
-		if (typeof getUrl !== "function")
+		if (typeof assetManager.getProjectFileUrl !== "function")
 		{
-			throw new Error("Spriter: asset manager does not support GetProjectFileUrl().");
+			throw new Error("Spriter: asset manager does not support getProjectFileUrl().");
 		}
 
-		const projectUrl = await getUrl.call(assetManager, projectFileName);
+		const projectUrl = await assetManager.getProjectFileUrl(projectFileName);
 
 		if (typeof projectUrl !== "string" || !projectUrl)
 		{
 			throw new Error(`Spriter: failed to resolve URL for project file '${projectFileName}'.`);
 		}
 
-		const fetchJson =
-			assetManager.FetchJson ||
-			assetManager.fetchJson ||
-			null;
-
 		let projectJson;
-		if (typeof fetchJson === "function")
+		if (typeof assetManager.fetchJson !== "function")
 		{
-			projectJson = await fetchJson.call(assetManager, projectUrl);
+			throw new Error("Spriter: asset manager does not support fetchJson().");
 		}
-		else
-		{
-			// Fallback: use fetch() directly if asset manager does not provide JSON helpers.
-			// Note: this may fail depending on browser/preview security; it's only a last resort.
-			const response = await fetch(projectUrl);
-			projectJson = await response.json();
-		}
+
+		projectJson = await assetManager.fetchJson(projectUrl);
 
 		if (typeof projectJson === "string")
 		{
@@ -597,12 +562,7 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			throw new Error("Spriter: renderer is unavailable for texture loading.");
 		}
 
-		const createStaticTexture =
-			renderer.createStaticTexture ||
-			renderer.CreateStaticTexture ||
-			null;
-
-		if (typeof createStaticTexture !== "function")
+		if (typeof renderer.createStaticTexture !== "function")
 		{
 			throw new Error("Spriter: renderer does not support createStaticTexture().");
 		}
@@ -615,38 +575,25 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			throw new Error("Spriter: runtime asset manager is unavailable.");
 		}
 
-		const getUrl =
-			assetManager.GetProjectFileUrl ||
-			assetManager.getProjectFileUrl ||
-			null;
-
-		if (typeof getUrl !== "function")
+		if (typeof assetManager.getProjectFileUrl !== "function")
 		{
 			throw new Error("Spriter: asset manager does not support getProjectFileUrl().");
 		}
 
-		const resolvedUrl = await getUrl.call(assetManager, projectFileName);
+		const resolvedUrl = await assetManager.getProjectFileUrl(projectFileName);
 
 		if (typeof resolvedUrl !== "string" || !resolvedUrl)
 		{
 			throw new Error(`Spriter: failed to resolve URL for image file '${projectFileName}'.`);
 		}
 
-		const fetchBlob =
-			assetManager.FetchBlob ||
-			assetManager.fetchBlob ||
-			null;
-
 		let blob;
-		if (typeof fetchBlob === "function")
+		if (typeof assetManager.fetchBlob !== "function")
 		{
-			blob = await fetchBlob.call(assetManager, resolvedUrl);
+			throw new Error("Spriter: asset manager does not support fetchBlob().");
 		}
-		else
-		{
-			const response = await fetch(resolvedUrl);
-			blob = await response.blob();
-		}
+
+		blob = await assetManager.fetchBlob(resolvedUrl);
 
 		if (!blob)
 		{
@@ -668,28 +615,10 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 				wrapY: "clamp-to-edge"
 			};
 
-			const samplingProp = runtime && typeof runtime.sampling === "string"
-				? runtime.sampling
-				: null;
-			const getSamplingMethodName = runtime && typeof runtime.GetSampling === "function"
-				? "GetSampling"
-				: runtime && typeof runtime.getSampling === "function"
-					? "getSampling"
-					: "";
-			const getSampling = getSamplingMethodName === "GetSampling"
-				? runtime.GetSampling.bind(runtime)
-				: getSamplingMethodName === "getSampling"
-					? runtime.getSampling.bind(runtime)
-					: null;
-
 			let sampling = null;
-			if (samplingProp != null)
+			if (runtime && typeof runtime.sampling === "string")
 			{
-				sampling = samplingProp;
-			}
-			else if (getSampling)
-			{
-				sampling = getSampling();
+				sampling = runtime.sampling;
 			}
 			else if (samplingHint != null)
 			{
@@ -701,7 +630,7 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 				textureOptions.sampling = sampling;
 			}
 
-			const texture = await createStaticTexture.call(renderer, imageBitmap, textureOptions);
+			const texture = await renderer.createStaticTexture(imageBitmap, textureOptions);
 			const width = Number(imageBitmap && imageBitmap.width);
 			const height = Number(imageBitmap && imageBitmap.height);
 

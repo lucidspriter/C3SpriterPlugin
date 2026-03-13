@@ -254,6 +254,38 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
     - Load a packed `.c3addon` build and verify the same import path works.
     - Repair/reimport a legacy project and verify red-box fallback does not appear.
 
+#### Pass 5 API translation map
+- Context: runtime asset manager access from `scml2/c3runtime/type.js`.
+  - Current pattern: probe `runtime.GetAssetManager()` first and then fall back to `runtime.assets`.
+  - Documented SDK2 call: `runtime.assets`.
+  - Notes: runtime code should use the runtime asset-manager surface directly.
+  - Source: Addon SDK runtime reference + `IRuntime` scripting reference.
+- Context: resolving project-file URLs.
+  - Current pattern: probe `GetProjectFileUrl/getProjectFileUrl`.
+  - Documented SDK2 call: `runtime.assets.getProjectFileUrl(projectFileName)`.
+  - Notes: this is the official runtime asset-manager path for project files.
+  - Source: runtime asset-manager scripting reference.
+- Context: fetching project JSON and blobs.
+  - Current pattern: probe `FetchJson/fetchJson` and `FetchBlob/fetchBlob`, then fall back to raw `fetch()`.
+  - Documented SDK2 call: `runtime.assets.fetchJson(url)` and `runtime.assets.fetchBlob(url)`.
+  - Notes: raw `fetch()` fallback is not part of the documented asset-manager flow and should be removed where the SDK path is clear.
+  - Source: runtime asset-manager scripting reference.
+- Context: runtime texture creation from decoded image data.
+  - Current pattern: probe `renderer.createStaticTexture` and `renderer.CreateStaticTexture`.
+  - Documented SDK2 call: `renderer.createStaticTexture(imageBitmap, options)`.
+  - Notes: this is the documented runtime renderer path for addon-created textures.
+  - Source: runtime `IRenderer` scripting reference.
+- Context: runtime sampling mode used for static texture creation.
+  - Current pattern: probe `runtime.GetSampling/getSampling` and `runtime.sampling`.
+  - Documented SDK2 call: `runtime.sampling`.
+  - Notes: pass the runtime sampling string through to texture creation where needed.
+  - Source: `IRuntime` scripting reference.
+- Context: compatibility atlas-image upload when an `IImageInfo` already exists.
+  - Current pattern: probe `GetImageInfo/getImageInfo`, `GetTexture/getTexture`, `LoadStaticTexture/loadStaticTexture`, `GetTexRect/getTexRect`, `GetWidth/getWidth`, and `GetHeight/getHeight`.
+  - Documented SDK2 call: use the lowercase runtime `IImageInfo` methods (`getImageInfo()`, `getTexture()`, `loadStaticTexture()`, `getTexRect()`, `getWidth()`, `getHeight()`).
+  - Notes: the underlying custom-plugin animation-frame access remains an unsupported legacy compatibility path; only the `IImageInfo` method names themselves are being normalized here.
+  - Source: runtime image-info scripting reference plus the existing open question about runtime access to custom plugin animation frames.
+
 ### Pass 6 — Animation state + playback core
 - [ ] Write the animation/playback API translation map from the official SDK v2 docs before editing code.
 - [ ] Write the manual break-detector checklist for animation/playback before editing code.
