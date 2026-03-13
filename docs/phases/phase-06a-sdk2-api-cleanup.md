@@ -359,6 +359,23 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
     - Container/paired-instance behaviour using helper sprites or linked objects.
     - `Find Spriter object` and object-name lookup workflows.
 
+#### Pass 8 API translation map
+- Context: resolving picked instances from object-type parameters.
+  - Current pattern: probe `GetPickedInstances/getPickedInstances`, `GetFirstPickedInstance/getFirstPickedInstance`, `GetPairedInstance/getPairedInstance`, `GetFirstPicked/getFirstPicked`, and SOL internals.
+  - Documented SDK2 call: `objectType.getPickedInstances()`, `objectType.getFirstPickedInstance()`, and `objectType.getPairedInstance(instance)`.
+  - Notes: use the documented runtime object-type picking APIs first; keep any remaining legacy/SOL-internal fallback isolated behind the official path.
+  - Source: runtime `IObjectType` scripting reference.
+- Context: enumerating instances of an object type.
+  - Current pattern: probe `GetInstances`, `instances()`, `getAllInstances()`, and `_instances`.
+  - Documented SDK2 call: `objectType.instances()` for active/current-layout instances, then `objectType.getAllInstances()` only when the broader set is actually needed.
+  - Notes: pairing and per-layout association should prefer `instances()` first.
+  - Source: runtime `IObjectType` scripting reference.
+- Context: using container pairing to map helper instances back to the current Spriter instance.
+  - Current pattern: probe `GetPairedInstance/getPairedInstance` with multiple self-instance candidates, then fall back to sibling scanning.
+  - Documented SDK2 call: `objectType.getPairedInstance(instance)`.
+  - Notes: keep sibling/internal fallback only as a compatibility tail if the documented pairing path is not sufficient in some runtime context.
+  - Source: runtime `IObjectType` scripting reference.
+
 ### Pass 9 — Associated object application
 - [ ] Write the associated-object API translation map from the official SDK v2 docs before editing code.
 - [ ] Write the manual break-detector checklist for associated-object application before editing code.
@@ -371,6 +388,23 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
     - Attack box turns on/off at the correct frames and does not linger after animation swap or destroy.
     - Non-self-draw image swaps follow frame changes.
     - Points/helpers track the correct instance under multiple simultaneous actors.
+
+#### Pass 9 API translation map
+- Context: applying per-tick transforms to associated sprite/box/helper instances.
+  - Current pattern: route nearly all child-instance updates through the synthetic world-info adapter (`SetX`, `SetY`, `SetAngle`, `SetWidth`, `SetHeight`, `SetOpacity`, `SetZElevation`, etc.).
+  - Documented SDK2 call: use direct runtime world-instance properties on the associated instance (`x`, `y`, `angle`, `width`, `height`, `opacity`, `zElevation`).
+  - Notes: this pass should move supported child-instance transform writes to direct runtime properties and leave only unsupported operations on the compatibility path.
+  - Source: runtime `IWorldInstance` scripting reference.
+- Context: sprite-frame changes in non-self-draw mode.
+  - Current pattern: try many legacy/internal setter names before touching direct frame state.
+  - Documented SDK2 call: use the sprite instance `animationFrame` property first.
+  - Notes: keep any remaining internal fallback isolated only for runtimes where the documented frame property is unavailable.
+  - Source: runtime sprite-instance scripting reference.
+- Context: helper visibility/collision/origin/bbox updates.
+  - Current pattern: use world-info compatibility methods for visibility, collision toggles, origin setters, and bbox invalidation.
+  - Documented SDK2 call: direct runtime visibility (`isVisible`) is documented, but collision/origin/bbox-invalidating APIs are still unresolved for this plugin.
+  - Notes: leave visibility/collision/origin/bbox cleanup on the compatibility path until those APIs are pinned down more confidently.
+  - Source: runtime `IWorldInstance` scripting reference plus existing open questions in `requests for ashley.txt`.
 
 ### Pass 10 — ACE surface cleanup
 - [ ] Write the ACE-to-runtime helper translation map from the official SDK v2 docs before editing code.

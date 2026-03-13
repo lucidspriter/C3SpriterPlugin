@@ -2859,30 +2859,16 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		const candidateType = (c2Object && typeof c2Object.GetObjectClass === "function")
-			? c2Object.GetObjectClass()
-			: (c2Object && typeof c2Object.getObjectClass === "function")
-				? c2Object.getObjectClass()
-				: (c2Object && c2Object.objectType)
-					? c2Object.objectType
-					: (c2Object && c2Object.type)
-						? c2Object.type
-						: c2Object;
+		const candidateType = (c2Object && c2Object.objectType)
+			? c2Object.objectType
+			: (c2Object && c2Object.type)
+				? c2Object.type
+				: (c2Object && typeof c2Object.getObjectClass === "function")
+					? c2Object.getObjectClass()
+					: c2Object;
 
-		let picked = null;
-		if (typeof this._resolveC2Instances === "function")
-		{
-			const instances = this._resolveC2Instances(c2Object);
-			picked = Array.isArray(instances) && instances.length ? instances[0] : null;
-		}
-		if (!picked && typeof c2Object.GetFirstPicked === "function")
-		{
-			picked = c2Object.GetFirstPicked();
-		}
-		if (!picked && typeof c2Object.getFirstPicked === "function")
-		{
-			picked = c2Object.getFirstPicked();
-		}
+		const instances = this._resolveC2Instances(c2Object);
+		const picked = Array.isArray(instances) && instances.length ? instances[0] : null;
 		if (!picked)
 		{
 			let typeMatchName = "";
@@ -6377,18 +6363,30 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_getInstancesOf(objType)
 	{
-		// SDK v1: GetInstances() returns an array.
-		if (typeof objType.GetInstances === "function")
-			return Array.from(objType.GetInstances());
-		// SDK v2: instances() may return an iterator.
+		if (!objType)
+		{
+			return [];
+		}
+
 		if (typeof objType.instances === "function")
-			return Array.from(objType.instances());
-		// SDK v2: getAllInstances() may include inactive instances from other layouts.
-		// Prefer `instances()` first for association pairing and per-layout updates.
+		{
+			const instances = Array.from(objType.instances());
+			if (instances.length)
+			{
+				return instances;
+			}
+		}
+
 		if (typeof objType.getAllInstances === "function")
+		{
 			return Array.from(objType.getAllInstances());
+		}
+
 		if (Array.isArray(objType._instances))
+		{
 			return objType._instances;
+		}
+
 		return [];
 	}
 
@@ -6483,55 +6481,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return null;
 		}
 
-		const selfCandidates = [];
-		const pushUnique = (value) =>
+		if (typeof objectType.getPairedInstance === "function")
 		{
-			if (value && !selfCandidates.includes(value))
-			{
-				selfCandidates.push(value);
-			}
-		};
-
-		pushUnique(this);
-		pushUnique(this._inst);
-		pushUnique(typeof this.GetInstance === "function" ? this.GetInstance() : null);
-		pushUnique(typeof this.getInstance === "function" ? this.getInstance() : null);
-
-		for (const fnName of ["GetPairedInstance", "getPairedInstance"])
-		{
-			const fn = objectType && objectType[fnName];
-			if (typeof fn !== "function")
-			{
-				continue;
-			}
-
-			for (const selfInst of selfCandidates)
-			{
-				try
-				{
-					const paired = fn.call(objectType, selfInst);
-					if (paired)
-					{
-						return paired;
-					}
-				}
-				catch (err)
-				{
-					// Try other candidate calling conventions.
-				}
-			}
-
 			try
 			{
-				const paired = fn.call(objectType);
+				const paired = objectType.getPairedInstance(this);
 				if (paired)
 				{
 					return paired;
 				}
 			}
-			catch (err)
+			catch (_)
 			{
-				// Ignore and fall back to IID-based pairing.
+				// Fall through to compatibility logic below.
 			}
 		}
 
@@ -6562,9 +6524,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				}
 			};
 
-			pushType(callFirstMethod(inst, ["GetObjectClass", "getObjectClass"]));
-			pushType(inst.type);
 			pushType(inst.objectType);
+			pushType(inst.type);
+			pushType(typeof inst.getObjectClass === "function" ? inst.getObjectClass() : null);
 			pushType(inst._objectType);
 
 			for (const candidate of instTypeCandidates)
@@ -7040,9 +7002,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		const apis = [
-			typeof objectType.GetInstances === "function" ? "GetInstances" : null,
-			typeof objectType.getAllInstances === "function" ? "getAllInstances" : null,
 			typeof objectType.instances === "function" ? "instances" : null,
+			typeof objectType.getAllInstances === "function" ? "getAllInstances" : null,
 			Array.isArray(objectType._instances) ? "_instances" : null
 		].filter(Boolean).join(",");
 		const frameCount = frameLookup instanceof Map ? frameLookup.size : 0;
@@ -7072,10 +7033,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		try
 		{
-			// SDK v2 picking APIs on IObjectType.
-			const picked = callFirstMethod(c2Object, ["GetPickedInstances", "getPickedInstances"]);
-			if (picked)
+			if (typeof c2Object.getPickedInstances === "function")
 			{
+				const picked = c2Object.getPickedInstances();
 				const pickedList = Array.isArray(picked) ? picked : Array.from(picked);
 				if (pickedList.length)
 				{
@@ -7083,44 +7043,27 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				}
 			}
 
-			const firstPickedInst = callFirstMethod(c2Object, ["GetFirstPickedInstance", "getFirstPickedInstance"]);
-			if (firstPickedInst)
+			if (typeof c2Object.getFirstPickedInstance === "function")
 			{
-				return [firstPickedInst];
-			}
-
-			// If this object type is in a container, prefer the paired instance for this Spriter
-			// instance when no explicit picks are available.
-			const selfInst = callFirstMethod(this, ["GetInstance", "getInstance"]) || this._inst || this;
-			const paired = callFirstMethod(c2Object, ["GetPairedInstance", "getPairedInstance"], selfInst);
-			if (paired)
-			{
-				return [paired];
-			}
-
-			if (typeof c2Object.GetSolStack === "function")
-			{
-				const sol = c2Object.GetSolStack()._current;
-				if (sol)
+				const firstPickedInst = c2Object.getFirstPickedInstance();
+				if (firstPickedInst)
 				{
-					let instances = Array.isArray(sol._instances) ? sol._instances : [];
-					if (!instances.length && sol._selectAll === true && Array.isArray(c2Object._instances))
-					{
-						instances = c2Object._instances;
-					}
-					return Array.from(instances);
+					return [firstPickedInst];
+				}
+			}
+
+			if (typeof c2Object.getPairedInstance === "function")
+			{
+				const paired = c2Object.getPairedInstance(this);
+				if (paired)
+				{
+					return [paired];
 				}
 			}
 		}
-		catch (error)
+		catch (_)
 		{
-			console.warn("[Spriter] Failed to resolve picked instances for object mapping.", error);
-		}
-
-		if (typeof c2Object.GetFirstPicked === "function")
-		{
-			const picked = c2Object.GetFirstPicked();
-			return picked ? [picked] : [];
+			// Fall through to compatibility logic below.
 		}
 
 		if (typeof c2Object.getFirstPicked === "function")
@@ -7129,22 +7072,18 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return picked ? [picked] : [];
 		}
 
-		// Some runtimes only expose object classes (no SOL methods on this object param).
-		if (typeof this._getInstancesOf === "function")
+		const directInstances = this._getInstancesOf(c2Object);
+		if (Array.isArray(directInstances) && directInstances.length)
 		{
-			const directInstances = this._getInstancesOf(c2Object);
-			if (Array.isArray(directInstances) && directInstances.length)
-			{
-				return directInstances;
-			}
+			return directInstances;
 		}
 
-		const objectClass = (typeof c2Object.GetObjectClass === "function")
-			? c2Object.GetObjectClass()
-			: (typeof c2Object.getObjectClass === "function")
-				? c2Object.getObjectClass()
+		const objectClass = (typeof c2Object.getObjectClass === "function")
+			? c2Object.getObjectClass()
+			: (typeof c2Object.GetObjectClass === "function")
+				? c2Object.GetObjectClass()
 				: null;
-		if (objectClass && typeof this._getInstancesOf === "function")
+		if (objectClass)
 		{
 			const classInstances = this._getInstancesOf(objectClass);
 			if (Array.isArray(classInstances) && classInstances.length)
@@ -7183,8 +7122,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		for (let i = this._objectsToSet.length - 1; i >= 0; i--)
 		{
 			const instr = this._objectsToSet[i];
+			const firstInst = instr.c2Instances.length > 0 ? instr.c2Instances[0] : null;
+			const firstInstType = firstInst
+				? (firstInst.objectType || firstInst.type || (typeof firstInst.getObjectClass === "function" ? firstInst.getObjectClass() : null))
+				: null;
 			if (instr.c2Instances.length > 0 &&
-				instr.c2Instances[0].GetObjectClass() === c2Object &&
+				firstInstType === c2Object &&
 				(allObjs || instr.objectName === queryName))
 			{
 				this._objectsToSet.splice(i, 1);
@@ -7313,13 +7256,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		const poseObjects = this._poseObjectStates;
 
-		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo)
-		{
-			if (!this._diagWiWarnDone) { this._diagWiWarnDone = true; console.warn("[Spriter] _applyPoseToInstances: worldInfo for self is NULL, bailing"); }
-			return;
-		}
-
 		const myX = this._getSelfX();
 		const myY = this._getSelfY();
 		const myAngle = this._getSelfAngle();
@@ -7409,9 +7345,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 			const inst = c2Entry.inst;
 			const wi = this._getWorldInfoOf(inst);
-			if (!wi) { skippedNoWi++; continue; }
 			try
 			{
+				if (!wi)
+				{
+					skippedNoWi++;
+				}
+
 				appliedCount++;
 				if (!isSpriteState)
 				{
@@ -7438,11 +7378,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				const finalAngle = (rootFlipSign < 0)
 					? ((Math.PI * 2) - state.angle) + myAngle
 					: state.angle + myAngle;
-				wi.SetAngle(finalAngle);
+				inst.angle = finalAngle;
 
 				// Opacity
-				wi.SetOpacity(clamp01(toFiniteNumber(state.alpha, 1) * myOpacity));
-				wi.SetZElevation(myZElevation);
+				inst.opacity = clamp01(toFiniteNumber(state.alpha, 1) * myOpacity);
+				inst.zElevation = myZElevation;
 
 				// Position: state.x/y are world-space offsets from the Spriter origin
 				const cosA = Math.cos(myAngle);
@@ -7452,14 +7392,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				const finalX = myX + localX * cosA - localY * sinA;
 				const finalY = myY + localX * sinA + localY * cosA;
 
-				wi.SetOriginX(0);
-				wi.SetOriginY(0);
-				wi.SetX(finalX);
-				wi.SetY(finalY);
+				if (wi)
+				{
+					wi.SetOriginX(0);
+					wi.SetOriginY(0);
+				}
+				inst.x = finalX;
+				inst.y = finalY;
 
 				if (doTickLog && appliedCount === 1)
 				{
-					spriterDebugLog(`[Spriter]   applied[0]: ${state.timelineName} -> finalPos=(${finalX.toFixed(1)},${finalY.toFixed(1)}), wiMethods=[SetX=${typeof wi.SetX},SetAngle=${typeof wi.SetAngle},SetBboxChanged=${typeof wi.SetBboxChanged}]`);
+					const setXType = wi ? typeof wi.SetX : "none";
+					const setAngleType = wi ? typeof wi.SetAngle : "none";
+					const setBboxChangedType = wi ? typeof wi.SetBboxChanged : "none";
+					spriterDebugLog(`[Spriter]   applied[0]: ${state.timelineName} -> finalPos=(${finalX.toFixed(1)},${finalY.toFixed(1)}), wiMethods=[SetX=${setXType},SetAngle=${setAngleType},SetBboxChanged=${setBboxChangedType}]`);
 				}
 
 				// Size (apply scale to original image dimensions)
@@ -7467,16 +7413,23 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				const trueH = state.height || 1;
 				const newW = trueW * state.scaleX * globalScale * mirrorFactor;
 				const newH = trueH * state.scaleY * globalScale * flipFactor;
-				wi.SetWidth(newW);
-				wi.SetHeight(newH);
+				inst.width = newW;
+				inst.height = newH;
 
 				// Pivot offset
-				this._applyPivotToInst(wi, state.pivotX, state.pivotY, newW, newH);
+				this._applyPivotToInst(inst, state.pivotX, state.pivotY, newW, newH);
 
 				// Z-ordering
 				if (isSpriteState && this.setLayersForSprites && previousZInst)
 				{
-					wi.ZOrderMoveAdjacentToInstance(previousZInst, true);
+					if (typeof inst.moveAdjacentToInstance === "function")
+					{
+						inst.moveAdjacentToInstance(previousZInst, true);
+					}
+					else if (wi)
+					{
+						wi.ZOrderMoveAdjacentToInstance(previousZInst, true);
+					}
 				}
 				if (isSpriteState)
 				{
@@ -7486,13 +7439,28 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				// Visibility/collision are toggled after the transform is fully updated so we don't
 				// momentarily re-enable a stale hitbox at the previous frame position.
 				if (this.setVisibilityForObjects)
-					wi.SetVisible(myVisible);
+				{
+					if (wi)
+					{
+						wi.SetVisible(myVisible);
+					}
+					else
+					{
+						inst.isVisible = myVisible;
+					}
+				}
 
-				wi.SetBboxChanged();
+				if (wi)
+				{
+					wi.SetBboxChanged();
+				}
 
 				if (this.setCollisionsForObjects)
 				{
-					wi.SetCollisionEnabled(true);
+					if (wi)
+					{
+						wi.SetCollisionEnabled(true);
+					}
 				}
 			}
 			catch (err)
@@ -7516,19 +7484,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 	}
 
-	_applyPivotToInst(wi, pivotX, pivotY, objWidth, objHeight)
+	_applyPivotToInst(inst, pivotX, pivotY, objWidth, objHeight)
 	{
 		const x = -pivotX * objWidth;
 		const y = -pivotY * objHeight;
-		const angle = wi.GetAngle();
+		const angle = toFiniteNumber(inst && inst.angle, 0);
 		let s = 0, c = 1;
 		if (angle !== 0)
 		{
 			s = Math.sin(angle);
 			c = Math.cos(angle);
 		}
-		wi.SetX(wi.GetX() + x * c - y * s);
-		wi.SetY(wi.GetY() + x * s + y * c);
+		inst.x = toFiniteNumber(inst && inst.x, 0) + x * c - y * s;
+		inst.y = toFiniteNumber(inst && inst.y, 0) + x * s + y * c;
 	}
 
 	_applyObjectsToSet()
@@ -7546,18 +7514,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				if (!c2Inst) continue;
 				if (c2Inst === this || c2Inst === this._inst) continue;
 				const wi = this._getWorldInfoOf(c2Inst);
-				if (!wi) continue;
 
 				// setType: 0=angle+position, 1=angle, 2=position
 				if (instr.setType === 0 || instr.setType === 1)
-					wi.SetAngle(worldState.angle);
+					c2Inst.angle = worldState.angle;
 
 				if (instr.setType === 0 || instr.setType === 2)
 				{
-					wi.SetX(worldState.x);
-					wi.SetY(worldState.y);
+					c2Inst.x = worldState.x;
+					c2Inst.y = worldState.y;
 				}
-				wi.SetBboxChanged();
+				if (wi)
+				{
+					wi.SetBboxChanged();
+				}
 			}
 
 			if (!instr.pin)
@@ -7619,16 +7589,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!state)
 		{
 			return null;
-		}
-
-		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo)
-		{
-			return {
-				x: toFiniteNumber(state.x, 0),
-				y: toFiniteNumber(state.y, 0),
-				angle: toFiniteNumber(state.angle, 0)
-			};
 		}
 
 		const myX = this._getSelfX();
