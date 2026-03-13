@@ -214,6 +214,33 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
     - Sampling/project setting changes affect output as expected.
     - Effects/shaders do not clip unexpectedly at object bounds.
 
+#### Pass 4 API translation map
+- Context: `_draw(renderer)` in `scml2/c3runtime/instance.js`.
+  - Current pattern: mix runtime `IRenderer` calls with older addon/editor-style renderer probing (`SetBlendMode`, `SetTexture`, `Quad3`, etc.).
+  - Documented SDK2 call: treat `renderer` as the runtime `IRenderer` surface used by `ISDKWorldInstanceBase._draw(renderer)`.
+  - Notes: for runtime code, use the runtime `IRenderer` methods directly, not the editor/reference `IWebGLRenderer` surface.
+  - Source: Addon SDK runtime reference + `ISDKWorldInstanceBase` runtime docs + `IRenderer` scripting reference.
+- Context: renderer blend state during self-draw.
+  - Current pattern: probe `SetBlendMode`, `setBlendMode`, `SetAlphaBlend`, `setAlphaBlendMode`, and an undocumented no-premultiply call.
+  - Documented SDK2 call: `renderer.setBlendMode(this.blendMode)` or `renderer.setAlphaBlendMode()`.
+  - Notes: keep the undocumented no-premultiply call isolated only as a compatibility fallback until the runtime docs expose an official equivalent.
+  - Source: `IRenderer` scripting reference (`setBlendMode()`, `setAlphaBlendMode()`).
+- Context: fill mode and texture binding.
+  - Current pattern: probe `SetColorFillMode`/`setColorFillMode`, `SetTextureFillMode`/`setTextureFillMode`, and `SetTexture`/`setTexture`.
+  - Documented SDK2 call: `renderer.setColorFillMode()`, `renderer.setTextureFillMode()`, `renderer.setTexture(texture)`.
+  - Notes: these should be called directly in runtime draw code.
+  - Source: `IRenderer` scripting reference.
+- Context: renderer color/alpha state.
+  - Current pattern: probe `SetColorRgba`/`setColorRgba` and `SetOpacity`/`setOpacity`.
+  - Documented SDK2 call: `renderer.setColorRgba(r, g, b, a)`.
+  - Notes: use direct RGBA color state for both textured and debug rendering; do not rely on legacy uppercase opacity helpers in runtime draw code.
+  - Source: `IRenderer` scripting reference (`setColorRgba()`).
+- Context: drawing quads in runtime self-draw.
+  - Current pattern: probe `renderer.quad`, `renderer.Quad`, `renderer.quad3`, `renderer.Quad3`, then fall back to `C3.Quad`/`C3.Rect`.
+  - Documented SDK2 call: `renderer.quad(domQuad)` and `renderer.quad3(domQuad, texRect)`.
+  - Notes: runtime `IRenderer` expects DOMQuad-like geometry objects here; remove uppercase/editor-style fallbacks from the runtime draw path.
+  - Source: `IRenderer` scripting reference (`quad()`, `quad3()`).
+
 ### Pass 5 — Asset + texture loading
 - [ ] Write the asset/texture API translation map from the official SDK v2 docs before editing code.
 - [ ] Write the manual break-detector checklist for asset/texture loading before editing code.

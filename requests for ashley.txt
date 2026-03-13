@@ -47,3 +47,13 @@ Each entry should note:
   - Addon SDK runtime API reference: https://www.construct.net/en/make-games/manuals/addon-sdk/runtime-reference
   - Addon-SDK `IWorldInstance` reference (method-style API): https://www.construct.net/en/make-games/manuals/addon-sdk/reference/object-interfaces/iworldinstance
   - Addon SDK v2 porting guide: https://www.construct.net/en/make-games/manuals/addon-sdk/guide/porting-addon-sdk-v2
+
+## Runtime IRenderer equivalent for no-premultiplied alpha blend
+- The Spriter runtime still has one isolated compatibility call to `renderer.SetNoPremultiplyAlphaBlend()` for the custom "no premultiplied alpha blend" property inherited from the legacy plugin.
+- During renderer API cleanup we moved the rest of `_draw(renderer)` to the documented runtime `IRenderer` surface (`setBlendMode()`, `setAlphaBlendMode()`, `setColorFillMode()`, `setTextureFillMode()`, `setTexture()`, `setColorRgba()`, `quad()`, `quad3()`), but we did not find a documented runtime `IRenderer` equivalent for disabling premultiplied-alpha blending.
+- Question: what is the supported runtime `IRenderer` API for no-premultiplied-alpha rendering in Addon SDK v2, if any?
+- References:
+  - Addon SDK runtime API reference: https://www.construct.net/en/make-games/manuals/addon-sdk/runtime-reference
+  - `ISDKWorldInstanceBase._draw(renderer)` runtime docs: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkworldinstancebase
+  - Runtime `IRenderer` scripting reference: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/interfaces/irenderer
+  - Addon-SDK `IWebGLRenderer` reference (contains `SetNoPremultiplyAlphaBlend()`, but this appears to be a different/editor-side renderer surface): https://www.construct.net/en/make-games/manuals/addon-sdk/reference/graphics-interfaces/iwebglrenderer

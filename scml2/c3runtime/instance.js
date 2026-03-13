@@ -928,58 +928,25 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		const worldInfo = this._getWorldInfoOf(this);
 
-		// Blend mode: use the documented world-instance property when available.
-		const blendModeValue = Number(this.blendMode);
-		const getBlendMode = Number.isFinite(blendModeValue)
-			? (() => blendModeValue)
-			: null;
-
+		// Runtime _draw(renderer) uses the scripting-style IRenderer surface.
+		// Keep the old no-premultiply path isolated until the runtime docs expose an official equivalent.
+		const blendMode = typeof this.blendMode === "string" ? this.blendMode : "";
 		if (this.noPremultiply && typeof renderer.SetNoPremultiplyAlphaBlend === "function")
 		{
 			renderer.SetNoPremultiplyAlphaBlend();
 		}
-		else if (typeof renderer.SetBlendMode === "function" && getBlendMode)
+		else if (blendMode)
 		{
-			renderer.SetBlendMode(getBlendMode());
+			renderer.setBlendMode(blendMode);
 		}
-		else if (typeof renderer.setBlendMode === "function" && getBlendMode)
-		{
-			renderer.setBlendMode(getBlendMode());
-		}
-		else if (typeof renderer.SetAlphaBlend === "function")
-		{
-			renderer.SetAlphaBlend();
-		}
-		else if (typeof renderer.setAlphaBlendMode === "function")
+		else
 		{
 			renderer.setAlphaBlendMode();
 		}
 
-		const setColorFillMode = (typeof renderer.SetColorFillMode === "function")
-			? renderer.SetColorFillMode.bind(renderer)
-			: (typeof renderer.setColorFillMode === "function")
-				? renderer.setColorFillMode.bind(renderer)
-				: null;
-
-		const setTextureFillMode = (typeof renderer.SetTextureFillMode === "function")
-			? renderer.SetTextureFillMode.bind(renderer)
-			: (typeof renderer.setTextureFillMode === "function")
-				? renderer.setTextureFillMode.bind(renderer)
-				: null;
-
-		const setTexture = (typeof renderer.SetTexture === "function")
-			? renderer.SetTexture.bind(renderer)
-			: (typeof renderer.setTexture === "function")
-				? renderer.setTexture.bind(renderer)
-				: null;
-
 		// Default to debug quads until textures are ready.
-		let fillMode = "";
-		if (setColorFillMode)
-		{
-			setColorFillMode();
-			fillMode = "color";
-		}
+		let fillMode = "color";
+		renderer.setColorFillMode();
 
 		const instX = this._getSelfX();
 		const instY = this._getSelfY();
@@ -996,56 +963,26 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			alpha: this._getSelfOpacityScalar()
 		};
 
-		// In SDK v2 runtime, renderer.quad(...) expects a DOMQuad-like object (p1..p4).
-		// Passing a C3.Quad to renderer.quad(...) throws in C3.Quad.fromDOMQuad, so only use
-		// C3 geometry types when using the legacy-style renderer APIs (Quad3/Quad4).
-		const quadDom = (typeof renderer.quad === "function") ? renderer.quad.bind(renderer) : null;
-		const quadC3 = (typeof renderer.Quad === "function") ? renderer.Quad.bind(renderer) : null;
-		const quad3C3 = (typeof renderer.Quad3 === "function") ? renderer.Quad3.bind(renderer) : null;
-		const quad3Dom = (typeof renderer.quad3 === "function") ? renderer.quad3.bind(renderer) : null;
-
-		const geometryQuad = (!quadDom && (quadC3 || quad3C3) && C3 && C3.Quad) ? new C3.Quad() : null;
-		const boundingRect = (!quadDom && (quadC3 || quad3C3) && C3 && C3.Rect) ? new C3.Rect() : null;
-
-		const setColorRgba = (typeof renderer.SetColorRgba === "function")
-			? renderer.SetColorRgba.bind(renderer)
-			: (typeof renderer.setColorRgba === "function")
-				? renderer.setColorRgba.bind(renderer)
-				: null;
-
-		const setOpacity = (typeof renderer.SetOpacity === "function")
-			? renderer.SetOpacity.bind(renderer)
-			: (typeof renderer.setOpacity === "function")
-				? renderer.setOpacity.bind(renderer)
-				: null;
-
-		const quad3 = quad3C3 || quad3Dom;
-		const quad = quadDom || quadC3;
+		const quad = renderer.quad.bind(renderer);
+		const quad3 = renderer.quad3.bind(renderer);
 		const fullTexRect = { x: 0, y: 0, width: 1, height: 1, left: 0, top: 0, right: 1, bottom: 1 };
 		const debugSpriteOverlays = this.drawDebug ? [] : null;
 
 		const renderDebugQuad = (domDebugQuad, r, g, b, a) =>
 		{
-			if (!domDebugQuad || !setColorRgba || !setColorFillMode)
+			if (!domDebugQuad)
 			{
 				return;
 			}
 
 			if (fillMode !== "color")
 			{
-				setColorFillMode();
+				renderer.setColorFillMode();
 				fillMode = "color";
 			}
 
-			setColorRgba(r, g, b, a);
-			if (quadDom)
-			{
-				quadDom(domDebugQuad);
-			}
-			else if (quad3Dom)
-			{
-				quad3Dom(domDebugQuad, fullTexRect);
-			}
+			renderer.setColorRgba(r, g, b, a);
+			quad(domDebugQuad);
 		};
 
 		const makeLineQuad = (x1, y1, x2, y2, halfThickness) =>
@@ -1228,7 +1165,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				console.warn(`[Spriter] Atlas metadata missing for '${state.name || "(unnamed)"}' (aw/ah/ax/ay not set). Using debug fallback.`);
 			}
 
-			if (hasAtlas && quad3Dom && setTextureFillMode && setTexture)
+			if (hasAtlas)
 			{
 				const atlasIndexRaw = toFiniteNumber(state.atlasIndex, 0);
 				const atlasIndex = Number.isInteger(atlasIndexRaw) ? atlasIndexRaw : Math.trunc(atlasIndexRaw);
@@ -1653,22 +1590,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 					if (fillMode !== "texture")
 					{
-						setTextureFillMode();
+						renderer.setTextureFillMode();
 						fillMode = "texture";
 					}
 
-					setTexture(texture);
-
-					if (this.noPremultiply && setOpacity)
-					{
-						setOpacity(alpha);
-					}
-					else if (setColorRgba)
-					{
-						setColorRgba(1, 1, 1, alpha);
-					}
-
-					quad3Dom(atlasDomQuad, uvRect);
+					renderer.setTexture(texture);
+					renderer.setColorRgba(1, 1, 1, alpha);
+					quad3(atlasDomQuad, uvRect);
 					continue;
 				}
 			}
@@ -1694,75 +1622,37 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					}
 				}
 
-				if (texture && quad3Dom && setTextureFillMode && setTexture)
+				if (texture)
 				{
 					if (fillMode !== "texture")
 					{
-						setTextureFillMode();
+						renderer.setTextureFillMode();
 						fillMode = "texture";
 					}
 
-					setTexture(texture);
-
-					if (this.noPremultiply && setOpacity)
-					{
-						setOpacity(alpha);
-					}
-					else if (setColorRgba)
-					{
-						setColorRgba(1, 1, 1, alpha);
-					}
-
-					quad3Dom(domQuad, fullTexRect);
+					renderer.setTexture(texture);
+					renderer.setColorRgba(1, 1, 1, alpha);
+					quad3(domQuad, fullTexRect);
 					continue;
 				}
 			}
 
 			// Fallback: debug quads (also used while textures are still loading).
-			if (fillMode !== "color" && setColorFillMode)
+			if (fillMode !== "color")
 			{
-				setColorFillMode();
+				renderer.setColorFillMode();
 				fillMode = "color";
 			}
 
-			if (setColorRgba)
-			{
-				const seed = (toFiniteNumber(state.file, i) * 97 + toFiniteNumber(state.folder, 0) * 57 + i * 13) | 0;
-				const r = ((seed >> 0) & 0xFF) / 255;
-				const g = ((seed >> 8) & 0xFF) / 255;
-				const b = ((seed >> 16) & 0xFF) / 255;
-				setColorRgba(r, g, b, alpha * 0.7);
-			}
-
-			if (quadDom)
-			{
-				quadDom(domQuad);
-			}
-			else if (quadC3 && geometryQuad && boundingRect)
-			{
-				boundingRect.set(left, top, left + scaledW, top + scaledH);
-				boundingRect.offset(-baseX, -baseY);
-				geometryQuad.setFromRotatedRect(boundingRect, angle);
-				geometryQuad.offset(baseX, baseY);
-				quadC3(geometryQuad);
-			}
-			else if (quad3C3 && geometryQuad && boundingRect)
-			{
-				boundingRect.set(left, top, left + scaledW, top + scaledH);
-				boundingRect.offset(-baseX, -baseY);
-				geometryQuad.setFromRotatedRect(boundingRect, angle);
-				geometryQuad.offset(baseX, baseY);
-				geometryQuad.getBoundingBox(boundingRect);
-				boundingRect.normalize();
-				quad3C3(geometryQuad, boundingRect);
-			}
-			else if (quad3Dom)
-			{
-				quad3Dom(domQuad, { x: 0, y: 0, width: 1, height: 1, left: 0, top: 0, right: 1, bottom: 1 });
-			}
+			const seed = (toFiniteNumber(state.file, i) * 97 + toFiniteNumber(state.folder, 0) * 57 + i * 13) | 0;
+			const r = ((seed >> 0) & 0xFF) / 255;
+			const g = ((seed >> 8) & 0xFF) / 255;
+			const b = ((seed >> 16) & 0xFF) / 255;
+			renderer.setColorRgba(r, g, b, alpha * 0.7);
+			quad(domQuad);
 		}
 
-		if (this.drawDebug && setColorFillMode && setColorRgba)
+		if (this.drawDebug)
 		{
 			const toRootWorldPoint = (x, y) =>
 			{
