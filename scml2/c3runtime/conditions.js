@@ -117,9 +117,7 @@ C3.Plugins.Spriter.Cnds =
 	{
 		if (Number(timeFormat) === 1)
 		{
-			const ratio = typeof this._getCurrentTimeRatio === "function"
-				? this._getCurrentTimeRatio()
-				: 0;
+			const ratio = this._getCurrentTimeRatio();
 			return compareValues(ratio, cmp, timeValue);
 		}
 
@@ -129,9 +127,7 @@ C3.Plugins.Spriter.Cnds =
 	CompareAnimation(name)
 	{
 		const checkedAnimationName = String(name ?? "");
-		const helperAnimationName = (typeof this._getAnimationName === "function")
-			? this._getAnimationName()
-			: "";
+		const helperAnimationName = this._getAnimationName();
 		const currentAnimationName = helperAnimationName
 			|| (this.animation && typeof this.animation.name === "string"
 				? this.animation.name
@@ -141,9 +137,7 @@ C3.Plugins.Spriter.Cnds =
 
 	CompareSecondAnimation(name)
 	{
-		const secondAnimationName = (typeof this._getSecondAnimationName === "function")
-			? this._getSecondAnimationName()
-			: "";
+		const secondAnimationName = this._getSecondAnimationName();
 		if (!secondAnimationName)
 		{
 			return false;
@@ -201,9 +195,7 @@ C3.Plugins.Spriter.Cnds =
 
 	AnimationLooping()
 	{
-		return typeof this._isAnimationLooping === "function"
-			? !!this._isAnimationLooping(this.animation)
-			: true;
+		return !!this._isAnimationLooping(this.animation);
 	},
 
 	IsMirrored()

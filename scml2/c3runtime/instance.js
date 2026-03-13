@@ -1616,6 +1616,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 
 			// Fallback: debug quads (also used while textures are still loading).
+			if (!this.drawDebug)
+			{
+				continue;
+			}
+
 			if (fillMode !== "color")
 			{
 				renderer.setColorFillMode();
@@ -5917,6 +5922,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.entity = entity;
 		this.animation = animation;
 		this.animationLengthMs = lengthMs;
+		this.startingEntityName = typeof entity.name === "string" ? entity.name : this.startingEntityName;
+		this.startingAnimationName = typeof animation.name === "string" ? animation.name : this.startingAnimationName;
 		this.secondAnimation = null;
 		this.animBlend = 0;
 		this._resetAutoBlendState();

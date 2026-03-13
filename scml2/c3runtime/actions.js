@@ -5,10 +5,7 @@ C3.Plugins.Spriter.Acts =
 {
 	SetAnimation(animationName, startFrom = 0, blendDuration = 0)
 	{
-		if (typeof this._setAnimation === "function")
-		{
-			this._setAnimation(animationName, startFrom, blendDuration);
-		}
+		this._setAnimation(animationName, startFrom, blendDuration);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -19,10 +16,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetPlaybackSpeedRatio(newSpeed)
 	{
-		if (typeof this._setPlaybackSpeedRatio === "function")
-		{
-			this._setPlaybackSpeedRatio(newSpeed);
-		}
+		this._setPlaybackSpeedRatio(newSpeed);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -33,10 +27,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetAnimationLoop(loopOn)
 	{
-		if (typeof this._setAnimationLoop === "function")
-		{
-			this._setAnimationLoop(loopOn);
-		}
+		this._setAnimationLoop(loopOn);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -47,10 +38,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetAnimationTime(units, timeValue)
 	{
-		if (typeof this._setAnimationTime === "function")
-		{
-			this._setAnimationTime(units, timeValue);
-		}
+		this._setAnimationTime(units, timeValue);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -61,10 +49,7 @@ C3.Plugins.Spriter.Acts =
 
 	PauseAnimation()
 	{
-		if (typeof this._pauseAnimation === "function")
-		{
-			this._pauseAnimation();
-		}
+		this._pauseAnimation();
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -75,10 +60,7 @@ C3.Plugins.Spriter.Acts =
 
 	ResumeAnimation()
 	{
-		if (typeof this._resumeAnimation === "function")
-		{
-			this._resumeAnimation();
-		}
+		this._resumeAnimation();
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -89,10 +71,7 @@ C3.Plugins.Spriter.Acts =
 
 	PlayAnimTo(units, targetValue)
 	{
-		if (typeof this._playAnimTo === "function")
-		{
-			this._playAnimTo(units, targetValue);
-		}
+		this._playAnimTo(units, targetValue);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -103,10 +82,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetEntity(entityName, animationName)
 	{
-		if (typeof this._setEnt === "function")
-		{
-			this._setEnt(entityName, animationName);
-		}
+		this._setEnt(entityName, animationName);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -257,10 +233,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetSecondAnim(animationName)
 	{
-		if (typeof this._setSecondAnim === "function")
-		{
-			this._setSecondAnim(animationName);
-		}
+		this._setSecondAnim(animationName);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -271,10 +244,7 @@ C3.Plugins.Spriter.Acts =
 
 	StopSecondAnim()
 	{
-		if (typeof this._stopSecondAnim === "function")
-		{
-			this._stopSecondAnim();
-		}
+		this._stopSecondAnim();
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -355,10 +325,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetAnimBlendRatio(blendRatio)
 	{
-		if (typeof this._setAnimBlendRatio === "function")
-		{
-			this._setAnimBlendRatio(blendRatio);
-		}
+		this._setAnimBlendRatio(blendRatio);
 	},
 
 	// Legacy ACE alias used by older projects.

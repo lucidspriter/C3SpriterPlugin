@@ -299,6 +299,23 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
     - Force a looping animation to play once and confirm `On animation finished` fires.
     - Test second animation + blend ratio + blend duration transition.
 
+#### Pass 6 API translation map
+- Context: animation/playback ACE actions in `scml2/c3runtime/actions.js`.
+  - Current pattern: every action probes plugin-internal helper methods like `_setAnimation`, `_setPlaybackSpeedRatio`, `_setAnimationLoop`, `_setAnimationTime`, `_pauseAnimation`, `_resumeAnimation`, `_playAnimTo`, `_setEnt`, `_setSecondAnim`, `_stopSecondAnim`, and `_setAnimBlendRatio`.
+  - Documented SDK2 call: no runtime SDK probing is needed here; these are plugin-owned instance methods and should be called directly.
+  - Notes: the Addon SDK/runtime docs define the ACE runtime surface as methods on the instance; our helper methods are implementation details, not discoverable SDK interfaces.
+  - Source: Addon SDK runtime reference + plugin-local runtime implementation contract in `scml2/c3runtime/instance.js`.
+- Context: animation/time/looping conditions and expressions in `scml2/c3runtime/conditions.js` and `scml2/c3runtime/expressions.js`.
+  - Current pattern: conditions/expressions probe plugin-owned helper methods like `_getAnimationName`, `_getSecondAnimationName`, `_getCurrentTimeRatio`, `_getPlayToTimeLeftMs`, and `_isAnimationLooping`.
+  - Documented SDK2 call: no runtime SDK probing is needed; call the plugin-owned helper directly.
+  - Notes: this pass only removes guard noise around plugin-local playback helpers. It does not change trigger dispatch or external runtime APIs.
+  - Source: Addon SDK runtime reference + plugin-local runtime implementation contract in `scml2/c3runtime/instance.js`.
+- Context: pre-ready animation requests and immediate `AnimationName` reads.
+  - Current pattern: queue pending animation changes until project/entity data is ready, then report pending/current/starting animation via `_getAnimationName()`.
+  - Documented SDK2 call: retain the existing plugin-local `_pendingPreReadyAnimationChange` / `_getAnimationName()` flow.
+  - Notes: this behavior is plugin parity logic, not an SDK-discovered surface, so the cleanup here is to preserve it while removing unnecessary defensive wrappers.
+  - Source: existing runtime implementation in `scml2/c3runtime/instance.js` plus the validated legacy-parity behavior.
+
 ### Pass 7 — Trigger + condition dispatch
 - [ ] Write the trigger/condition API translation map from the official SDK v2 docs before editing code.
 - [ ] Write the manual break-detector checklist for trigger/condition dispatch before editing code.

@@ -35,17 +35,13 @@ C3.Plugins.Spriter.Exps =
 
 	TimeRatio()
 	{
-		return (typeof this._getCurrentTimeRatio === "function")
-			? this._getCurrentTimeRatio()
-			: 0;
+		return this._getCurrentTimeRatio();
 	},
 
 	// Legacy ACE alias used by older projects.
 	timeRatio()
 	{
-		return (typeof this._getCurrentTimeRatio === "function")
-			? this._getCurrentTimeRatio()
-			: 0;
+		return this._getCurrentTimeRatio();
 	},
 
 	PlayTo()
@@ -56,9 +52,7 @@ C3.Plugins.Spriter.Exps =
 
 	PlayToTimeLeft()
 	{
-		return (typeof this._getPlayToTimeLeftMs === "function")
-			? this._getPlayToTimeLeftMs()
-			: 0;
+		return this._getPlayToTimeLeftMs();
 	},
 
 	AnimationLength()
@@ -108,17 +102,13 @@ C3.Plugins.Spriter.Exps =
 
 	SecondAnimationName()
 	{
-		return (typeof this._getSecondAnimationName === "function")
-			? this._getSecondAnimationName()
-			: "";
+		return this._getSecondAnimationName();
 	},
 
 	// Legacy ACE alias used by older projects.
 	secondAnimationName()
 	{
-		return (typeof this._getSecondAnimationName === "function")
-			? this._getSecondAnimationName()
-			: "";
+		return this._getSecondAnimationName();
 	},
 
 	ObjectCount()
@@ -243,17 +233,13 @@ C3.Plugins.Spriter.Exps =
 
 	AnimationName()
 	{
-		return (typeof this._getAnimationName === "function")
-			? this._getAnimationName()
-			: (this.animation && typeof this.animation.name === "string" ? this.animation.name : "");
+		return this._getAnimationName();
 	},
 
 	// Legacy ACE alias used by older projects.
 	animationName()
 	{
-		return (typeof this._getAnimationName === "function")
-			? this._getAnimationName()
-			: (this.animation && typeof this.animation.name === "string" ? this.animation.name : "");
+		return this._getAnimationName();
 	},
 
 	TriggeredSound()
