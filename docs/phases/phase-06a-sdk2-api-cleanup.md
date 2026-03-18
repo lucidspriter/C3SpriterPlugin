@@ -475,12 +475,61 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
   - Covered by: indirectly related to the broader runtime API parity uncertainty already logged; promote to a separate Ashley request only if the documented `animationFrame` path proves insufficient in final testing.
 
 ### Pass 12 — Final cleanup + guardrails
-- [ ] Write the final approved SDK2 surface list before deleting the last temporary helpers.
-- [ ] Write the final regression checklist before deleting the last temporary helpers.
-- [ ] Remove dead helpers, dead probes, and obsolete compatibility branches made unnecessary by earlier passes.
-- [ ] Add a short developer note listing the approved SDK2 call surfaces we intentionally rely on.
-- [ ] Add grep-based guardrails/checklist notes so future edits do not reintroduce the same mixed-case probing patterns.
+- [x] Write the final approved SDK2 surface list before deleting the last temporary helpers.
+- [x] Write the final regression checklist before deleting the last temporary helpers.
+- [x] Remove dead helpers, dead probes, and obsolete compatibility branches made unnecessary by earlier passes.
+- [x] Add a short developer note listing the approved SDK2 call surfaces we intentionally rely on.
+- [x] Add grep-based guardrails/checklist notes so future edits do not reintroduce the same mixed-case probing patterns.
 - [ ] Perform a final regression pass covering self-draw, non-self-draw, legacy import/repair, and key gameplay timing cases.
+
+#### Pass 12 approved runtime surfaces
+- Canonical developer note: `docs/SDK2_RUNTIME_SURFACES.md`
+- Runtime rule:
+  - use Addon SDK lifecycle/hooks for plugin classes
+  - use Construct runtime/scripting APIs for runtime objects
+- Approved direct surfaces are listed in `docs/SDK2_RUNTIME_SURFACES.md` for:
+  - lifecycle/hooks
+  - runtime clock
+  - world-instance reads/writes
+  - associated child instances
+  - renderer
+  - asset/texture loading
+
+#### Pass 12 remaining compatibility islands
+- `scml2/c3runtime/instance.js`
+  - `_applySelfDrawBlendMode(renderer)`
+  - `_getWorldInfoOf(inst)`
+  - `_getPairedInstanceByContainer(...)`
+  - `_getSdkInstanceOf(...)`
+  - `_getIID()` / `_getIIDOfInstance(...)`
+  - `_setSpriteFrameByIndex(...)`
+  - `_getAtlasFrame(...)`
+  - `_tryGetEmbeddedAtlasCompatibilityTexture(...)`
+- `scml2/c3runtime/type.js`
+  - `_getObjectClass()`
+  - `_tryGetFramesFromSource(...)`
+
+#### Pass 12 guardrails
+- Run before merging runtime API work:
+  - `rg -n "callFirstMethod\\(" scml2/c3runtime`
+  - `rg -n 'typeof .*=== "function"' scml2/c3runtime`
+  - `rg -n 'spriterDebugLog\\(|console\\.debug\\(' scml2`
+- Review every remaining hit.
+- New hits are only acceptable inside the documented compatibility islands.
+
+#### Pass 12 regression checklist
+- Self-draw:
+  - rendering, opacity, blend mode, sampling, atlas rendering, shader clipping
+- Non-self-draw:
+  - helper movement, z-elevation, visibility, collision enable/disable, frame swaps
+- Legacy:
+  - import/reimport/repair flow for old self-draw projects
+- Timing/gameplay:
+  - create -> set animation -> read `AnimationName`
+  - `On animation finished`
+  - first-frame event and sound triggers
+  - point/object expressions while moving
+  - multi-instance IK overrides and helper ownership
 
 ## Exit criteria
 - The working `scml2/` runtime still behaves like the current good build in manual C3 testing.

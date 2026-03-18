@@ -1,5 +1,4 @@
 const C3 = globalThis.C3;
-const spriterDebugLog = () => {};
 
 function normaliseProjectFileName(fileName)
 {
@@ -440,6 +439,8 @@ function toNumberOrDefault(value, defaultValue)
 	return Number.isFinite(numberValue) ? numberValue : defaultValue;
 }
 
+// Compatibility-only helper. Cleaned SDK2 paths should call the documented
+// runtime surface directly instead of routing through method-name probing.
 function callFirstMethod(target, methodNames, ...args)
 {
 	if (!target)
@@ -662,15 +663,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._atlasDebug = {
 			loggedMissingMetadata: false,
 			loggedFrameLookupIssue: false,
-			loggedFrameLookupRecovered: false,
-			loggedLegacyFrameProbeObject: false,
-			loggedTypeImageInfoProbe: false,
-			loggedTypeImageInfoFallbackUsed: false,
-			loggedInstanceImageInfoProbe: false,
-			loggedInstanceImageInfoFallbackUsed: false,
-			loggedWorldInfoImageInfoProbe: false,
-			loggedWorldInfoImageInfoFallbackUsed: false,
-			loggedLegacyFrameFallbackUsed: false,
 			missingFrameIndices: new Set(),
 			missingAtlasImageIndices: new Set(),
 			pendingTextureIndices: new Set()
@@ -681,7 +673,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this._c2ObjectMap = new Map();
 		this._objectsToSet = [];
 		this._timelineNameById = new Map();
-		this._nonSelfDrawDiagDone = false;
 		this._didWarnSpriteFrameApiUnavailable = false;
 		this.setLayersForSprites = true;
 		this.setVisibilityForObjects = true;
@@ -925,26 +916,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				return;
 			}
 
-			if (!this._loggedNoPremultiplyBlendProbe)
-			{
-				const rendererProto = Object.getPrototypeOf(renderer);
-				const rendererMethods = Object.getOwnPropertyNames(rendererProto)
-					.filter((name) => /blend|premult/i.test(name))
-					.sort();
-				console.debug(`[Spriter] No-premultiply probe: type='${this.objectType && this.objectType.name ? this.objectType.name : "?"}', rendererMethods=${JSON.stringify(rendererMethods)}`);
-				this._loggedNoPremultiplyBlendProbe = true;
-			}
-
 			renderer.setAlphaBlendMode();
 			return;
 		}
 
 		const blendMode = String(this.blendMode ?? "normal");
-		if (!this._loggedBlendModeProbe)
-		{
-			console.debug(`[Spriter] Blend probe: type='${this.objectType && this.objectType.name ? this.objectType.name : "?"}', blendMode='${blendMode}', instBlendMode='${String(this._inst && this._inst.blendMode)}', noPremultiply=${this.noPremultiply}`);
-			this._loggedBlendModeProbe = true;
-		}
 		renderer.setBlendMode(blendMode);
 	}
 	
@@ -1564,7 +1540,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		};
 
 		let objectClass = null;
-		let objectClassSource = "";
 		const objectClassCandidates = [
 			["instance", this],
 			["instance._inst", this._inst],
@@ -1582,7 +1557,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			if (resolved)
 			{
 				objectClass = resolved;
-				objectClassSource = label;
 				break;
 			}
 		}
@@ -1596,12 +1570,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!objectClass)
 		{
 			return null;
-		}
-
-		if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupRecovered && objectClassSource)
-		{
-			this._atlasDebug.loggedFrameLookupRecovered = true;
-			spriterDebugLog(`[Spriter] Atlas frame lookup: recovered object class from ${objectClassSource}.`);
 		}
 
 		const getAnimations = typeof objectClass.GetAnimations === "function"
@@ -1778,7 +1746,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return null;
 		}
 
-		const tryImageInfoSource = (getImageInfo, probeFlag, usedFlag, probeMessage, usedMessage) =>
+		const tryImageInfoSource = (getImageInfo) =>
 		{
 			if (typeof getImageInfo !== "function")
 			{
@@ -1795,12 +1763,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				imageInfo = null;
 			}
 
-			if (this._atlasDebug && !this._atlasDebug[probeFlag])
-			{
-				this._atlasDebug[probeFlag] = true;
-				spriterDebugLog(probeMessage, imageInfo);
-			}
-
 			if (!imageInfo)
 			{
 				return null;
@@ -1809,11 +1771,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			const textureState = this._readCompatibilityTextureFromImageInfo(imageInfo, fallbackTexRect);
 			if (textureState)
 			{
-				if (this._atlasDebug && !this._atlasDebug[usedFlag])
-				{
-					this._atlasDebug[usedFlag] = true;
-					spriterDebugLog(usedMessage);
-				}
 				return textureState;
 			}
 
@@ -1826,11 +1783,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				? sdkType.getImageInfo.bind(sdkType)
 				: typeof sdkType.GetImageInfo === "function"
 					? sdkType.GetImageInfo.bind(sdkType)
-					: null),
-			"loggedTypeImageInfoProbe",
-			"loggedTypeImageInfoFallbackUsed",
-			"[Spriter] Atlas compatibility probe via sdkType.getImageInfo():",
-			"[Spriter] Using sdkType.getImageInfo() embedded-atlas fallback for self-draw compatibility."
+					: null)
 		);
 		if (typeTexture)
 		{
@@ -1842,11 +1795,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				? this.getImageInfo.bind(this)
 				: typeof this.GetImageInfo === "function"
 					? this.GetImageInfo.bind(this)
-					: null,
-			"loggedInstanceImageInfoProbe",
-			"loggedInstanceImageInfoFallbackUsed",
-			"[Spriter] Atlas compatibility probe via sdkInstance.getImageInfo():",
-			"[Spriter] Using sdkInstance.getImageInfo() embedded-atlas fallback for self-draw compatibility."
+					: null
 		);
 		if (instanceTexture)
 		{
@@ -1858,11 +1807,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				? worldInfo.getImageInfo.bind(worldInfo)
 				: typeof worldInfo.GetImageInfo === "function"
 					? worldInfo.GetImageInfo.bind(worldInfo)
-					: null),
-			"loggedWorldInfoImageInfoProbe",
-			"loggedWorldInfoImageInfoFallbackUsed",
-			"[Spriter] Atlas compatibility probe via worldInfo.getImageInfo():",
-			"[Spriter] Using worldInfo.getImageInfo() embedded-atlas fallback for self-draw compatibility."
+					: null)
 		);
 		if (worldTexture)
 		{
@@ -1885,11 +1830,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const frameTexture = this._readCompatibilityTextureFromImageInfo(frameImageInfo, fallbackTexRect);
 		if (frameTexture)
 		{
-			if (this._atlasDebug && !this._atlasDebug.loggedLegacyFrameFallbackUsed)
-			{
-				this._atlasDebug.loggedLegacyFrameFallbackUsed = true;
-				spriterDebugLog("[Spriter] Using legacy embedded atlas-frame fallback for self-draw compatibility.");
-			}
 			return frameTexture;
 		}
 
@@ -6059,12 +5999,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		this._didTriggerReady = true;
-		spriterDebugLog(`[Spriter] Ready trigger fired: drawSelf=${this.drawSelf}, isReady=${!!this.isReady}, mapSize=${this._c2ObjectMap ? this._c2ObjectMap.size : 0}`);
 
 		const cnds = C3.Plugins.Spriter.Cnds;
-		spriterDebugLog("[Spriter] -> Triggering condition: OnReady");
 		this._trigger(cnds.OnReady);
-		spriterDebugLog("[Spriter] -> Triggering condition: readyForSetup (legacy)");
 		this._trigger(cnds.readyForSetup);
 	}
 
@@ -6944,13 +6881,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
-		const apis = [
-			typeof objectType.instances === "function" ? "instances" : null,
-			typeof objectType.getAllInstances === "function" ? "getAllInstances" : null,
-			Array.isArray(objectType._instances) ? "_instances" : null
-		].filter(Boolean).join(",");
-		const frameCount = frameLookup instanceof Map ? frameLookup.size : 0;
-		spriterDebugLog(`[Spriter] _associateTypeWithName: requestedName='${requestedName}', spriterName='${resolvedName}', storeKey='${storeKey}', typeName='${this._getObjectTypeName(objectType)}', spriterType='${spriterType}', myIID=${myIID}, instanceCount=${instances.length}, pairedInst=${pairedInst ? "found" : "NULL"}, frameMap=${frameCount}, replacingExisting=${existingEntry ? "yes" : "no"}, apis=[${apis}]`);
 		if (!pairedInst)
 		{
 			console.warn(`[Spriter] _associateTypeWithName: no paired instance found for '${resolvedName}' (IID=${myIID}). Association stored with type only.`);
@@ -7172,29 +7102,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_applyPoseToInstances()
 	{
-		if (!this._nonSelfDrawDiagDone)
-		{
-			this._nonSelfDrawDiagDone = true;
-			const mapKeys = Array.from(this._c2ObjectMap.keys());
-			const poseNames = this._poseObjectStates.map(s => s.timelineName);
-			const mapEntries = Array.from(this._c2ObjectMap.entries()).map(([k, v]) =>
-				`${k} => inst=${v.inst ? "OK" : "NULL"}, type=${this._getObjectTypeName(v.type)}`
-			);
-			spriterDebugLog(`[Spriter] NON-SELF-DRAW DIAG: drawSelf=${this.drawSelf}, mapSize=${this._c2ObjectMap.size}, poseCount=${this._poseObjectStates.length}`);
-			spriterDebugLog(`[Spriter]   map keys: [${mapKeys.join(", ")}]`);
-			spriterDebugLog(`[Spriter]   map entries: [${mapEntries.join(" | ")}]`);
-			spriterDebugLog(`[Spriter]   pose timelineNames: [${poseNames.join(", ")}]`);
-
-			for (const name of poseNames)
-			{
-				const assocLookup = this._getAssociatedEntryForTimelineName(name);
-				if (!assocLookup.entry)
-				{
-					console.warn(`[Spriter]   MISMATCH: pose timelineName '${name}' not found in c2ObjectMap (tried=[${(assocLookup.triedKeys || []).join(", ")}])`);
-				}
-			}
-		}
-
 		if (!this._c2ObjectMap.size) return;
 
 		const poseObjects = this._poseObjectStates;
@@ -7217,54 +7124,26 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			this._assocDebug = {
 				missingPoseMap: new Set(),
-				missingInst: new Set(),
-				boxApplied: new Set()
+				missingInst: new Set()
 			};
 		}
 		const assocDebug = this._assocDebug;
 
-		// Per-tick diagnostic (every 60 frames)
-		this._diagTickCount = (this._diagTickCount || 0) + 1;
-		const doTickLog = (this._diagTickCount % 60 === 1);
-
-		if (doTickLog)
-		{
-			const s0 = poseObjects[0];
-			const sx = s0 && s0.x != null ? s0.x.toFixed(1) : "?";
-			const sy = s0 && s0.y != null ? s0.y.toFixed(1) : "?";
-			const sa = s0 && s0.angle != null ? s0.angle.toFixed(3) : "?";
-			const t = this.localTimeMs != null ? this.localTimeMs.toFixed(1) : "?";
-			spriterDebugLog(`[Spriter] tick#${this._diagTickCount}: myPos=(${myX},${myY}), poseCount=${poseObjects.length}, sample[0]: name=${s0 ? s0.timelineName : "?"}, x=${sx}, y=${sy}, angle=${sa}, time=${t}ms`);
-		}
-
 		let previousZInst = null; // null = skip first z-order (can't pass SDK inst to moveAdjacentToInstance)
-		let appliedCount = 0;
-		let skippedNoEntry = 0;
-		let skippedNoWi = 0;
-		let boxStateCount = 0;
-		let boxAppliedCount = 0;
-		let boxMissingEntryCount = 0;
-		let boxMissingInstCount = 0;
 
 		for (const state of poseObjects)
 		{
 			const stateType = typeof state.spriterType === "string" ? state.spriterType.trim().toLowerCase() : "sprite";
 			const isSpriteState = stateType === "sprite";
-			if (!isSpriteState)
-			{
-				boxStateCount++;
-			}
 
 			const assocLookup = this._getAssociatedEntryForTimelineName(state.timelineName);
 			const c2Entry = assocLookup.entry;
 			if (!c2Entry || !c2Entry.inst)
 			{
-				skippedNoEntry++;
 				if (!isSpriteState)
 				{
 					if (!c2Entry)
 					{
-						boxMissingEntryCount++;
 						const key = `${stateType}:${state.timelineName}:no-map`;
 						if (!assocDebug.missingPoseMap.has(key))
 						{
@@ -7274,7 +7153,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					}
 					else
 					{
-						boxMissingInstCount++;
 						const key = `${stateType}:${state.timelineName}:no-inst`;
 						if (!assocDebug.missingInst.has(key))
 						{
@@ -7292,19 +7170,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			{
 				if (!wi)
 				{
-					skippedNoWi++;
-				}
-
-				appliedCount++;
-				if (!isSpriteState)
-				{
-					boxAppliedCount++;
-					const key = `${stateType}:${state.timelineName}`;
-					if (!assocDebug.boxApplied.has(key))
-					{
-						assocDebug.boxApplied.add(key);
-						spriterDebugLog(`[Spriter] Box/helper apply active: timeline='${state.timelineName}', matchedKey='${assocLookup.key}', type='${stateType}', mappedType='${this._getObjectTypeName(c2Entry.type)}'`);
-					}
+					continue;
 				}
 
 				// Non-self-draw sprite swapping: map Spriter (folder,file) to child sprite frame index.
@@ -7335,21 +7201,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				const finalX = myX + localX * cosA - localY * sinA;
 				const finalY = myY + localX * sinA + localY * cosA;
 
-				if (wi)
-				{
-					wi.SetOriginX(0);
-					wi.SetOriginY(0);
-				}
+				wi.SetOriginX(0);
+				wi.SetOriginY(0);
 				inst.x = finalX;
 				inst.y = finalY;
-
-				if (doTickLog && appliedCount === 1)
-				{
-					const setXType = wi ? typeof wi.SetX : "none";
-					const setAngleType = wi ? typeof wi.SetAngle : "none";
-					const setBboxChangedType = wi ? typeof wi.SetBboxChanged : "none";
-					spriterDebugLog(`[Spriter]   applied[0]: ${state.timelineName} -> finalPos=(${finalX.toFixed(1)},${finalY.toFixed(1)}), wiMethods=[SetX=${setXType},SetAngle=${setAngleType},SetBboxChanged=${setBboxChangedType}]`);
-				}
 
 				// Size (apply scale to original image dimensions)
 				const trueW = state.width || 1;
@@ -7369,7 +7224,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					{
 						inst.moveAdjacentToInstance(previousZInst, true);
 					}
-					else if (wi)
+					else
 					{
 						wi.ZOrderMoveAdjacentToInstance(previousZInst, true);
 					}
@@ -7383,27 +7238,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				// momentarily re-enable a stale hitbox at the previous frame position.
 				if (this.setVisibilityForObjects)
 				{
-					if (wi)
-					{
-						wi.SetVisible(myVisible);
-					}
-					else
-					{
-						inst.isVisible = myVisible;
-					}
+					wi.SetVisible(myVisible);
 				}
 
-				if (wi)
-				{
-					wi.SetBboxChanged();
-				}
+				wi.SetBboxChanged();
 
 				if (this.setCollisionsForObjects)
 				{
-					if (wi)
-					{
-						wi.SetCollisionEnabled(true);
-					}
+					wi.SetCollisionEnabled(true);
 				}
 			}
 			catch (err)
@@ -7419,11 +7261,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				}
 				continue;
 			}
-		}
-
-		if (doTickLog)
-		{
-			spriterDebugLog(`[Spriter]   tick#${this._diagTickCount} summary: applied=${appliedCount}, skippedNoEntry=${skippedNoEntry}, skippedNoWi=${skippedNoWi}, boxStates=${boxStateCount}, boxApplied=${boxAppliedCount}, boxMissingEntry=${boxMissingEntryCount}, boxMissingInst=${boxMissingInstCount}`);
 		}
 	}
 

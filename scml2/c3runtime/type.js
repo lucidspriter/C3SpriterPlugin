@@ -1,5 +1,4 @@
 const C3 = globalThis.C3;
-const spriterDebugLog = () => {};
 
 function normaliseProjectFileName(fileName)
 {
@@ -49,7 +48,6 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 		this._atlasTextureLoadState = new Map();
 
 		this._atlasLookupDebug = {
-			loggedSource: false,
 			loggedFailure: false
 		};
 
@@ -209,11 +207,6 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			const frames = this._tryGetFramesFromSource(candidate, visited);
 			if (Array.isArray(frames))
 			{
-				if (this._atlasLookupDebug && !this._atlasLookupDebug.loggedSource)
-				{
-					this._atlasLookupDebug.loggedSource = true;
-					spriterDebugLog(`[Spriter] Atlas frame source resolved (frames=${frames.length}).`);
-				}
 				return frames;
 			}
 		}
