@@ -130,92 +130,68 @@ C3.Plugins.Spriter.Exps =
 
 	PointX(name)
 	{
-		return (typeof this._getPoseObjectX === "function")
-			? this._getPoseObjectX(name)
-			: 0;
+		return this._getPoseObjectX(name);
 	},
 
 	// Legacy ACE alias used by older projects.
 	pointX(name)
 	{
-		return (typeof this._getPoseObjectX === "function")
-			? this._getPoseObjectX(name)
-			: 0;
+		return C3.Plugins.Spriter.Exps.PointX.call(this, name);
 	},
 
 	PointY(name)
 	{
-		return (typeof this._getPoseObjectY === "function")
-			? this._getPoseObjectY(name)
-			: 0;
+		return this._getPoseObjectY(name);
 	},
 
 	// Legacy ACE alias used by older projects.
 	pointY(name)
 	{
-		return (typeof this._getPoseObjectY === "function")
-			? this._getPoseObjectY(name)
-			: 0;
+		return C3.Plugins.Spriter.Exps.PointY.call(this, name);
 	},
 
 	PointAngle(name)
 	{
-		return (typeof this._getPoseObjectAngleDegrees === "function")
-			? this._getPoseObjectAngleDegrees(name)
-			: 0;
+		return this._getPoseObjectAngleDegrees(name);
 	},
 
 	// Legacy ACE alias used by older projects.
 	pointAngle(name)
 	{
-		return (typeof this._getPoseObjectAngleDegrees === "function")
-			? this._getPoseObjectAngleDegrees(name)
-			: 0;
+		return C3.Plugins.Spriter.Exps.PointAngle.call(this, name);
 	},
 
 	ObjectX(name)
 	{
-		return (typeof this._getPoseObjectX === "function")
-			? this._getPoseObjectX(name)
-			: 0;
+		return this._getPoseObjectX(name);
 	},
 
 	// Legacy ACE alias used by older projects.
 	objectX(name)
 	{
-		return (typeof this._getPoseObjectX === "function")
-			? this._getPoseObjectX(name)
-			: 0;
+		return C3.Plugins.Spriter.Exps.ObjectX.call(this, name);
 	},
 
 	ObjectY(name)
 	{
-		return (typeof this._getPoseObjectY === "function")
-			? this._getPoseObjectY(name)
-			: 0;
+		return this._getPoseObjectY(name);
 	},
 
 	// Legacy ACE alias used by older projects.
 	objectY(name)
 	{
-		return (typeof this._getPoseObjectY === "function")
-			? this._getPoseObjectY(name)
-			: 0;
+		return C3.Plugins.Spriter.Exps.ObjectY.call(this, name);
 	},
 
 	ObjectAngle(name)
 	{
-		return (typeof this._getPoseObjectAngleDegrees === "function")
-			? this._getPoseObjectAngleDegrees(name)
-			: 0;
+		return this._getPoseObjectAngleDegrees(name);
 	},
 
 	// Legacy ACE alias used by older projects.
 	objectAngle(name)
 	{
-		return (typeof this._getPoseObjectAngleDegrees === "function")
-			? this._getPoseObjectAngleDegrees(name)
-			: 0;
+		return C3.Plugins.Spriter.Exps.ObjectAngle.call(this, name);
 	},
 
 	EntityName()
@@ -300,112 +276,80 @@ C3.Plugins.Spriter.Exps =
 
 	GetOpacity()
 	{
-		return (typeof this._getWorldOpacityPercent === "function")
-			? this._getWorldOpacityPercent()
-			: 0;
+		return this._getWorldOpacityPercent();
 	},
 
 	// Legacy ACE alias used by older projects.
 	Opacity()
 	{
-		return (typeof this._getWorldOpacityPercent === "function")
-			? this._getWorldOpacityPercent()
-			: 0;
+		return C3.Plugins.Spriter.Exps.GetOpacity.call(this);
 	},
 
 	BBoxLeft()
 	{
-		const rect = (typeof this._getWorldBoundingRect === "function")
-			? this._getWorldBoundingRect()
-			: null;
+		const rect = this._getWorldBoundingRect();
 		return rect ? Number(rect.left) || 0 : 0;
 	},
 
 	// Legacy ACE alias used by older projects.
 	bboxLeft()
 	{
-		const rect = (typeof this._getWorldBoundingRect === "function")
-			? this._getWorldBoundingRect()
-			: null;
-		return rect ? Number(rect.left) || 0 : 0;
+		return C3.Plugins.Spriter.Exps.BBoxLeft.call(this);
 	},
 
 	BBoxTop()
 	{
-		const rect = (typeof this._getWorldBoundingRect === "function")
-			? this._getWorldBoundingRect()
-			: null;
+		const rect = this._getWorldBoundingRect();
 		return rect ? Number(rect.top) || 0 : 0;
 	},
 
 	// Legacy ACE alias used by older projects.
 	bboxTop()
 	{
-		const rect = (typeof this._getWorldBoundingRect === "function")
-			? this._getWorldBoundingRect()
-			: null;
-		return rect ? Number(rect.top) || 0 : 0;
+		return C3.Plugins.Spriter.Exps.BBoxTop.call(this);
 	},
 
 	BBoxRight()
 	{
-		const rect = (typeof this._getWorldBoundingRect === "function")
-			? this._getWorldBoundingRect()
-			: null;
+		const rect = this._getWorldBoundingRect();
 		return rect ? Number(rect.right) || 0 : 0;
 	},
 
 	// Legacy ACE alias used by older projects.
 	bboxRight()
 	{
-		const rect = (typeof this._getWorldBoundingRect === "function")
-			? this._getWorldBoundingRect()
-			: null;
-		return rect ? Number(rect.right) || 0 : 0;
+		return C3.Plugins.Spriter.Exps.BBoxRight.call(this);
 	},
 
 	BBoxBottom()
 	{
-		const rect = (typeof this._getWorldBoundingRect === "function")
-			? this._getWorldBoundingRect()
-			: null;
+		const rect = this._getWorldBoundingRect();
 		return rect ? Number(rect.bottom) || 0 : 0;
 	},
 
 	// Legacy ACE alias used by older projects.
 	bboxBottom()
 	{
-		const rect = (typeof this._getWorldBoundingRect === "function")
-			? this._getWorldBoundingRect()
-			: null;
-		return rect ? Number(rect.bottom) || 0 : 0;
+		return C3.Plugins.Spriter.Exps.BBoxBottom.call(this);
 	},
 
 	ZElevation()
 	{
-		return (typeof this._getWorldZElevation === "function")
-			? this._getWorldZElevation(false)
-			: 0;
+		return this._getWorldZElevation(false);
 	},
 
 	TotalZElevation()
 	{
-		return (typeof this._getWorldZElevation === "function")
-			? this._getWorldZElevation(true)
-			: 0;
+		return this._getWorldZElevation(true);
 	},
 
 	val(varName, objectName = "")
 	{
-		return (typeof this._val === "function")
-			? this._val(varName, objectName)
-			: 0;
+		return this._val(varName, objectName);
 	},
 
 	Val(varName, objectName = "")
 	{
-		return (typeof this._val === "function")
-			? this._val(varName, objectName)
-			: 0;
+		return C3.Plugins.Spriter.Exps.val.call(this, varName, objectName);
 	}
 };

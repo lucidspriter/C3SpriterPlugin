@@ -93,10 +93,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetObjectScaleRatio(scaleRatio, xFlip, yFlip)
 	{
-		if (typeof this._setObjectScaleRatio === "function")
-		{
-			this._setObjectScaleRatio(scaleRatio, xFlip, yFlip);
-		}
+		this._setObjectScaleRatio(scaleRatio, xFlip, yFlip);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -107,10 +104,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetObjectXFlip(xFlip)
 	{
-		if (typeof this._setObjectXFlip === "function")
-		{
-			this._setObjectXFlip(xFlip);
-		}
+		this._setObjectXFlip(xFlip);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -121,10 +115,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetObjectYFlip(yFlip)
 	{
-		if (typeof this._setObjectYFlip === "function")
-		{
-			this._setObjectYFlip(yFlip);
-		}
+		this._setObjectYFlip(yFlip);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -135,10 +126,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetIgnoreGlobalTimeScale(ignore)
 	{
-		if (typeof this._setIgnoreGlobalTimeScale === "function")
-		{
-			this._setIgnoreGlobalTimeScale(ignore);
-		}
+		this._setIgnoreGlobalTimeScale(ignore);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -149,10 +137,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer)
 	{
-		if (typeof this._setAutomaticPausing === "function")
-		{
-			this._setAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer);
-		}
+		this._setAutomaticPausing(newPauseSetting, leftBuffer, rightBuffer, topBuffer, bottomBuffer);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -163,10 +148,7 @@ C3.Plugins.Spriter.Acts =
 
 	StopResumeSettingLayer(resume)
 	{
-		if (typeof this._stopResumeSettingLayer === "function")
-		{
-			this._stopResumeSettingLayer(resume);
-		}
+		this._stopResumeSettingLayer(resume);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -177,10 +159,7 @@ C3.Plugins.Spriter.Acts =
 
 	StopResumeSettingVisibilityForObjects(resume)
 	{
-		if (typeof this._stopResumeSettingVisibilityForObjects === "function")
-		{
-			this._stopResumeSettingVisibilityForObjects(resume);
-		}
+		this._stopResumeSettingVisibilityForObjects(resume);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -191,10 +170,7 @@ C3.Plugins.Spriter.Acts =
 
 	StopResumeSettingCollisionsForObjects(resume)
 	{
-		if (typeof this._stopResumeSettingCollisionsForObjects === "function")
-		{
-			this._stopResumeSettingCollisionsForObjects(resume);
-		}
+		this._stopResumeSettingCollisionsForObjects(resume);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -205,10 +181,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetVisible(visible)
 	{
-		if (typeof this._setVisible === "function")
-		{
-			this._setVisible(visible);
-		}
+		this._setVisible(visible);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -219,10 +192,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetOpacity(opacityPercent)
 	{
-		if (typeof this._setOpacity === "function")
-		{
-			this._setOpacity(opacityPercent);
-		}
+		this._setOpacity(opacityPercent);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -255,10 +225,7 @@ C3.Plugins.Spriter.Acts =
 
 	AppendCharMap(mapName)
 	{
-		if (typeof this._appendCharMap === "function")
-		{
-			this._appendCharMap(mapName);
-		}
+		this._appendCharMap(mapName);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -269,10 +236,7 @@ C3.Plugins.Spriter.Acts =
 
 	RemoveCharMap(mapName)
 	{
-		if (typeof this._removeCharMap === "function")
-		{
-			this._removeCharMap(mapName);
-		}
+		this._removeCharMap(mapName);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -283,10 +247,7 @@ C3.Plugins.Spriter.Acts =
 
 	RemoveAllCharMaps()
 	{
-		if (typeof this._removeAllCharMaps === "function")
-		{
-			this._removeAllCharMaps();
-		}
+		this._removeAllCharMaps();
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -297,10 +258,7 @@ C3.Plugins.Spriter.Acts =
 
 	OverrideObjectComponent(objectName, component, newValue)
 	{
-		if (typeof this._overrideObjectComponent === "function")
-		{
-			this._overrideObjectComponent(objectName, component, newValue);
-		}
+		this._overrideObjectComponent(objectName, component, newValue);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -311,10 +269,7 @@ C3.Plugins.Spriter.Acts =
 
 	OverrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength)
 	{
-		if (typeof this._overrideBonesWithIk === "function")
-		{
-			this._overrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength);
-		}
+		this._overrideBonesWithIk(parentBoneName, childBoneName, targetX, targetY, additionalLength);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -336,10 +291,7 @@ C3.Plugins.Spriter.Acts =
 
 	SetZElevation(zElevation)
 	{
-		if (typeof this._setZElevation === "function")
-		{
-			this._setZElevation(zElevation);
-		}
+		this._setZElevation(zElevation);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -350,20 +302,12 @@ C3.Plugins.Spriter.Acts =
 
 	loadFromURL(url, crossOrigin, sconText)
 	{
-		if (typeof this._loadFromURL === "function")
-		{
-			return this._loadFromURL(url, crossOrigin, sconText);
-		}
-
-		return undefined;
+		return this._loadFromURL(url, crossOrigin, sconText);
 	},
 
 	FindSpriterObject(c2Object)
 	{
-		if (typeof this._findSpriterObject === "function")
-		{
-			this._findSpriterObject(c2Object);
-		}
+		this._findSpriterObject(c2Object);
 	},
 
 	// Legacy ACE alias used by older projects.

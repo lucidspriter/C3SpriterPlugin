@@ -91,9 +91,7 @@ C3.Plugins.Spriter.Cnds =
 
 	outsidePaddedViewport()
 	{
-		return typeof this._isOutsideViewportBox === "function"
-			? this._isOutsideViewportBox()
-			: false;
+		return this._isOutsideViewportBox();
 	},
 
 	OutsidePaddedViewport()
@@ -103,9 +101,7 @@ C3.Plugins.Spriter.Cnds =
 
 	tagActive(tagName, objectName)
 	{
-		return typeof this._tagActive === "function"
-			? this._tagActive(tagName, objectName)
-			: false;
+		return this._tagActive(tagName, objectName);
 	},
 
 	CompareCurrentKey(cmp, frame)
@@ -155,9 +151,7 @@ C3.Plugins.Spriter.Cnds =
 
 	ActionPointExists(pointName)
 	{
-		return (typeof this._actionPointExists === "function")
-			? this._actionPointExists(pointName)
-			: false;
+		return this._actionPointExists(pointName);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -168,9 +162,7 @@ C3.Plugins.Spriter.Cnds =
 
 	ObjectExists(objectName)
 	{
-		return (typeof this._objectExists === "function")
-			? this._objectExists(objectName)
-			: false;
+		return this._objectExists(objectName);
 	},
 
 	// Legacy ACE alias used by older projects.
@@ -182,9 +174,7 @@ C3.Plugins.Spriter.Cnds =
 	CompareZElevation(which, cmp, zElevation)
 	{
 		const useTotal = Number(which) === 1;
-		const value = (typeof this._getWorldZElevation === "function")
-			? this._getWorldZElevation(useTotal)
-			: 0;
+		const value = this._getWorldZElevation(useTotal);
 		return compareValues(value, cmp, zElevation);
 	},
 

@@ -926,22 +926,41 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
+		// Only used by the embedded-atlas compatibility island later in _draw().
 		const worldInfo = this._getWorldInfoOf(this);
 
-		// Runtime _draw(renderer) uses the scripting-style IRenderer surface.
-		// Keep the old no-premultiply path isolated until the runtime docs expose an official equivalent.
-		const blendMode = typeof this.blendMode === "string" ? this.blendMode : "";
-		if (this.noPremultiply && typeof renderer.SetNoPremultiplyAlphaBlend === "function")
+		// Custom Spriter property: either force the legacy no-premultiply path,
+		// or use Construct's normal instance blend mode.
+		if (this.noPremultiply)
 		{
-			renderer.SetNoPremultiplyAlphaBlend();
-		}
-		else if (blendMode)
-		{
-			renderer.setBlendMode(blendMode);
+			const noPremultiplyFn = renderer.setNoPremultiplyAlphaBlend || renderer.SetNoPremultiplyAlphaBlend;
+			if (typeof noPremultiplyFn === "function")
+			{
+				noPremultiplyFn.call(renderer);
+			}
+			else
+			{
+				if (!this._loggedNoPremultiplyBlendProbe)
+				{
+					const rendererProto = Object.getPrototypeOf(renderer);
+					const rendererMethods = Object.getOwnPropertyNames(rendererProto)
+						.filter((name) => /blend|premult/i.test(name))
+						.sort();
+					console.debug(`[Spriter] No-premultiply probe: type='${this.objectType && this.objectType.name ? this.objectType.name : "?"}', rendererMethods=${JSON.stringify(rendererMethods)}`);
+					this._loggedNoPremultiplyBlendProbe = true;
+				}
+				renderer.setAlphaBlendMode();
+			}
 		}
 		else
 		{
-			renderer.setAlphaBlendMode();
+			const blendMode = String(this.blendMode ?? "normal");
+			if (!this._loggedBlendModeProbe)
+			{
+				console.debug(`[Spriter] Blend probe: type='${this.objectType && this.objectType.name ? this.objectType.name : "?"}', blendMode='${blendMode}', instBlendMode='${String(this._inst && this._inst.blendMode)}', noPremultiply=${this.noPremultiply}`);
+				this._loggedBlendModeProbe = true;
+			}
+			renderer.setBlendMode(blendMode);
 		}
 
 		// Default to debug quads until textures are ready.
@@ -5440,7 +5459,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		const boneRefByName = new Map();
-		const childRefsByParentId = new Map();
 
 		for (const boneRef of boneRefs)
 		{
@@ -5450,16 +5468,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 
 			const id = toFiniteNumber(boneRef.id, NaN);
-			const parentId = toFiniteNumber(boneRef.parent, NaN);
-			if (Number.isFinite(parentId))
-			{
-				if (!childRefsByParentId.has(parentId))
-				{
-					childRefsByParentId.set(parentId, []);
-				}
-				childRefsByParentId.get(parentId).push(boneRef);
-			}
-
 			const timelineId = toFiniteNumber(boneRef.timeline, NaN);
 			const timelineName = this._timelineNameById.get(timelineId) || "";
 			const key = normaliseTimelineLookupName(timelineName, this.entity && this.entity.name);
@@ -5485,16 +5493,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				continue;
 			}
 
-			let childRef = null;
-			if (ikOverride.childBone)
-			{
-				childRef = boneRefByName.get(ikOverride.childBone) || null;
-			}
-			if (!childRef)
-			{
-				const directChildren = childRefsByParentId.get(parentId) || [];
-				childRef = directChildren.length ? directChildren[0] : null;
-			}
+			const childRef = ikOverride.childBone
+				? (boneRefByName.get(ikOverride.childBone) || null)
+				: null;
 			if (!childRef)
 			{
 				continue;
@@ -5523,10 +5524,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 			const childTimelineName = this._timelineNameById.get(childTimelineId) || "";
 			const childBoneLength = this._getBoneLengthForTimelineName(childTimelineName);
+			const localTarget = this._layoutToRootLocalPoint(ikOverride.targetX, ikOverride.targetY);
+			const rootScale = Math.max(Math.abs(toFiniteNumber(this._globalScaleRatio, 1)), 1e-6);
 			const solved = this._applyIkToWorldBones(
-				toFiniteNumber(ikOverride.targetX, 0),
-				toFiniteNumber(ikOverride.targetY, 0),
-				toFiniteNumber(ikOverride.additionalLength, 0),
+				localTarget.x,
+				localTarget.y,
+				toFiniteNumber(ikOverride.additionalLength, 0) / rootScale,
 				parentWorld,
 				childWorld,
 				childLocal,
@@ -7549,11 +7552,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return null;
 		}
 
-		for (const state of this._poseObjectStates)
+		const stateCollections = [
+			Array.isArray(this._poseObjectStates) ? this._poseObjectStates : [],
+			Array.isArray(this._poseBoneStates) ? this._poseBoneStates : []
+		];
+
+		for (const states of stateCollections)
 		{
-			if (state && state.timelineName === queryName)
+			for (const state of states)
 			{
-				return state;
+				if (state && state.timelineName === queryName)
+				{
+					return state;
+				}
 			}
 		}
 
@@ -7563,11 +7574,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return null;
 		}
 
-		for (const state of this._poseObjectStates)
+		for (const states of stateCollections)
 		{
-			if (toLowerCaseSafe(state && state.timelineName) === queryLower)
+			for (const state of states)
 			{
-				return state;
+				if (toLowerCaseSafe(state && state.timelineName) === queryLower)
+				{
+					return state;
+				}
 			}
 		}
 
@@ -7612,6 +7626,27 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			x: worldX,
 			y: worldY,
 			angle: worldAngle
+		};
+	}
+
+	_layoutToRootLocalPoint(x, y)
+	{
+		const myX = this._getSelfX();
+		const myY = this._getSelfY();
+		const myAngle = this._getSelfAngle();
+		const rootScale = toFiniteNumber(this._globalScaleRatio, 1);
+		const rootScaleX = rootScale * (this._xFlip ? -1 : 1);
+		const rootScaleY = rootScale * (this._yFlip ? -1 : 1);
+		const dx = toFiniteNumber(x, 0) - myX;
+		const dy = toFiniteNumber(y, 0) - myY;
+		const cosA = Math.cos(myAngle);
+		const sinA = Math.sin(myAngle);
+		const rotatedX = dx * cosA + dy * sinA;
+		const rotatedY = -dx * sinA + dy * cosA;
+
+		return {
+			x: rootScaleX !== 0 ? rotatedX / rootScaleX : 0,
+			y: rootScaleY !== 0 ? rotatedY / rootScaleY : 0
 		};
 	}
 

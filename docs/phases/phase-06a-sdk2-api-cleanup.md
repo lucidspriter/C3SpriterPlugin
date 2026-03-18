@@ -417,6 +417,23 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
     - For each ACE group touched, make one event sheet that reads the expression immediately after the paired action.
     - Verify legacy ACE aliases still produce the same gameplay result as the non-legacy version.
 
+#### Pass 10 API translation map
+- Context: ACE methods in `actions.js`, `conditions.js`, and `expressions.js` that call plugin-owned runtime helpers.
+  - Current pattern: guard helper calls with `typeof this._helper === "function"` and silently return fallback values.
+  - Documented SDK2 call: ACE runtime handlers are instance methods; once the plugin runtime helper exists on the instance, call it directly.
+  - Notes: these are plugin-internal helper methods, not optional SDK surfaces. If one is missing, it is a plugin bug and should fail loudly during testing instead of being hidden by ACE wrappers.
+  - Source: Addon SDK/runtime guide for ACE runtime methods plus this plugin's instance helper implementation in `scml2/c3runtime/instance.js`.
+- Context: legacy ACE aliases that duplicate canonical ACE logic.
+  - Current pattern: many legacy aliases copy the same helper access or fallback logic again.
+  - Documented SDK2 call: keep one canonical ACE implementation and route legacy aliases to it.
+  - Notes: this pass should reduce duplicate guard logic so both legacy and non-legacy ACEs exercise the same runtime path.
+  - Source: Addon SDK/runtime ACE method structure.
+- Context: ACE expressions reading world/object state through plugin helpers.
+  - Current pattern: wrap `_getPoseObjectX`, `_getWorldBoundingRect`, `_getWorldZElevation`, `_val`, etc. with helper-existence checks.
+  - Documented SDK2 call: call the plugin helper directly and let the helper own fallback/default behavior.
+  - Notes: expression defaults should live in the runtime helper or canonical expression body, not in every ACE wrapper.
+  - Source: Addon SDK/runtime ACE method structure plus plugin runtime helper definitions in `scml2/c3runtime/instance.js`.
+
 ### Pass 11 — Fallback isolation
 - [ ] Write the fallback inventory/justification list before moving or deleting compatibility code.
 - [ ] Write the manual break-detector checklist for each fallback being isolated or removed.
