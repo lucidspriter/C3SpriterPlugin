@@ -7,11 +7,11 @@ function normaliseProjectFileName(fileName)
 		return "";
 	}
 
-	let normalised = fileName.trim().toLowerCase();
+	let normalised = fileName.trim();
 
-	if (normalised.endsWith(".scml"))
+	if (/\.scml$/i.test(normalised))
 	{
-		normalised = normalised.replace(/\.scml$/, ".scon");
+		normalised = normalised.replace(/\.scml$/i, ".scon");
 	}
 
 	return normalised;
