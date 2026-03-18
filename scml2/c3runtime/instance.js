@@ -986,6 +986,18 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const quad3 = renderer.quad3.bind(renderer);
 		const fullTexRect = { x: 0, y: 0, width: 1, height: 1, left: 0, top: 0, right: 1, bottom: 1 };
 		const debugSpriteOverlays = this.drawDebug ? [] : null;
+		const applyTextureOpacity = (alpha) =>
+		{
+			if (this.noPremultiply)
+			{
+				renderer.resetColor();
+				renderer.setOpacity(alpha);
+			}
+			else
+			{
+				renderer.setColorRgba(alpha, alpha, alpha, alpha);
+			}
+		};
 
 		const renderDebugQuad = (domDebugQuad, r, g, b, a) =>
 		{
@@ -1592,7 +1604,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					}
 
 					renderer.setTexture(texture);
-					renderer.setColorRgba(1, 1, 1, alpha);
+					applyTextureOpacity(alpha);
 					quad3(atlasDomQuad, uvRect);
 					continue;
 				}
@@ -1628,7 +1640,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					}
 
 					renderer.setTexture(texture);
-					renderer.setColorRgba(1, 1, 1, alpha);
+					applyTextureOpacity(alpha);
 					quad3(domQuad, fullTexRect);
 					continue;
 				}
