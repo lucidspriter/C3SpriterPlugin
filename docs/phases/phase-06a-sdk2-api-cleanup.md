@@ -441,6 +441,38 @@ The goal is to make every pass testable by direct C3 interaction, not just by co
 - [ ] Document why each fallback still exists and what SDK gap it covers.
 - [ ] Add/update `requests for ashley.txt` for any fallback that should become unnecessary with an SDK addition.
 - [ ] If needed, add a temporary parity probe around a fallback boundary, then remove it after validation.
+  - Break detectors:
+    - Legacy self-draw project repaired from embedded atlas data still renders instead of falling back to debug quads.
+    - Collision boxes/helpers still enable, disable, and move correctly on old projects that depend on the world-info compatibility path.
+    - Multiple same-type instances in containers still associate to the correct helper objects.
+    - Non-self-draw sprite-frame swaps still work on runtimes where the documented `animationFrame` path succeeds.
+
+#### Pass 11 fallback inventory
+- Context: self-draw no-premultiplied alpha blend.
+  - Compatibility path: runtime renderer method probing for `setNoPremultiplyAlphaBlend` / `SetNoPremultiplyAlphaBlend`.
+  - Why it still exists: we have not found a documented runtime `IRenderer` API for no-premultiplied-alpha rendering.
+  - Isolated helper: `_applySelfDrawBlendMode(renderer)` in `scml2/c3runtime/instance.js`.
+  - Covered by: `requests for ashley.txt` entry `Runtime IRenderer equivalent for no-premultiplied alpha blend`.
+- Context: legacy self-draw projects with atlas imagery embedded in the object image/frames instead of project files.
+  - Compatibility path: image-info probing through sdk type / sdk instance / world-info / legacy atlas frame access.
+  - Why it still exists: the runtime SDK still does not document a supported way to enumerate custom-plugin animation frames or their image infos.
+  - Isolated helpers: `_tryGetEmbeddedAtlasCompatibilityTexture(...)`, `_readCompatibilityTextureFromImageInfo(...)`, `_getAtlasFrame(...)` in `scml2/c3runtime/instance.js` and `_getObjectClass()` in `scml2/c3runtime/type.js`.
+  - Covered by: `requests for ashley.txt` entry `SDK2 runtime access to custom plugin animation frames / atlas image info`.
+- Context: world-instance writes that are still unresolved in SDK2 runtime docs.
+  - Compatibility path: `_getWorldInfoOf(inst)` adapter plus targeted fallbacks for origin writes, collision toggles, and bbox invalidation.
+  - Why it still exists: origin/hotspot writes, collision enable/disable, and some direct-property setter parity remain unresolved.
+  - Isolated helper: `_getWorldInfoOf(inst)` in `scml2/c3runtime/instance.js`.
+  - Covered by: `requests for ashley.txt` entries `SDK2 world-instance origin/hotspot write API`, `SDK2 world-instance collision enable/disable API`, and `ISDKWorldInstanceBase direct property setter parity vs. resolved world-info path`.
+- Context: SOL/container pairing and instance-surface recovery on legacy/internal shapes.
+  - Compatibility path: `_getPairedInstanceByContainer(...)`, `_getSdkInstanceOf(...)`, `_getIID*` helpers, and object-class recovery tails.
+  - Why it still exists: the documented runtime object-type path is primary now, but we still need a guarded escape hatch for old projects until those scenarios are fully re-tested.
+  - Isolated helpers: `_getPairedInstanceByContainer(...)`, `_getSdkInstanceOf(...)`, `_getIID()`, `_getIIDOfInstance(...)`, `_getObjectClass()` / `_getAtlasFrame(...)`.
+  - Covered by: no new Ashley request yet; keep until container/legacy re-tests are complete.
+- Context: non-self-draw sprite-frame fallback.
+  - Compatibility path: `_setSpriteFrameByIndex(...)` still falls through older/internal frame setter names after trying the documented `animationFrame` property.
+  - Why it still exists: some runtimes did not expose a clearly documented sprite-frame setter during earlier testing.
+  - Isolated helper: `_setSpriteFrameByIndex(...)` in `scml2/c3runtime/instance.js`.
+  - Covered by: indirectly related to the broader runtime API parity uncertainty already logged; promote to a separate Ashley request only if the documented `animationFrame` path proves insufficient in final testing.
 
 ### Pass 12 — Final cleanup + guardrails
 - [ ] Write the final approved SDK2 surface list before deleting the last temporary helpers.

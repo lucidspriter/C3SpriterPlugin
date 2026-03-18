@@ -911,6 +911,42 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		runtime.sdk.updateRender();
 	}
+
+	_applySelfDrawBlendMode(renderer)
+	{
+		// Compatibility island: the no-premultiply renderer API is not documented on
+		// the runtime IRenderer surface, so keep it isolated here.
+		if (this.noPremultiply)
+		{
+			const noPremultiplyFn = renderer.setNoPremultiplyAlphaBlend || renderer.SetNoPremultiplyAlphaBlend;
+			if (typeof noPremultiplyFn === "function")
+			{
+				noPremultiplyFn.call(renderer);
+				return;
+			}
+
+			if (!this._loggedNoPremultiplyBlendProbe)
+			{
+				const rendererProto = Object.getPrototypeOf(renderer);
+				const rendererMethods = Object.getOwnPropertyNames(rendererProto)
+					.filter((name) => /blend|premult/i.test(name))
+					.sort();
+				console.debug(`[Spriter] No-premultiply probe: type='${this.objectType && this.objectType.name ? this.objectType.name : "?"}', rendererMethods=${JSON.stringify(rendererMethods)}`);
+				this._loggedNoPremultiplyBlendProbe = true;
+			}
+
+			renderer.setAlphaBlendMode();
+			return;
+		}
+
+		const blendMode = String(this.blendMode ?? "normal");
+		if (!this._loggedBlendModeProbe)
+		{
+			console.debug(`[Spriter] Blend probe: type='${this.objectType && this.objectType.name ? this.objectType.name : "?"}', blendMode='${blendMode}', instBlendMode='${String(this._inst && this._inst.blendMode)}', noPremultiply=${this.noPremultiply}`);
+			this._loggedBlendModeProbe = true;
+		}
+		renderer.setBlendMode(blendMode);
+	}
 	
 	_draw(renderer)
 	{
@@ -928,40 +964,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		// Only used by the embedded-atlas compatibility island later in _draw().
 		const worldInfo = this._getWorldInfoOf(this);
-
-		// Custom Spriter property: either force the legacy no-premultiply path,
-		// or use Construct's normal instance blend mode.
-		if (this.noPremultiply)
-		{
-			const noPremultiplyFn = renderer.setNoPremultiplyAlphaBlend || renderer.SetNoPremultiplyAlphaBlend;
-			if (typeof noPremultiplyFn === "function")
-			{
-				noPremultiplyFn.call(renderer);
-			}
-			else
-			{
-				if (!this._loggedNoPremultiplyBlendProbe)
-				{
-					const rendererProto = Object.getPrototypeOf(renderer);
-					const rendererMethods = Object.getOwnPropertyNames(rendererProto)
-						.filter((name) => /blend|premult/i.test(name))
-						.sort();
-					console.debug(`[Spriter] No-premultiply probe: type='${this.objectType && this.objectType.name ? this.objectType.name : "?"}', rendererMethods=${JSON.stringify(rendererMethods)}`);
-					this._loggedNoPremultiplyBlendProbe = true;
-				}
-				renderer.setAlphaBlendMode();
-			}
-		}
-		else
-		{
-			const blendMode = String(this.blendMode ?? "normal");
-			if (!this._loggedBlendModeProbe)
-			{
-				console.debug(`[Spriter] Blend probe: type='${this.objectType && this.objectType.name ? this.objectType.name : "?"}', blendMode='${blendMode}', instBlendMode='${String(this._inst && this._inst.blendMode)}', noPremultiply=${this.noPremultiply}`);
-				this._loggedBlendModeProbe = true;
-			}
-			renderer.setBlendMode(blendMode);
-		}
+		this._applySelfDrawBlendMode(renderer);
 
 		// Default to debug quads until textures are ready.
 		let fillMode = "color";
@@ -1235,255 +1238,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					}
 				}
 
-				// Old projects may have the atlas image embedded in the Spriter object's frames,
-				// but not present as a separate Project File. Try the legacy frame path as a
-				// compatibility fallback only when the preferred project-file atlas path failed.
-					if ((!texture || imageWidth <= 0 || imageHeight <= 0) && renderer)
+				if (!texture || imageWidth <= 0 || imageHeight <= 0)
+				{
+					const compatibilityTexture = this._tryGetEmbeddedAtlasCompatibilityTexture(atlasIndex, renderer, sdkType, worldInfo, fullTexRect);
+					if (compatibilityTexture)
 					{
-						// Compatibility fallback for old projects: use the object's embedded image
-						// (typically atlas 0) via the documented SDK type image-info accessor.
-						if (atlasIndex === 0 && sdkType)
-					{
-						const getTypeImageInfo = typeof sdkType.getImageInfo === "function"
-							? sdkType.getImageInfo.bind(sdkType)
-							: typeof sdkType.GetImageInfo === "function"
-								? sdkType.GetImageInfo.bind(sdkType)
-								: null;
-
-						if (getTypeImageInfo)
-						{
-							let typeImageInfo = null;
-							try
-							{
-								typeImageInfo = getTypeImageInfo();
-							}
-							catch (_)
-							{
-								typeImageInfo = null;
-							}
-
-							if (this._atlasDebug && !this._atlasDebug.loggedTypeImageInfoProbe)
-							{
-								this._atlasDebug.loggedTypeImageInfoProbe = true;
-								spriterDebugLog("[Spriter] Atlas compatibility probe via sdkType.getImageInfo():", typeImageInfo);
-							}
-
-							if (typeImageInfo)
-							{
-								const getTypeTexture = typeImageInfo.GetTexture || typeImageInfo.getTexture || null;
-								const typeTexture = (typeof getTypeTexture === "function")
-									? getTypeTexture.call(typeImageInfo)
-									: null;
-
-								if (typeTexture)
-								{
-									const getTypeTexRect = typeImageInfo.GetTexRect || typeImageInfo.getTexRect || null;
-									const getTypeWidth = typeImageInfo.GetWidth || typeImageInfo.getWidth || null;
-									const getTypeHeight = typeImageInfo.GetHeight || typeImageInfo.getHeight || null;
-									const typeWidth = (typeof getTypeWidth === "function")
-										? Number(getTypeWidth.call(typeImageInfo))
-										: Number(typeImageInfo && typeImageInfo._width);
-									const typeHeight = (typeof getTypeHeight === "function")
-										? Number(getTypeHeight.call(typeImageInfo))
-										: Number(typeImageInfo && typeImageInfo._height);
-
-									texture = typeTexture;
-									imageWidth = Number.isFinite(typeWidth) ? typeWidth : 0;
-									imageHeight = Number.isFinite(typeHeight) ? typeHeight : 0;
-									texRect = (typeof getTypeTexRect === "function")
-										? (getTypeTexRect.call(typeImageInfo) || fullTexRect)
-										: (typeImageInfo && (typeImageInfo._rcTex || typeImageInfo._texRect)) || fullTexRect;
-
-									if (this._atlasDebug && !this._atlasDebug.loggedTypeImageInfoFallbackUsed)
-									{
-										this._atlasDebug.loggedTypeImageInfoFallbackUsed = true;
-										spriterDebugLog("[Spriter] Using sdkType.getImageInfo() embedded-atlas fallback for self-draw compatibility.");
-									}
-								}
-								else
-								{
-									this._requestAtlasTextureLoad(atlasIndex, typeImageInfo, renderer);
-								}
-								}
-							}
-						}
-
-						// Some runtimes expose the embedded image info on the SDK instance instead
-						// of the SDK type for animated/image-backed world plugins.
-						if ((!texture || imageWidth <= 0 || imageHeight <= 0) && atlasIndex === 0)
-						{
-							const getInstanceImageInfo = typeof this.getImageInfo === "function"
-								? this.getImageInfo.bind(this)
-								: typeof this.GetImageInfo === "function"
-									? this.GetImageInfo.bind(this)
-									: null;
-
-							if (getInstanceImageInfo)
-							{
-								let instanceImageInfo = null;
-								try
-								{
-									instanceImageInfo = getInstanceImageInfo();
-								}
-								catch (_)
-								{
-									instanceImageInfo = null;
-								}
-
-								if (this._atlasDebug && !this._atlasDebug.loggedInstanceImageInfoProbe)
-								{
-									this._atlasDebug.loggedInstanceImageInfoProbe = true;
-									spriterDebugLog("[Spriter] Atlas compatibility probe via sdkInstance.getImageInfo():", instanceImageInfo);
-								}
-
-								if (instanceImageInfo)
-								{
-									const getInstTexture = instanceImageInfo.GetTexture || instanceImageInfo.getTexture || null;
-									const instTexture = (typeof getInstTexture === "function")
-										? getInstTexture.call(instanceImageInfo)
-										: null;
-
-									if (instTexture)
-									{
-										const getInstTexRect = instanceImageInfo.GetTexRect || instanceImageInfo.getTexRect || null;
-										const getInstWidth = instanceImageInfo.GetWidth || instanceImageInfo.getWidth || null;
-										const getInstHeight = instanceImageInfo.GetHeight || instanceImageInfo.getHeight || null;
-										const instWidth = (typeof getInstWidth === "function")
-											? Number(getInstWidth.call(instanceImageInfo))
-											: Number(instanceImageInfo && instanceImageInfo._width);
-										const instHeight = (typeof getInstHeight === "function")
-											? Number(getInstHeight.call(instanceImageInfo))
-											: Number(instanceImageInfo && instanceImageInfo._height);
-
-										texture = instTexture;
-										imageWidth = Number.isFinite(instWidth) ? instWidth : 0;
-										imageHeight = Number.isFinite(instHeight) ? instHeight : 0;
-										texRect = (typeof getInstTexRect === "function")
-											? (getInstTexRect.call(instanceImageInfo) || fullTexRect)
-											: (instanceImageInfo && (instanceImageInfo._rcTex || instanceImageInfo._texRect)) || fullTexRect;
-
-										if (this._atlasDebug && !this._atlasDebug.loggedInstanceImageInfoFallbackUsed)
-										{
-											this._atlasDebug.loggedInstanceImageInfoFallbackUsed = true;
-											spriterDebugLog("[Spriter] Using sdkInstance.getImageInfo() embedded-atlas fallback for self-draw compatibility.");
-										}
-									}
-									else
-									{
-										this._requestAtlasTextureLoad(atlasIndex, instanceImageInfo, renderer);
-									}
-								}
-							}
-						}
-
-						// Some wrappers may surface image info on WorldInfo rather than the SDK instance.
-						if ((!texture || imageWidth <= 0 || imageHeight <= 0) && atlasIndex === 0 && worldInfo)
-						{
-							const getWorldImageInfo = typeof worldInfo.getImageInfo === "function"
-								? worldInfo.getImageInfo.bind(worldInfo)
-								: typeof worldInfo.GetImageInfo === "function"
-									? worldInfo.GetImageInfo.bind(worldInfo)
-									: null;
-
-							if (getWorldImageInfo)
-							{
-								let worldImageInfo = null;
-								try
-								{
-									worldImageInfo = getWorldImageInfo();
-								}
-								catch (_)
-								{
-									worldImageInfo = null;
-								}
-
-								if (this._atlasDebug && !this._atlasDebug.loggedWorldInfoImageInfoProbe)
-								{
-									this._atlasDebug.loggedWorldInfoImageInfoProbe = true;
-									spriterDebugLog("[Spriter] Atlas compatibility probe via worldInfo.getImageInfo():", worldImageInfo);
-								}
-
-								if (worldImageInfo)
-								{
-									const getWorldTexture = worldImageInfo.GetTexture || worldImageInfo.getTexture || null;
-									const worldTexture = (typeof getWorldTexture === "function")
-										? getWorldTexture.call(worldImageInfo)
-										: null;
-
-									if (worldTexture)
-									{
-										const getWorldTexRect = worldImageInfo.GetTexRect || worldImageInfo.getTexRect || null;
-										const getWorldWidth = worldImageInfo.GetWidth || worldImageInfo.getWidth || null;
-										const getWorldHeight = worldImageInfo.GetHeight || worldImageInfo.getHeight || null;
-										const worldWidth = (typeof getWorldWidth === "function")
-											? Number(getWorldWidth.call(worldImageInfo))
-											: Number(worldImageInfo && worldImageInfo._width);
-										const worldHeight = (typeof getWorldHeight === "function")
-											? Number(getWorldHeight.call(worldImageInfo))
-											: Number(worldImageInfo && worldImageInfo._height);
-
-										texture = worldTexture;
-										imageWidth = Number.isFinite(worldWidth) ? worldWidth : 0;
-										imageHeight = Number.isFinite(worldHeight) ? worldHeight : 0;
-										texRect = (typeof getWorldTexRect === "function")
-											? (getWorldTexRect.call(worldImageInfo) || fullTexRect)
-											: (worldImageInfo && (worldImageInfo._rcTex || worldImageInfo._texRect)) || fullTexRect;
-
-										if (this._atlasDebug && !this._atlasDebug.loggedWorldInfoImageInfoFallbackUsed)
-										{
-											this._atlasDebug.loggedWorldInfoImageInfoFallbackUsed = true;
-											spriterDebugLog("[Spriter] Using worldInfo.getImageInfo() embedded-atlas fallback for self-draw compatibility.");
-										}
-									}
-								}
-							}
-						}
-
-					const frame = this._getAtlasFrame(atlasIndex);
-					const imageInfo = frame && typeof frame.GetImageInfo === "function"
-						? frame.GetImageInfo()
-						: frame && typeof frame.getImageInfo === "function"
-							? frame.getImageInfo()
-							: frame && frame._imageInfo
-								? frame._imageInfo
-								: null;
-
-					if (imageInfo)
-					{
-						const getFrameTexture = imageInfo.GetTexture || imageInfo.getTexture || null;
-						const frameTexture = (typeof getFrameTexture === "function")
-							? getFrameTexture.call(imageInfo)
-							: null;
-
-						if (frameTexture)
-						{
-							const getTexRect = imageInfo.GetTexRect || imageInfo.getTexRect || null;
-							const getWidth = imageInfo.GetWidth || imageInfo.getWidth || null;
-							const getHeight = imageInfo.GetHeight || imageInfo.getHeight || null;
-							const frameWidth = (typeof getWidth === "function")
-								? Number(getWidth.call(imageInfo))
-								: Number(imageInfo && imageInfo._width);
-							const frameHeight = (typeof getHeight === "function")
-								? Number(getHeight.call(imageInfo))
-								: Number(imageInfo && imageInfo._height);
-
-							texture = frameTexture;
-							imageWidth = Number.isFinite(frameWidth) ? frameWidth : 0;
-							imageHeight = Number.isFinite(frameHeight) ? frameHeight : 0;
-							texRect = (typeof getTexRect === "function")
-								? (getTexRect.call(imageInfo) || fullTexRect)
-								: fullTexRect;
-
-							if (this._atlasDebug && !this._atlasDebug.loggedLegacyFrameFallbackUsed)
-							{
-								this._atlasDebug.loggedLegacyFrameFallbackUsed = true;
-								spriterDebugLog("[Spriter] Using legacy embedded atlas-frame fallback for self-draw compatibility.");
-							}
-						}
-						else
-						{
-							this._requestAtlasTextureLoad(atlasIndex, imageInfo, renderer);
-						}
+						texture = compatibilityTexture.texture;
+						imageWidth = compatibilityTexture.imageWidth;
+						imageHeight = compatibilityTexture.imageHeight;
+						texRect = compatibilityTexture.texRect;
 					}
 				}
 
@@ -1967,6 +1730,171 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			entry.error = message || "Unknown error";
 			console.error(`[Spriter] Failed requesting atlas texture upload for frame ${atlasIndex}: ${entry.error}`, error);
 		}
+	}
+
+	_readCompatibilityTextureFromImageInfo(imageInfo, fallbackTexRect)
+	{
+		if (!imageInfo)
+		{
+			return null;
+		}
+
+		const getTexture = imageInfo.GetTexture || imageInfo.getTexture || null;
+		const texture = (typeof getTexture === "function")
+			? getTexture.call(imageInfo)
+			: null;
+		if (!texture)
+		{
+			return null;
+		}
+
+		const getTexRect = imageInfo.GetTexRect || imageInfo.getTexRect || null;
+		const getWidth = imageInfo.GetWidth || imageInfo.getWidth || null;
+		const getHeight = imageInfo.GetHeight || imageInfo.getHeight || null;
+		const imageWidth = (typeof getWidth === "function")
+			? Number(getWidth.call(imageInfo))
+			: Number(imageInfo && imageInfo._width);
+		const imageHeight = (typeof getHeight === "function")
+			? Number(getHeight.call(imageInfo))
+			: Number(imageInfo && imageInfo._height);
+		const texRect = (typeof getTexRect === "function")
+			? (getTexRect.call(imageInfo) || fallbackTexRect)
+			: (imageInfo && (imageInfo._rcTex || imageInfo._texRect)) || fallbackTexRect;
+
+		return {
+			texture,
+			imageWidth: Number.isFinite(imageWidth) ? imageWidth : 0,
+			imageHeight: Number.isFinite(imageHeight) ? imageHeight : 0,
+			texRect
+		};
+	}
+
+	_tryGetEmbeddedAtlasCompatibilityTexture(atlasIndex, renderer, sdkType, worldInfo, fallbackTexRect)
+	{
+		// Compatibility island for legacy self-draw projects that embedded atlas
+		// imagery in the object's own frames instead of separate project files.
+		if (!renderer || atlasIndex !== 0)
+		{
+			return null;
+		}
+
+		const tryImageInfoSource = (getImageInfo, probeFlag, usedFlag, probeMessage, usedMessage) =>
+		{
+			if (typeof getImageInfo !== "function")
+			{
+				return null;
+			}
+
+			let imageInfo = null;
+			try
+			{
+				imageInfo = getImageInfo();
+			}
+			catch (_)
+			{
+				imageInfo = null;
+			}
+
+			if (this._atlasDebug && !this._atlasDebug[probeFlag])
+			{
+				this._atlasDebug[probeFlag] = true;
+				spriterDebugLog(probeMessage, imageInfo);
+			}
+
+			if (!imageInfo)
+			{
+				return null;
+			}
+
+			const textureState = this._readCompatibilityTextureFromImageInfo(imageInfo, fallbackTexRect);
+			if (textureState)
+			{
+				if (this._atlasDebug && !this._atlasDebug[usedFlag])
+				{
+					this._atlasDebug[usedFlag] = true;
+					spriterDebugLog(usedMessage);
+				}
+				return textureState;
+			}
+
+			this._requestAtlasTextureLoad(atlasIndex, imageInfo, renderer);
+			return null;
+		};
+
+		const typeTexture = tryImageInfoSource(
+			sdkType && (typeof sdkType.getImageInfo === "function"
+				? sdkType.getImageInfo.bind(sdkType)
+				: typeof sdkType.GetImageInfo === "function"
+					? sdkType.GetImageInfo.bind(sdkType)
+					: null),
+			"loggedTypeImageInfoProbe",
+			"loggedTypeImageInfoFallbackUsed",
+			"[Spriter] Atlas compatibility probe via sdkType.getImageInfo():",
+			"[Spriter] Using sdkType.getImageInfo() embedded-atlas fallback for self-draw compatibility."
+		);
+		if (typeTexture)
+		{
+			return typeTexture;
+		}
+
+		const instanceTexture = tryImageInfoSource(
+			typeof this.getImageInfo === "function"
+				? this.getImageInfo.bind(this)
+				: typeof this.GetImageInfo === "function"
+					? this.GetImageInfo.bind(this)
+					: null,
+			"loggedInstanceImageInfoProbe",
+			"loggedInstanceImageInfoFallbackUsed",
+			"[Spriter] Atlas compatibility probe via sdkInstance.getImageInfo():",
+			"[Spriter] Using sdkInstance.getImageInfo() embedded-atlas fallback for self-draw compatibility."
+		);
+		if (instanceTexture)
+		{
+			return instanceTexture;
+		}
+
+		const worldTexture = tryImageInfoSource(
+			worldInfo && (typeof worldInfo.getImageInfo === "function"
+				? worldInfo.getImageInfo.bind(worldInfo)
+				: typeof worldInfo.GetImageInfo === "function"
+					? worldInfo.GetImageInfo.bind(worldInfo)
+					: null),
+			"loggedWorldInfoImageInfoProbe",
+			"loggedWorldInfoImageInfoFallbackUsed",
+			"[Spriter] Atlas compatibility probe via worldInfo.getImageInfo():",
+			"[Spriter] Using worldInfo.getImageInfo() embedded-atlas fallback for self-draw compatibility."
+		);
+		if (worldTexture)
+		{
+			return worldTexture;
+		}
+
+		const frame = this._getAtlasFrame(atlasIndex);
+		const frameImageInfo = frame && typeof frame.GetImageInfo === "function"
+			? frame.GetImageInfo()
+			: frame && typeof frame.getImageInfo === "function"
+				? frame.getImageInfo()
+				: frame && frame._imageInfo
+					? frame._imageInfo
+					: null;
+		if (!frameImageInfo)
+		{
+			return null;
+		}
+
+		const frameTexture = this._readCompatibilityTextureFromImageInfo(frameImageInfo, fallbackTexRect);
+		if (frameTexture)
+		{
+			if (this._atlasDebug && !this._atlasDebug.loggedLegacyFrameFallbackUsed)
+			{
+				this._atlasDebug.loggedLegacyFrameFallbackUsed = true;
+				spriterDebugLog("[Spriter] Using legacy embedded atlas-frame fallback for self-draw compatibility.");
+			}
+			return frameTexture;
+		}
+
+		this._requestAtlasTextureLoad(atlasIndex, frameImageInfo, renderer);
+		return null;
 	}
 
 	_getDtSeconds()
