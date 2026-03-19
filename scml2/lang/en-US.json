@@ -1741,6 +1741,7 @@
 						"description": "Get this instance's total Z elevation."
 					},
 					"val": {
+						"translated-name": "val",
 						"list-name": "val",
 						"display-text": "val({0})",
 						"description": "Get the current Spriter variable value by name (optionally scoped to an object timeline).",

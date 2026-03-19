@@ -55,6 +55,7 @@ Use these directly in cleaned code paths.
 
 - **Assets/textures**
   - `runtime.assets`
+  - `assetManager.projectFileList`
   - `assetManager.getProjectFileUrl(...)`
   - `assetManager.fetchJson(...)`
   - `assetManager.fetchBlob(...)`

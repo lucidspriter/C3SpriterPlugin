@@ -1,4 +1,5 @@
 const C3 = globalThis.C3;
+console.log("[scml runtime: v7]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -1940,6 +1941,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					nextTime = lengthMs;
 					this.playing = false;
 					this._playToTimeMs = -1;
+					if (finished)
+					{
+						const objectTypeName = this.objectType ? this._getObjectTypeName(this.objectType) : "?";
+						const uid = this._getInstanceUidMaybe(this);
+						const animationName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "";
+						console.debug(`[Spriter] Non-loop stop: type='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${animationName}', localMs=${toFiniteNumber(previousTime, 0)}, endMs=${lengthMs}`);
+					}
 				}
 				else if (speed < 0 && nextTime <= 0)
 				{
@@ -1951,6 +1959,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					nextTime = 0;
 					this.playing = false;
 					this._playToTimeMs = -1;
+					if (finished)
+					{
+						const objectTypeName = this.objectType ? this._getObjectTypeName(this.objectType) : "?";
+						const uid = this._getInstanceUidMaybe(this);
+						const animationName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "";
+						console.debug(`[Spriter] Non-loop stop: type='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${animationName}', localMs=${toFiniteNumber(previousTime, 0)}, endMs=0`);
+					}
 				}
 			}
 		}
@@ -2184,6 +2199,29 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return 0;
 		}
 
+		if (typeof identifier === "string")
+		{
+			const asText = identifier.trim().toLowerCase();
+			if (!asText)
+			{
+				return 0;
+			}
+
+			for (let i = 0, len = animations.length; i < len; i++)
+			{
+				const animation = animations[i];
+				const name = animation && typeof animation.name === "string"
+					? animation.name.trim().toLowerCase()
+					: "";
+				if (name && name === asText)
+				{
+					return i;
+				}
+			}
+
+			return -1;
+		}
+
 		const asNumber = Number(identifier);
 		if (Number.isInteger(asNumber))
 		{
@@ -2202,24 +2240,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
-		const asText = toLowerCaseSafe(identifier);
-		if (!asText)
-		{
-			return 0;
-		}
-
-		for (let i = 0, len = animations.length; i < len; i++)
-		{
-			const animation = animations[i];
-			const name = animation && typeof animation.name === "string"
-				? animation.name.trim().toLowerCase()
-				: "";
-			if (name && name === asText)
-			{
-				return i;
-			}
-		}
-
 		return -1;
 	}
 
@@ -2230,9 +2250,29 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return "";
 		}
 
+		const animations = this.entity && Array.isArray(this.entity.animation) ? this.entity.animation : [];
 		if (typeof identifier === "string")
 		{
-			return identifier.trim();
+			const nameText = identifier.trim();
+			if (!nameText)
+			{
+				return "";
+			}
+
+			const lowerNameText = nameText.toLowerCase();
+			for (let i = 0, len = animations.length; i < len; i++)
+			{
+				const animation = animations[i];
+				const animationName = animation && typeof animation.name === "string"
+					? animation.name.trim()
+					: "";
+				if (animationName && animationName.toLowerCase() === lowerNameText)
+				{
+					return animationName;
+				}
+			}
+
+			return "";
 		}
 
 		const asNumber = Number(identifier);
@@ -2241,7 +2281,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return "";
 		}
 
-		const animations = this.entity && Array.isArray(this.entity.animation) ? this.entity.animation : [];
 		for (let i = 0, len = animations.length; i < len; i++)
 		{
 			const animation = animations[i];
@@ -2260,11 +2299,24 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		return "";
 	}
 
+	_getResolvedAnimationName(identifier)
+	{
+		const animationIndex = this._findAnimationByIdentifier(identifier);
+		if (animationIndex < 0)
+		{
+			return "";
+		}
+
+		const animations = this.entity && Array.isArray(this.entity.animation) ? this.entity.animation : [];
+		const animation = animations[animationIndex];
+		return animation && typeof animation.name === "string" ? animation.name : "";
+	}
+
 	_getAnimationName()
 	{
 		if (this._pendingAnimationChange)
 		{
-			const pendingName = this._resolveAnimationIdentifierToName(this._pendingAnimationChange.animationIdentifier);
+			const pendingName = this._getResolvedAnimationName(this._pendingAnimationChange.animationIdentifier);
 			if (pendingName)
 			{
 				return pendingName;
@@ -2277,16 +2329,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return currentAnimation.name;
 		}
 
-		if (this._pendingPreReadyAnimationChange)
-		{
-			const queuedName = this._resolveAnimationIdentifierToName(this._pendingPreReadyAnimationChange.animationIdentifier);
-			if (queuedName)
-			{
-				return queuedName;
-			}
-		}
-
-		return typeof this.startingAnimationName === "string" ? this.startingAnimationName.trim() : "";
+		return "";
 	}
 
 	_rebuildAnimationTimelineCache(animation)
@@ -2351,6 +2394,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (!nextAnimation)
 		{
 			return false;
+		}
+		const nextAnimationLoops = this._isAnimationLoopingFor(nextAnimation, this.entityIndex, animationIndex);
+		if (!nextAnimationLoops)
+		{
+			const objectTypeName = this.objectType ? this._getObjectTypeName(this.objectType) : "?";
+			const uid = this._getInstanceUidMaybe(this);
+			const animationName = typeof nextAnimation.name === "string" ? nextAnimation.name : "";
+			console.debug(`[Spriter] SetAnimation non-loop: type='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${animationName}', startFrom=${Number(startFrom)}, blendMs=${toFiniteNumber(blendDuration, 0)}, localMs=${toFiniteNumber(this.localTimeMs, 0)}`);
+			const currentAnimationName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "";
+			const currentLengthMs = toFiniteNumber(this.animationLengthMs, 0);
+			if (currentAnimationName === animationName && currentLengthMs > 0 && Math.abs(toFiniteNumber(this.localTimeMs, 0) - currentLengthMs) <= 1)
+			{
+				console.debug(`[Spriter] SetAnimation non-loop restart stack: type='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${animationName}'\n${new Error().stack}`);
+			}
 		}
 
 		const blendStartMode = Number(startFrom);
@@ -3026,14 +3083,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		return Math.abs(playTo - this.localTimeMs);
 	}
 
-	_isAnimationLooping(animation)
+	_isAnimationLoopingFor(animation, entityIndex, animationIndex)
 	{
 		if (!animation || typeof animation !== "object")
 		{
 			return true;
 		}
 
-		const key = `${this.entityIndex}:${this.animationIndex}`;
+		const key = `${entityIndex}:${animationIndex}`;
 		if (this._loopOverrideByAnimationIndex.has(key))
 		{
 			return !!this._loopOverrideByAnimationIndex.get(key);
@@ -3057,6 +3114,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		// Spriter defaults to looping when the attribute is omitted.
 		return true;
+	}
+
+	_isAnimationLooping(animation)
+	{
+		return this._isAnimationLoopingFor(animation, this.entityIndex, this.animationIndex);
 	}
 
 	_evaluatePose()
@@ -3167,7 +3229,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return emptyPose;
 		}
 
-		const sampleTimeMs = this._normaliseSampleTime(fallbackTime, this.animationLengthMs, this._isAnimationLooping(animation));
+		const isLooping = this._isAnimationLooping(animation);
+		const sampleTimeMs = this._normaliseSampleTime(fallbackTime, this.animationLengthMs, isLooping);
 		const mainKeyIndex = this._findKeyIndexForTime(keys, sampleTimeMs);
 		const mainKey = keys[mainKeyIndex];
 		if (!mainKey)
@@ -3175,9 +3238,18 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return emptyPose;
 		}
 
-		const poseTimeMs = this._getMainlineAdjustedTime(keys, mainKeyIndex, sampleTimeMs);
+		const poseTimeMs = this._getMainlineAdjustedTime(
+			keys,
+			mainKeyIndex,
+			sampleTimeMs,
+			isLooping
+		);
 		const boneRefs = Array.isArray(mainKey.bone_ref) ? mainKey.bone_ref : [];
 		const objectRefs = Array.isArray(mainKey.object_ref) ? mainKey.object_ref : [];
+		if (!isLooping && this.animationLengthMs > 0 && sampleTimeMs === this.animationLengthMs && !objectRefs.length)
+		{
+			return this._evaluatePoseForCurrentAnimation(Math.max(0, this.animationLengthMs - 0.001));
+		}
 
 		const boneRefsById = new Map();
 		for (const boneRef of boneRefs)
@@ -4699,6 +4771,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return [];
 		}
 
+		if (Array.isArray(meta.valline))
+		{
+			return meta.valline;
+		}
 		if (Array.isArray(meta.varline))
 		{
 			return meta.varline;
@@ -4793,9 +4869,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_resolveVarDefForLine(varline, scopeLookup)
 	{
+		const varlineName = typeof varline.name === "string" ? varline.name : "";
 		const fallbackDef = {
 			id: NaN,
-			name: typeof varline.name === "string" ? varline.name : "",
+			name: varlineName,
 			type: "float",
 			defaultValue: 0
 		};
@@ -5031,7 +5108,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				continue;
 			}
 
-			this._applyMetaScopeState(scopeKey, soundline.meta, globalVarDefs, sampleTime, lengthMs, isLooping);
+			const scopeVarDefs = this._varDefsByScope.get(scopeKey) || globalVarDefs;
+			this._applyMetaScopeState(scopeKey, soundline.meta, scopeVarDefs, sampleTime, lengthMs, isLooping);
 		}
 
 		const eventlineList = this._getEventlinesForAnimation(animation);
@@ -5048,8 +5126,62 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				continue;
 			}
 
-			this._applyMetaScopeState(scopeKey, eventline.meta, globalVarDefs, sampleTime, lengthMs, isLooping);
+			const scopeVarDefs = this._varDefsByScope.get(scopeKey) || globalVarDefs;
+			this._applyMetaScopeState(scopeKey, eventline.meta, scopeVarDefs, sampleTime, lengthMs, isLooping);
 		}
+	}
+
+	_getValScopeInfo(objectName)
+	{
+		const animation = this.animation;
+		if (!animation)
+		{
+			return null;
+		}
+
+		const globalVarDefs = this._varDefsByScope.get("") || { byId: this._varDefsById, byName: this._varDefsByName };
+		const requestedScope = toStringOrEmpty(objectName);
+		if (!requestedScope)
+		{
+			return {
+				meta: animation.meta,
+				varDefs: globalVarDefs
+			};
+		}
+
+		const entityName = this.entity && this.entity.name ? this.entity.name : "";
+		const requestedLookupName = normaliseTimelineLookupName(requestedScope, entityName);
+		const requestedExactName = normaliseSpriterObjectName(requestedScope);
+		const collections = [
+			Array.isArray(animation.timeline) ? animation.timeline : [],
+			this._getSoundlinesForAnimation(animation),
+			this._getEventlinesForAnimation(animation)
+		];
+
+		for (const collection of collections)
+		{
+			for (const entry of collection)
+			{
+				if (!entry || typeof entry !== "object" || !entry.meta)
+				{
+					continue;
+				}
+
+				const rawName = typeof entry.name === "string" ? entry.name : "";
+				if (rawName !== requestedExactName && normaliseTimelineLookupName(rawName, entityName) !== requestedLookupName)
+				{
+					continue;
+				}
+
+				const scopeKey = normaliseTimelineLookupName(rawName, entityName);
+				return {
+					meta: entry.meta,
+					varDefs: (scopeKey ? (this._varDefsByScope.get(scopeKey) || globalVarDefs) : globalVarDefs)
+				};
+			}
+		}
+
+		return null;
 	}
 
 	_tagActive(tagName, objectName)
@@ -5072,28 +5204,62 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_val(varName, objectName)
 	{
-		const key = toLowerCaseSafe(varName);
-		if (!key)
+		const requestedVarName = toStringOrEmpty(varName);
+		if (!requestedVarName)
 		{
 			return 0;
 		}
 
-		if (this._varValuesByScope.size === 0)
+		const scopeInfo = this._getValScopeInfo(objectName);
+		const animation = this.animation;
+
+		// Try to find the varline in the current animation's meta
+		if (scopeInfo && scopeInfo.meta && animation)
 		{
-			this._refreshMetaState(this._currentAdjustedTimeMs);
+			const varLines = this._getVarlines(scopeInfo.meta);
+			const sampleTime = toFiniteNumber(this._currentAdjustedTimeMs, 0);
+			const animationLengthMs = Math.max(0, toFiniteNumber(this.animationLengthMs, 0));
+			const isLooping = this._isAnimationLooping(animation);
+
+			for (const varline of varLines)
+			{
+				const def = this._resolveVarDefForLine(varline, scopeInfo.varDefs);
+				if (!def || def.name !== requestedVarName)
+				{
+					continue;
+				}
+
+				return this._evaluateVarlineAtTime(varline, def, sampleTime, animationLengthMs, isLooping);
+			}
 		}
 
-		const scopeKey = objectName ? normaliseTimelineLookupName(objectName, this.entity && this.entity.name) : "";
-		const vars = this._varValuesByScope.get(scopeKey);
-		if (!vars)
-		{
-			return 0;
-		}
-
-		return vars.has(key) ? vars.get(key) : 0;
+		// No varline found in this animation for the requested variable.
+		// Fall back to the entity-level var def default instead of returning 0.
+		return this._getVarDefDefault(requestedVarName, objectName);
 	}
 
-	_getMainlineAdjustedTime(mainKeys, mainKeyIndex, timeMs)
+	_getVarDefDefault(varName, objectName)
+	{
+		const requestedScope = toStringOrEmpty(objectName);
+		const entityName = this.entity && this.entity.name ? this.entity.name : "";
+
+		// Try scope-specific var defs first, then global
+		const scopeKey = requestedScope ? normaliseTimelineLookupName(requestedScope, entityName) : "";
+		const scopeLookup = this._varDefsByScope.get(scopeKey) || this._varDefsByScope.get("");
+		if (scopeLookup && scopeLookup.byName instanceof Map)
+		{
+			const lowerName = toLowerCaseSafe(varName);
+			if (lowerName && scopeLookup.byName.has(lowerName))
+			{
+				const def = scopeLookup.byName.get(lowerName);
+				return this._coerceVarValue(def.defaultValue, def.type);
+			}
+		}
+
+		return 0;
+	}
+
+	_getMainlineAdjustedTime(mainKeys, mainKeyIndex, timeMs, isLooping)
 	{
 		if (!Array.isArray(mainKeys) || !mainKeys.length)
 		{
@@ -5116,6 +5282,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		if (nextIndex === 0)
 		{
+			if (!isLooping)
+			{
+				return clamp(toFiniteNumber(timeMs, startTime), startTime, animationLengthMs);
+			}
+
 			endTime += animationLengthMs;
 			if (sampleTime < startTime)
 			{
@@ -5955,6 +6126,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				try
 				{
 					this.projectData = projectData;
+					const resolvedProjectFileName = projectData && typeof projectData._resolvedProjectFileName === "string"
+						? projectData._resolvedProjectFileName
+						: "";
+					if (resolvedProjectFileName)
+					{
+						this.projectFileName = resolvedProjectFileName;
+						this._rawProjectFileName = resolvedProjectFileName;
+						this._rawProjectDir = getDirectoryPath(resolvedProjectFileName);
+					}
 					this._initPlaybackFromProject(projectData);
 					this.loadError = null;
 					this.loadErrorMessage = "";

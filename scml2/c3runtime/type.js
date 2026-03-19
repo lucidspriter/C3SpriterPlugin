@@ -17,6 +17,23 @@ function normaliseProjectFileName(fileName)
 	return normalised;
 }
 
+function normaliseProjectPath(path)
+{
+	if (typeof path !== "string")
+	{
+		return "";
+	}
+
+	return path.trim().replace(/\\/g, "/");
+}
+
+function getPathLeaf(path)
+{
+	const normalised = normaliseProjectPath(path);
+	const lastSlash = normalised.lastIndexOf("/");
+	return lastSlash >= 0 ? normalised.slice(lastSlash + 1) : normalised;
+}
+
 function getAssetManager(runtime)
 {
 	if (!runtime)
@@ -354,6 +371,102 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 		return this._projectDataCache.get(cacheKey) || null;
 	}
 
+	_resolveProjectFilePath(assetManager, projectFileName)
+	{
+		const requestedPath = normaliseProjectPath(projectFileName);
+		if (!requestedPath)
+		{
+			return "";
+		}
+
+		const projectFileList = assetManager && Array.isArray(assetManager.projectFileList)
+			? assetManager.projectFileList
+			: null;
+		if (!projectFileList || !projectFileList.length)
+		{
+			return requestedPath;
+		}
+
+		const getEntryName = (entry) =>
+		{
+			if (!entry)
+			{
+				return "";
+			}
+
+			if (typeof entry === "string")
+			{
+				return normaliseProjectPath(entry);
+			}
+
+			if (typeof entry.name === "string")
+			{
+				return normaliseProjectPath(entry.name);
+			}
+
+			return "";
+		};
+
+		const requestedLower = requestedPath.toLowerCase();
+		let exactCaseInsensitive = "";
+		for (const entry of projectFileList)
+		{
+			const entryName = getEntryName(entry);
+			if (!entryName)
+			{
+				continue;
+			}
+
+			if (entryName === requestedPath)
+			{
+				return entryName;
+			}
+
+			if (!exactCaseInsensitive && entryName.toLowerCase() === requestedLower)
+			{
+				exactCaseInsensitive = entryName;
+			}
+		}
+
+		if (exactCaseInsensitive)
+		{
+			return exactCaseInsensitive;
+		}
+
+		if (requestedPath.includes("/"))
+		{
+			return requestedPath;
+		}
+
+		const requestedLeafLower = getPathLeaf(requestedPath).toLowerCase();
+		const leafMatches = [];
+		for (const entry of projectFileList)
+		{
+			const entryName = getEntryName(entry);
+			if (!entryName)
+			{
+				continue;
+			}
+
+			if (getPathLeaf(entryName).toLowerCase() === requestedLeafLower)
+			{
+				leafMatches.push(entryName);
+			}
+		}
+
+		if (leafMatches.length === 1)
+		{
+			return leafMatches[0];
+		}
+
+		if (leafMatches.length > 1)
+		{
+			console.warn(`[Spriter] Project file path '${requestedPath}' is ambiguous; matching files: ${leafMatches.join(", ")}`);
+		}
+
+		return requestedPath;
+	}
+
 	_requestProjectDataLoad(projectFileName)
 	{
 		const cacheKey = normaliseProjectFileName(projectFileName);
@@ -402,11 +515,12 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			throw new Error("Spriter: asset manager does not support getProjectFileUrl().");
 		}
 
-		const projectUrl = await assetManager.getProjectFileUrl(projectFileName);
+		const resolvedProjectFileName = this._resolveProjectFilePath(assetManager, projectFileName);
+		const projectUrl = await assetManager.getProjectFileUrl(resolvedProjectFileName);
 
 		if (typeof projectUrl !== "string" || !projectUrl)
 		{
-			throw new Error(`Spriter: failed to resolve URL for project file '${projectFileName}'.`);
+			throw new Error(`Spriter: failed to resolve URL for project file '${resolvedProjectFileName}'.`);
 		}
 
 		let projectJson;
@@ -426,13 +540,25 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			catch (error)
 			{
 				const message = error instanceof Error ? error.message : String(error);
-				throw new Error(`Spriter: project '${projectFileName}' returned invalid JSON: ${message}`);
+				throw new Error(`Spriter: project '${resolvedProjectFileName}' returned invalid JSON: ${message}`);
 			}
 		}
 
 		if (!projectJson || typeof projectJson !== "object")
 		{
-			throw new Error(`Spriter: project '${projectFileName}' did not provide JSON data.`);
+			throw new Error(`Spriter: project '${resolvedProjectFileName}' did not provide JSON data.`);
+		}
+
+		try
+		{
+			Object.defineProperty(projectJson, "_resolvedProjectFileName", {
+				value: resolvedProjectFileName,
+				configurable: true
+			});
+		}
+		catch (_)
+		{
+			projectJson._resolvedProjectFileName = resolvedProjectFileName;
 		}
 
 		return projectJson;
@@ -573,11 +699,12 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 			throw new Error("Spriter: asset manager does not support getProjectFileUrl().");
 		}
 
-		const resolvedUrl = await assetManager.getProjectFileUrl(projectFileName);
+		const resolvedProjectFileName = this._resolveProjectFilePath(assetManager, projectFileName);
+		const resolvedUrl = await assetManager.getProjectFileUrl(resolvedProjectFileName);
 
 		if (typeof resolvedUrl !== "string" || !resolvedUrl)
 		{
-			throw new Error(`Spriter: failed to resolve URL for image file '${projectFileName}'.`);
+			throw new Error(`Spriter: failed to resolve URL for image file '${resolvedProjectFileName}'.`);
 		}
 
 		let blob;
@@ -590,7 +717,7 @@ C3.Plugins.Spriter.Type = class SpriterType extends globalThis.ISDKObjectTypeBas
 
 		if (!blob)
 		{
-			throw new Error(`Spriter: failed to fetch image file '${projectFileName}'.`);
+			throw new Error(`Spriter: failed to fetch image file '${resolvedProjectFileName}'.`);
 		}
 
 		if (typeof createImageBitmap !== "function")
