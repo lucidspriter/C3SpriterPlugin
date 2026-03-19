@@ -123,12 +123,14 @@ C3.Plugins.Spriter.Cnds =
 	CompareAnimation(name)
 	{
 		const checkedAnimationName = String(name ?? "");
-		const helperAnimationName = this._getAnimationName();
-		const currentAnimationName = helperAnimationName
-			|| (this.animation && typeof this.animation.name === "string"
-				? this.animation.name
-				: "");
-		return lower(currentAnimationName) === lower(checkedAnimationName);
+		const blendTarget = this.secondAnimation;
+		if (blendTarget && this.blendEndTime > 0 && typeof blendTarget.name === "string" && blendTarget.name === checkedAnimationName)
+		{
+			return true;
+		}
+
+		const currentAnimation = this.animation;
+		return !!(currentAnimation && typeof currentAnimation.name === "string" && currentAnimation.name === checkedAnimationName);
 	},
 
 	CompareSecondAnimation(name)
