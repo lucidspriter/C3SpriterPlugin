@@ -129,8 +129,7 @@ C3.Plugins.Spriter.Cnds =
 			return true;
 		}
 
-		const currentAnimation = this.animation;
-		return !!(currentAnimation && typeof currentAnimation.name === "string" && currentAnimation.name === checkedAnimationName);
+		return this._getAnimationName() === checkedAnimationName;
 	},
 
 	CompareSecondAnimation(name)

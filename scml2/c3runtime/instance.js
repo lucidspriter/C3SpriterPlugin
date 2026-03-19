@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v8]");
+console.log("[scml runtime: v9]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -1038,18 +1038,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		};
 
 		const sdkType = this.objectType;
-		const runtimeSamplingHint = this.runtime && typeof this.runtime.sampling === "string"
+		const runtimeSamplingHint = typeof this.runtime.sampling === "string"
 			? this.runtime.sampling
 			: null;
-		const getOrLoadTexture = sdkType
-			? ((path, rend) => sdkType._getOrLoadTextureForPath(path, rend, runtimeSamplingHint))
-			: null;
-		const hasTextureError = sdkType
-			? sdkType._hasTextureErrorForPath.bind(sdkType)
-			: null;
-		const getTextureSize = sdkType
-			? sdkType._getTextureSizeForPath.bind(sdkType)
-			: null;
+		const getOrLoadTexture = (path, rend) => sdkType._getOrLoadTextureForPath(path, rend, runtimeSamplingHint);
+		const hasTextureError = sdkType._hasTextureErrorForPath.bind(sdkType);
+		const getTextureSize = sdkType._getTextureSizeForPath.bind(sdkType);
 
 		for (let i = 0, len = poseObjects.length; i < len; i++)
 		{
@@ -1148,12 +1142,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			const hasAtlas = atlasW > 0 && atlasH > 0;
 			const hasAtlasList = !!(this.projectData && Array.isArray(this.projectData.atlas) && this.projectData.atlas.length);
 
-			if (!hasAtlas && hasAtlasList && this._atlasDebug && !this._atlasDebug.loggedMissingMetadata)
-			{
-				this._atlasDebug.loggedMissingMetadata = true;
-				console.warn(`[Spriter] Atlas metadata missing for '${state.name || "(unnamed)"}' (aw/ah/ax/ay not set). Using debug fallback.`);
-			}
-
 			if (hasAtlas)
 			{
 				const atlasIndexRaw = toFiniteNumber(state.atlasIndex, 0);
@@ -1166,12 +1154,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				let imageHeight = 0;
 				let texRect = fullTexRect;
 
-				if (atlasImagePathFromProject && getOrLoadTexture)
+				if (atlasImagePathFromProject)
 				{
 					let atlasImagePath = atlasImagePathFromProject;
 					let projectTexture = getOrLoadTexture(atlasImagePath, renderer);
 
-					if (!projectTexture && hasTextureError && hasTextureError(atlasImagePath))
+					if (!projectTexture && hasTextureError(atlasImagePath))
 					{
 						const slash = atlasImagePath.lastIndexOf("/");
 						if (slash >= 0)
@@ -1189,7 +1177,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 						}
 					}
 
-					if (!projectTexture && hasTextureError && this._rawProjectDir && hasTextureError(atlasImagePath))
+					if (!projectTexture && this._rawProjectDir && hasTextureError(atlasImagePath))
 					{
 						const altPath = joinPaths(this._rawProjectDir, atlasImagePath);
 						if (altPath && altPath !== atlasImagePath)
@@ -1203,15 +1191,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					{
 						texture = projectTexture;
 
-						const textureSize = getTextureSize ? getTextureSize(atlasImagePath) : null;
+						const textureSize = getTextureSize(atlasImagePath);
 						imageWidth = textureSize ? toFiniteNumber(textureSize.width, 0) : 0;
 						imageHeight = textureSize ? toFiniteNumber(textureSize.height, 0) : 0;
 
 					}
-					else if (this._atlasDebug && !this._atlasDebug.missingAtlasImageIndices.has(atlasIndex))
+					else if (this._atlasDebug)
 					{
 						this._atlasDebug.missingAtlasImageIndices.add(atlasIndex);
-						console.warn(`[Spriter] Atlas project texture not ready for index ${atlasIndex} ('${atlasImagePathFromProject}').`);
 					}
 				}
 
@@ -1356,12 +1343,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				const imageName = normaliseAssetPath(state.name);
 				let texture = null;
 
-				if (getOrLoadTexture && imageName)
+				if (imageName)
 				{
 					texture = getOrLoadTexture(imageName, renderer);
 
 					// If the image path is relative to the .scon file's folder, try that on failure.
-					if (!texture && hasTextureError && this._rawProjectDir && hasTextureError(imageName))
+					if (!texture && this._rawProjectDir && hasTextureError(imageName))
 					{
 						const altPath = joinPaths(this._rawProjectDir, imageName);
 						if (altPath && altPath !== imageName)
@@ -1562,12 +1549,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
-		if (!objectClass && this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
-		{
-			this._atlasDebug.loggedFrameLookupIssue = true;
-			console.warn("[Spriter] Atlas frame lookup: no accessible object class (GetObjectClass/getObjectClass/_objectClass) found on instance/type candidates.");
-		}
-
 		if (!objectClass)
 		{
 			return null;
@@ -1581,22 +1562,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		if (!getAnimations)
 		{
-			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
-			{
-				this._atlasDebug.loggedFrameLookupIssue = true;
-				console.warn("[Spriter] Atlas frame lookup: object class has no GetAnimations/getAnimations method.");
-			}
 			return null;
 		}
 
 		const animations = getAnimations();
 		if (!Array.isArray(animations) || !animations.length)
 		{
-			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
-			{
-				this._atlasDebug.loggedFrameLookupIssue = true;
-				console.warn("[Spriter] Atlas frame lookup: object class has no animations.");
-			}
 			return null;
 		}
 
@@ -1614,23 +1585,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		if (!getFrames)
 		{
-			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
-			{
-				this._atlasDebug.loggedFrameLookupIssue = true;
-				console.warn("[Spriter] Atlas frame lookup: first animation has no GetFrames/getFrames method.");
-			}
 			return null;
 		}
 
 		const frames = getFrames();
 		if (!Array.isArray(frames) || atlasIndex >= frames.length)
 		{
-			if (this._atlasDebug && !this._atlasDebug.loggedFrameLookupIssue)
-			{
-				this._atlasDebug.loggedFrameLookupIssue = true;
-				const count = Array.isArray(frames) ? frames.length : 0;
-				console.warn(`[Spriter] Atlas frame lookup: frame index ${atlasIndex} out of range (frames=${count}).`);
-			}
 			return null;
 		}
 
@@ -1941,13 +1901,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					nextTime = lengthMs;
 					this.playing = false;
 					this._playToTimeMs = -1;
-					if (finished)
-					{
-						const objectTypeName = this.objectType ? this._getObjectTypeName(this.objectType) : "?";
-						const uid = this._getInstanceUidMaybe(this);
-						const animationName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "";
-						console.debug(`[Spriter] Non-loop stop: type='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${animationName}', localMs=${toFiniteNumber(previousTime, 0)}, endMs=${lengthMs}`);
-					}
 				}
 				else if (speed < 0 && nextTime <= 0)
 				{
@@ -1959,13 +1912,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					nextTime = 0;
 					this.playing = false;
 					this._playToTimeMs = -1;
-					if (finished)
-					{
-						const objectTypeName = this.objectType ? this._getObjectTypeName(this.objectType) : "?";
-						const uid = this._getInstanceUidMaybe(this);
-						const animationName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "";
-						console.debug(`[Spriter] Non-loop stop: type='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${animationName}', localMs=${toFiniteNumber(previousTime, 0)}, endMs=0`);
-					}
 				}
 			}
 		}
@@ -2329,6 +2275,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return currentAnimation.name;
 		}
 
+		// Pre-load: if a SetAnimation was queued before the entity loaded,
+		// return the stored animation name (legacy parity).
+		if (this._pendingPreReadyAnimationChange && this.startingAnimationName)
+		{
+			return this.startingAnimationName;
+		}
+
 		return "";
 	}
 
@@ -2374,10 +2327,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				blendDuration
 			};
 
-			const requestedName = this._resolveAnimationIdentifierToName(animationIdentifier);
-			if (requestedName)
+			// Store the raw name so the entity load path can use it to pick
+			// the correct initial animation (legacy parity: setAnimTo stored
+			// the raw name since entity wasn't available to resolve against).
+			if (typeof animationIdentifier === "string" && animationIdentifier.trim())
 			{
-				this.startingAnimationName = requestedName;
+				this.startingAnimationName = animationIdentifier.trim();
 			}
 			return true;
 		}
@@ -2395,20 +2350,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			return false;
 		}
-		const nextAnimationLoops = this._isAnimationLoopingFor(nextAnimation, this.entityIndex, animationIndex);
-		if (!nextAnimationLoops)
-		{
-			const objectTypeName = this.objectType ? this._getObjectTypeName(this.objectType) : "?";
-			const uid = this._getInstanceUidMaybe(this);
-			const animationName = typeof nextAnimation.name === "string" ? nextAnimation.name : "";
-			console.debug(`[Spriter] SetAnimation non-loop: type='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${animationName}', startFrom=${Number(startFrom)}, blendMs=${toFiniteNumber(blendDuration, 0)}, localMs=${toFiniteNumber(this.localTimeMs, 0)}`);
-			const currentAnimationName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "";
-			const currentLengthMs = toFiniteNumber(this.animationLengthMs, 0);
-			if (currentAnimationName === animationName && currentLengthMs > 0 && Math.abs(toFiniteNumber(this.localTimeMs, 0) - currentLengthMs) <= 1)
-			{
-				console.debug(`[Spriter] SetAnimation non-loop restart stack: type='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${animationName}'\n${new Error().stack}`);
-			}
-		}
+
+		const objectTypeName = this._getObjectTypeName(this.objectType);
+		const uid = this._getInstanceUidMaybe(this);
+		const iid = this._getIID();
+		const entityName = this.entity && typeof this.entity.name === "string" ? this.entity.name : "?";
+		const fromAnimName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "(none)";
+		const toAnimName = typeof nextAnimation.name === "string" ? nextAnimation.name : "?";
+		console.log(`[Spriter] SetAnimation: object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, iid=${Number.isFinite(iid) ? iid : "?"}, entity='${entityName}', from='${fromAnimName}', to='${toAnimName}'`);
 
 		const blendStartMode = Number(startFrom);
 		const blendMs = toFiniteNumber(blendDuration, 0);
@@ -6099,14 +6048,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
-		const sdkType = this.objectType;
-		if (!sdkType)
-		{
-			this._setLoadError(new Error("Spriter: object type does not support project loading yet."));
-			return;
-		}
-
-		const loadPromise = sdkType._requestProjectDataLoad(projectFileName);
+		const loadPromise = this.objectType._requestProjectDataLoad(projectFileName);
 		if (!isPromiseLike(loadPromise))
 		{
 			this._setLoadError(new Error("Spriter: failed to start project load."));
@@ -6202,11 +6144,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	{
 		// If the renderer (e.g. WebGL) context is lost, any addon-created textures become invalid.
 		// Clear the shared cache so textures will be reloaded lazily on the next draw.
-		const sdkType = this.objectType;
-		if (sdkType)
-		{
-			sdkType._releaseAllTextures();
-		}
+		this.objectType._releaseAllTextures();
 
 		if (this._atlasTextureLoadState)
 		{
@@ -6394,7 +6332,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			};
 		}
 
-		console.warn("[Spriter] _getWorldInfoOf: could not resolve worldInfo for", inst);
 		return null;
 	}
 
@@ -6809,12 +6746,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			c2Entry.missingFrameKeys = new Set();
 		}
 
-		if (!c2Entry.missingFrameKeys.has(key))
-		{
-			c2Entry.missingFrameKeys.add(key);
-			console.warn(`[Spriter] Non-self-draw frame missing for '${state.timelineName}' at folder=${folder}, file=${file}.`);
-		}
-
+		c2Entry.missingFrameKeys.add(key);
 		return -1;
 	}
 
@@ -7010,12 +6942,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
-		if (!this._didWarnSpriteFrameApiUnavailable)
-		{
-			this._didWarnSpriteFrameApiUnavailable = true;
-			console.warn("[Spriter] Non-self-draw sprite frame API unavailable; image swaps may not work in this runtime.");
-		}
-
 		return false;
 	}
 
@@ -7028,7 +6954,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		);
 		if (!resolvedName || !objectType)
 		{
-			console.warn(`[Spriter] _associateTypeWithName aborted: requestedName='${requestedName}', resolvedName='${resolvedName}', objectType=${objectType}`);
 			return;
 		}
 
@@ -7059,11 +6984,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					break;
 				}
 			}
-		}
-
-		if (!pairedInst)
-		{
-			console.warn(`[Spriter] _associateTypeWithName: no paired instance found for '${resolvedName}' (IID=${myIID}). Association stored with type only.`);
 		}
 
 		this._c2ObjectMap.set(storeKey, {
@@ -7324,21 +7244,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				{
 					if (!c2Entry)
 					{
-						const key = `${stateType}:${state.timelineName}:no-map`;
-						if (!assocDebug.missingPoseMap.has(key))
-						{
-							assocDebug.missingPoseMap.add(key);
-							console.warn(`[Spriter] Box/helper apply missing association: timeline='${state.timelineName}', type='${stateType}', mapSize=${this._c2ObjectMap.size}, tried=[${(assocLookup.triedKeys || []).join(", ")}]`);
-						}
+						assocDebug.missingPoseMap.add(`${stateType}:${state.timelineName}:no-map`);
 					}
 					else
 					{
-						const key = `${stateType}:${state.timelineName}:no-inst`;
-						if (!assocDebug.missingInst.has(key))
-						{
-							assocDebug.missingInst.add(key);
-							console.warn(`[Spriter] Box/helper association has no paired instance: timeline='${state.timelineName}', type='${stateType}', mappedType='${this._getObjectTypeName(c2Entry.type)}'`);
-						}
+						assocDebug.missingInst.add(`${stateType}:${state.timelineName}:no-inst`);
 					}
 				}
 				continue;
@@ -7423,15 +7333,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 			catch (err)
 			{
-				const mappedTypeName = c2Entry && c2Entry.type ? this._getObjectTypeName(c2Entry.type) : "?";
-				console.warn(`[Spriter] Failed applying associated helper/sprite transform: timeline='${state.timelineName}', matchedKey='${assocLookup.key}', mappedType='${mappedTypeName}'.`, err);
 				const retryIID = Number.isInteger(c2Entry.pairIID) ? c2Entry.pairIID : this._getIID();
-				const repairedInst = c2Entry.type ? this._getPairedInstanceForIID(c2Entry.type, retryIID) : null;
-				c2Entry.inst = repairedInst || null;
-				if (!repairedInst)
-				{
-					console.warn(`[Spriter] Association instance cleared after apply failure: timeline='${state.timelineName}', matchedKey='${assocLookup.key}', pairIID=${retryIID}`);
-				}
+				c2Entry.inst = c2Entry.type ? this._getPairedInstanceForIID(c2Entry.type, retryIID) : null;
 				continue;
 			}
 		}
