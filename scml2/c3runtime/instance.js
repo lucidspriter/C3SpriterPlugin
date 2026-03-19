@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v7]");
+console.log("[scml runtime: v8]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -1041,13 +1041,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const runtimeSamplingHint = this.runtime && typeof this.runtime.sampling === "string"
 			? this.runtime.sampling
 			: null;
-		const getOrLoadTexture = sdkType && typeof sdkType._getOrLoadTextureForPath === "function"
+		const getOrLoadTexture = sdkType
 			? ((path, rend) => sdkType._getOrLoadTextureForPath(path, rend, runtimeSamplingHint))
 			: null;
-		const hasTextureError = sdkType && typeof sdkType._hasTextureErrorForPath === "function"
+		const hasTextureError = sdkType
 			? sdkType._hasTextureErrorForPath.bind(sdkType)
 			: null;
-		const getTextureSize = sdkType && typeof sdkType._getTextureSizeForPath === "function"
+		const getTextureSize = sdkType
 			? sdkType._getTextureSizeForPath.bind(sdkType)
 			: null;
 
@@ -2683,7 +2683,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_setVisible(visible)
 	{
 		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo || typeof worldInfo.SetVisible !== "function")
+		if (!worldInfo)
 		{
 			return;
 		}
@@ -2755,8 +2755,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return true;
 		}
 
-		const aSdk = typeof this._getSdkInstanceOf === "function" ? this._getSdkInstanceOf(a) : null;
-		const bSdk = typeof this._getSdkInstanceOf === "function" ? this._getSdkInstanceOf(b) : null;
+		const aSdk = this._getSdkInstanceOf(a);
+		const bSdk = this._getSdkInstanceOf(b);
 		if (aSdk && (aSdk === b || aSdk === bi || (bSdk && aSdk === bSdk)))
 		{
 			return true;
@@ -4677,7 +4677,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	_setZElevation(zElevation)
 	{
 		const worldInfo = this._getWorldInfoOf(this);
-		if (!worldInfo || typeof worldInfo.SetZElevation !== "function")
+		if (!worldInfo)
 		{
 			return;
 		}
@@ -6100,7 +6100,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		const sdkType = this.objectType;
-		if (!sdkType || typeof sdkType._requestProjectDataLoad !== "function")
+		if (!sdkType)
 		{
 			this._setLoadError(new Error("Spriter: object type does not support project loading yet."));
 			return;
@@ -6203,7 +6203,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		// If the renderer (e.g. WebGL) context is lost, any addon-created textures become invalid.
 		// Clear the shared cache so textures will be reloaded lazily on the next draw.
 		const sdkType = this.objectType;
-		if (sdkType && typeof sdkType._releaseAllTextures === "function")
+		if (sdkType)
 		{
 			sdkType._releaseAllTextures();
 		}
@@ -7400,14 +7400,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				// Z-ordering
 				if (isSpriteState && this.setLayersForSprites && previousZInst)
 				{
-					if (typeof inst.moveAdjacentToInstance === "function")
-					{
-						inst.moveAdjacentToInstance(previousZInst, true);
-					}
-					else
-					{
-						wi.ZOrderMoveAdjacentToInstance(previousZInst, true);
-					}
+					inst.moveAdjacentToInstance(previousZInst, true);
 				}
 				if (isSpriteState)
 				{

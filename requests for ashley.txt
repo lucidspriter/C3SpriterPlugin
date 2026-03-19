@@ -57,3 +57,21 @@ Each entry should note:
   - `ISDKWorldInstanceBase._draw(renderer)` runtime docs: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkworldinstancebase
   - Runtime `IRenderer` scripting reference: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/interfaces/irenderer
   - Addon-SDK `IWebGLRenderer` reference (contains `SetNoPremultiplyAlphaBlend()`, but this appears to be a different/editor-side renderer surface): https://www.construct.net/en/make-games/manuals/addon-sdk/reference/graphics-interfaces/iwebglrenderer
+
+## SDK2 runtime APIs for instance enumeration, naming, UID, picking, siblings
+
+The Spriter runtime needs to interact with associated Sprite object types at runtime for non-self-draw mode. Several operations require APIs that are not clearly documented for SDK v2 addon runtime code:
+
+- **Instance enumeration**: Given an object type, enumerate its instances. Currently probing `instances()`, `getAllInstances()`, `GetInstances()`.
+- **Object type name**: Get the name of an object type. Currently probing `GetName()` and the `.name` property.
+- **Instance UID**: Get the UID of an instance. Currently probing `GetUID()`, `getUID()`, `getUid()`, and `.uid` property.
+- **Picking/resolved instances**: Get the currently picked or paired instance of an object type in an event context. Currently probing `getPickedInstances()`, `getFirstPickedInstance()`, `getPairedInstance()`, `getFirstPicked()`.
+- **Container siblings**: Get sibling instances from a container. Currently probing `GetSiblings()`, `getSiblings()`.
+- **Sprite frame index**: Read the current animation frame index from a Sprite SDK instance. Currently probing `_changeAnimFrameIndex`, `_currentFrameIndex`, `currentFrameIndex` and methods like `_DoChangeAnimFrame()`.
+
+Question: What are the supported SDK v2 runtime APIs for these operations when an addon needs to interact with other object types (particularly built-in Sprite) at runtime?
+
+- References:
+  - IObjectType scripting reference: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/object-interfaces/iobjecttype
+  - IWorldInstance scripting reference: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/world-interfaces/iworldinstance
+  - ISDKWorldInstanceBase: https://www.construct.net/en/make-games/manuals/construct-3/scripting/scripting-reference/addon-sdk-interfaces/isdkworldinstancebase

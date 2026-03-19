@@ -73,9 +73,21 @@ these patterns into cleaned code paths.
   - `_getWorldInfoOf(inst)`
     - unresolved origin write, collision enable/disable, and bbox invalidation surface
   - `_getPairedInstanceByContainer(...)`
+    - unresolved container siblings API (`GetSiblings`/`getSiblings`)
   - `_getSdkInstanceOf(...)`
   - `_getIID()` / `_getIIDOfInstance(...)`
+  - `_getInstancesOf(...)`
+    - unresolved instance enumeration API (`instances()`/`getAllInstances()`/`GetInstances()`)
+  - `_getObjectTypeName(...)`
+    - unresolved object type name API (`GetName()`/`.name`)
+  - `_getInstanceUidMaybe(...)`
+    - unresolved instance UID API (`GetUID`/`getUID`/`getUid`/`.uid`)
+  - `_resolveC2Instances(...)`
+    - unresolved picking API (`getPickedInstances`/`getFirstPickedInstance`/`getPairedInstance`/`getFirstPicked`)
+  - `_getCurrentSpriteFrameIndex(...)`
+    - unresolved sprite frame index read API
   - `_setSpriteFrameByIndex(...)`
+    - unresolved sprite frame index write API
   - `_getAtlasFrame(...)`
   - `_tryGetEmbeddedAtlasCompatibilityTexture(...)`
 
