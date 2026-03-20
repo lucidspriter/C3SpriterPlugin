@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v9]");
+console.log("[scml runtime: v10]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -7274,9 +7274,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				}
 
 				// Apply parent/root angle in non-self-draw mode (legacy behaviour).
-				const finalAngle = (rootFlipSign < 0)
+				let finalAngle = (rootFlipSign < 0)
 					? ((Math.PI * 2) - state.angle) + myAngle
 					: state.angle + myAngle;
+
+				// Legacy parity: action points get an extra 180° rotation when mirrored.
+				if (stateType === "point" && this._xFlip)
+				{
+					finalAngle -= Math.PI;
+				}
 				inst.angle = finalAngle;
 
 				// Opacity
@@ -7471,9 +7477,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const localY = toFiniteNumber(state.y, 0) * globalScale * flipFactor;
 		const worldX = myX + localX * cosA - localY * sinA;
 		const worldY = myY + localX * sinA + localY * cosA;
-		const worldAngle = (rootFlipSign < 0)
+		let worldAngle = (rootFlipSign < 0)
 			? ((Math.PI * 2) - toFiniteNumber(state.angle, 0)) + myAngle
 			: toFiniteNumber(state.angle, 0) + myAngle;
+
+		// Legacy parity: action points get an extra 180° rotation when mirrored.
+		if (state.spriterType === "point" && this._xFlip)
+		{
+			worldAngle -= Math.PI;
+		}
 
 		return {
 			x: worldX,
