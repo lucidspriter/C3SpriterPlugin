@@ -4,6 +4,19 @@ C3.Plugins.Spriter.Acts =
 {
 	SetAnimation(animationName, startFrom = 0, blendDuration = 0)
 	{
+		const blendStartMode = Number(startFrom);
+		if (blendStartMode === 3 || blendStartMode === 4)
+		{
+			const objectTypeName = this._getObjectTypeName(this.objectType);
+			const uid = this._getInstanceUidMaybe(this);
+			const iid = this._getIID();
+			const entityName = this.entity && typeof this.entity.name === "string" ? this.entity.name : "?";
+			const currentAnimationName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "(none)";
+			console.debug(
+				`[Spriter] Blend action: object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, iid=${Number.isFinite(iid) ? iid : "?"}, entity='${entityName}', current='${currentAnimationName}', requested='${String(animationName ?? "")}', startFrom=${blendStartMode}, blendMs=${Number(blendDuration) || 0}, ready=${!!this.isReady}`
+			);
+		}
+
 		this._setAnimation(animationName, startFrom, blendDuration);
 	},
 

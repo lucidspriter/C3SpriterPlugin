@@ -842,8 +842,9 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		const dtSeconds = this._getDtSeconds();
-		const shouldAdvance = this.playing && dtSeconds > 0;
-		if (shouldAdvance)
+		const shouldAdvancePlayback = this.playing && dtSeconds > 0;
+		const shouldAdvanceBlend = this._autoBlendActive && dtSeconds > 0;
+		if (shouldAdvancePlayback)
 		{
 			if (this._advanceTime(dtSeconds))
 			{
@@ -855,6 +856,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 					this._setAnimation(pending.animationIdentifier, pending.startFrom, pending.blendDuration);
 				}
 			}
+		}
+
+		if (shouldAdvanceBlend)
+		{
 			this._advanceAutoBlend(dtSeconds);
 		}
 
@@ -868,7 +873,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			this._refreshMetaState(this._currentAdjustedTimeMs);
 			this._applyPoseToInstances();
 
-			if (this.drawSelf && shouldAdvance)
+			if (this.drawSelf && (shouldAdvancePlayback || shouldAdvanceBlend))
 			{
 				// Self-draw animation changes are internal to the addon, so request a redraw explicitly.
 				// Otherwise the runtime may skip rendering until another object changes.
@@ -1962,6 +1967,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.animBlend = clamp01(this._autoBlendElapsedMs / durationMs);
 		if (this.animBlend >= 1)
 		{
+			const objectTypeName = this._getObjectTypeName(this.objectType);
+			const uid = this._getInstanceUidMaybe(this);
+			const targetAnimationName = this.secondAnimation && typeof this.secondAnimation.name === "string" ? this.secondAnimation.name : "?";
+			console.debug(`[Spriter] Blend debug: stage='complete-auto-blend', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, target='${targetAnimationName}', elapsedMs=${toFiniteNumber(this._autoBlendElapsedMs, 0)}, durationMs=${durationMs}`);
 			this._completeAutoBlend();
 		}
 	}
@@ -2309,8 +2318,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_setAnimation(animationIdentifier, startFrom = 0, blendDuration = 0)
 	{
+		const blendStartMode = Number(startFrom);
+		const blendMs = toFiniteNumber(blendDuration, 0);
+		const isBlendRequest = blendStartMode === 3 || blendStartMode === 4;
+
 		if (this._inAnimTrigger)
 		{
+			if (isBlendRequest)
+			{
+				const objectTypeName = this._getObjectTypeName(this.objectType);
+				const uid = this._getInstanceUidMaybe(this);
+				console.debug(`[Spriter] Blend debug: stage='queued-in-trigger', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, requested='${String(animationIdentifier ?? "")}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
+			}
+
 			this._pendingAnimationChange = {
 				animationIdentifier,
 				startFrom,
@@ -2321,6 +2341,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		if (!this.entity)
 		{
+			if (isBlendRequest)
+			{
+				const objectTypeName = this._getObjectTypeName(this.objectType);
+				const uid = this._getInstanceUidMaybe(this);
+				console.debug(`[Spriter] Blend debug: stage='queued-pre-ready', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, requested='${String(animationIdentifier ?? "")}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
+			}
+
 			this._pendingPreReadyAnimationChange = {
 				animationIdentifier,
 				startFrom,
@@ -2341,6 +2368,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const animationIndex = this._findAnimationByIdentifier(animationIdentifier);
 		if (animationIndex < 0)
 		{
+			if (isBlendRequest)
+			{
+				const objectTypeName = this._getObjectTypeName(this.objectType);
+				const uid = this._getInstanceUidMaybe(this);
+				console.debug(`[Spriter] Blend debug: stage='resolve-failed', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, requested='${String(animationIdentifier ?? "")}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
+			}
+
 			return false;
 		}
 
@@ -2357,15 +2391,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const entityName = this.entity && typeof this.entity.name === "string" ? this.entity.name : "?";
 		const fromAnimName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "(none)";
 		const toAnimName = typeof nextAnimation.name === "string" ? nextAnimation.name : "?";
-		console.log(`[Spriter] SetAnimation: object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, iid=${Number.isFinite(iid) ? iid : "?"}, entity='${entityName}', from='${fromAnimName}', to='${toAnimName}'`);
-
-		const blendStartMode = Number(startFrom);
-		const blendMs = toFiniteNumber(blendDuration, 0);
 		const shouldAutoBlend = (blendStartMode === 3 || blendStartMode === 4) && blendMs > 0 && !!this.animation;
+		if (isBlendRequest)
+		{
+			console.debug(`[Spriter] Blend debug: stage='resolved', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, iid=${Number.isFinite(iid) ? iid : "?"}, entity='${entityName}', from='${fromAnimName}', to='${toAnimName}', startFrom=${blendStartMode}, blendMs=${blendMs}, hasCurrent=${!!this.animation}, autoBlendEligible=${shouldAutoBlend}, active=${!!this._autoBlendActive}, blend=${toFiniteNumber(this.animBlend, 0)}, localMs=${toFiniteNumber(this.localTimeMs, 0)}`);
+		}
+
 		if (shouldAutoBlend)
 		{
 			if (nextAnimation === this.animation && !this.secondAnimation)
 			{
+				console.debug(`[Spriter] Blend debug: stage='same-animation-no-second', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${toAnimName}'`);
 				this._resetAutoBlendState();
 				this.animBlend = 0;
 				return true;
@@ -2373,15 +2409,27 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 			if (this._autoBlendActive && this.secondAnimation === nextAnimation && this._autoBlendStartFrom === blendStartMode)
 			{
+				console.debug(`[Spriter] Blend debug: stage='reuse-active', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${toAnimName}', elapsedMs=${toFiniteNumber(this._autoBlendElapsedMs, 0)}, durationMs=${toFiniteNumber(this._autoBlendDurationMs, 0)}`);
 				return true;
 			}
 
+			console.debug(`[Spriter] Blend debug: stage='start-auto-blend', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, from='${fromAnimName}', to='${toAnimName}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
 			this._startAutoBlend(nextAnimation, animationIndex, blendStartMode, blendMs);
 			this._playToTimeMs = -1;
 			this.playing = true;
 			this._evaluatePose();
 			this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
 			return true;
+		}
+
+		if (isBlendRequest)
+		{
+			const reason = blendMs <= 0
+				? "blend-duration<=0"
+				: !this.animation
+					? "no-current-animation"
+					: "auto-blend-not-entered";
+			console.debug(`[Spriter] Blend debug: stage='fallback-direct-set', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, from='${fromAnimName}', to='${toAnimName}', reason='${reason}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
 		}
 
 		const previousLength = toFiniteNumber(this.animationLengthMs, 0);
