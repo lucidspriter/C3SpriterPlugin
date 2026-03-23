@@ -10,14 +10,13 @@ C3.Plugins.Spriter.Exps =
 	Time()
 	{
 		const timeMs = Number(this.localTimeMs);
-		return Number.isFinite(timeMs) ? timeMs / 1000 : 0;
+		return Number.isFinite(timeMs) ? timeMs : 0;
 	},
 
 	// Legacy ACE alias used by older projects.
 	time()
 	{
-		const timeMs = Number(this.localTimeMs);
-		return Number.isFinite(timeMs) ? timeMs : 0;
+		return C3.Plugins.Spriter.Exps.Time.call(this);
 	},
 
 	Key()

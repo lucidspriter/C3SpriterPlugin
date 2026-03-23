@@ -1513,11 +1513,11 @@
 						"translated-name": "LastError"
 					},
 					"time": {
-						"description": "Get the current playback time (in seconds) for the selected animation.",
+						"description": "Get the current playback time in milliseconds for the selected animation.",
 						"translated-name": "Time"
 					},
 					"time-legacy": {
-						"description": "Legacy time expression (milliseconds).",
+						"description": "Legacy alias for Time.",
 						"translated-name": "time"
 					},
 					"key": {
