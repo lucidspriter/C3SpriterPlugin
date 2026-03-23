@@ -29,8 +29,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	key()
 	{
-		const keyIndex = Number(this._currentMainlineKeyIndex);
-		return Number.isFinite(keyIndex) ? keyIndex : 0;
+		return C3.Plugins.Spriter.Exps.Key.call(this);
 	},
 
 	TimeRatio()
@@ -41,7 +40,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	timeRatio()
 	{
-		return this._getCurrentTimeRatio();
+		return C3.Plugins.Spriter.Exps.TimeRatio.call(this);
 	},
 
 	PlayTo()
@@ -64,8 +63,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	animationLength()
 	{
-		const lengthMs = Number(this.animationLengthMs);
-		return Number.isFinite(lengthMs) ? lengthMs : 0;
+		return C3.Plugins.Spriter.Exps.AnimationLength.call(this);
 	},
 
 	SpeedRatio()
@@ -77,8 +75,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	speedRatio()
 	{
-		const speed = Number(this.playbackSpeed);
-		return Number.isFinite(speed) ? speed : 1;
+		return C3.Plugins.Spriter.Exps.SpeedRatio.call(this);
 	},
 
 	ScaleRatio()
@@ -96,8 +93,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	blendRatio()
 	{
-		const blend = Number(this.animBlend);
-		return Number.isFinite(blend) ? blend : 0;
+		return C3.Plugins.Spriter.Exps.BlendRatio.call(this);
 	},
 
 	SecondAnimationName()
@@ -108,7 +104,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	secondAnimationName()
 	{
-		return this._getSecondAnimationName();
+		return C3.Plugins.Spriter.Exps.SecondAnimationName.call(this);
 	},
 
 	ObjectCount()
@@ -125,7 +121,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	foundObject()
 	{
-		return this.lastFoundObject || "";
+		return C3.Plugins.Spriter.Exps.FoundObject.call(this);
 	},
 
 	PointX(name)
@@ -203,8 +199,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	entityName()
 	{
-		const entity = this.entity;
-		return entity && typeof entity.name === "string" ? entity.name : "";
+		return C3.Plugins.Spriter.Exps.EntityName.call(this);
 	},
 
 	AnimationName()
@@ -215,7 +210,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	animationName()
 	{
-		return this._getAnimationName();
+		return C3.Plugins.Spriter.Exps.AnimationName.call(this);
 	},
 
 	TriggeredSound()
@@ -226,7 +221,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	triggeredSound()
 	{
-		return this._triggeredSoundName || "";
+		return C3.Plugins.Spriter.Exps.TriggeredSound.call(this);
 	},
 
 	TriggeredSoundTag()
@@ -237,7 +232,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	triggeredSoundTag()
 	{
-		return this._triggeredSoundTag || "";
+		return C3.Plugins.Spriter.Exps.TriggeredSoundTag.call(this);
 	},
 
 	SoundVolume(soundTag)
@@ -251,10 +246,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	soundVolume(soundTag)
 	{
-		const key = typeof soundTag === "string" ? soundTag : String(soundTag ?? "");
-		const state = this._soundStateByName && this._soundStateByName.get(key);
-		const volume = state ? Number(state.volume) : NaN;
-		return Number.isFinite(volume) ? volume : 0;
+		return C3.Plugins.Spriter.Exps.SoundVolume.call(this, soundTag);
 	},
 
 	SoundPanning(soundTag)
@@ -268,10 +260,7 @@ C3.Plugins.Spriter.Exps =
 	// Legacy ACE alias used by older projects.
 	soundPanning(soundTag)
 	{
-		const key = typeof soundTag === "string" ? soundTag : String(soundTag ?? "");
-		const state = this._soundStateByName && this._soundStateByName.get(key);
-		const panning = state ? Number(state.panning) : NaN;
-		return Number.isFinite(panning) ? panning : 0;
+		return C3.Plugins.Spriter.Exps.SoundPanning.call(this, soundTag);
 	},
 
 	GetOpacity()

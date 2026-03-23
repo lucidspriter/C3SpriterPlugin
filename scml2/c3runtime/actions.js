@@ -323,7 +323,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	associateTypeWithName(objectType, name)
 	{
-		this._associateTypeWithName(objectType, name);
+		C3.Plugins.Spriter.Acts.AssociateTypeWithName.call(this, objectType, name);
 	},
 
 	PinC3ObjectToSpriterObject(c3Object, setType, name)
@@ -334,7 +334,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	pinC2ObjectToSpriterObject(c2Object, setType, name)
 	{
-		this._pinC2ObjectToSpriterObject(c2Object, setType, name);
+		C3.Plugins.Spriter.Acts.PinC3ObjectToSpriterObject.call(this, c2Object, setType, name);
 	},
 
 	SetC3ObjectToSpriterObject(c3Object, setType, name)
@@ -345,7 +345,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	setC2ObjectToSpriterObject(c2Object, setType, name)
 	{
-		this._setC2ObjectToSpriterObject(c2Object, setType, name);
+		C3.Plugins.Spriter.Acts.SetC3ObjectToSpriterObject.call(this, c2Object, setType, name);
 	},
 
 	UnpinC3ObjectFromSpriterObject(c3Object, name)
@@ -356,7 +356,7 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	unpinC2ObjectFromSpriterObject(c2Object, name)
 	{
-		this._unpinC2ObjectFromSpriterObject(c2Object, name);
+		C3.Plugins.Spriter.Acts.UnpinC3ObjectFromSpriterObject.call(this, c2Object, name);
 	},
 
 	UnpinAllFromSpriterObject(name)
@@ -367,6 +367,6 @@ C3.Plugins.Spriter.Acts =
 	// Legacy ACE alias used by older projects.
 	unpinAllFromSpriterObject(name)
 	{
-		this._unpinAllFromSpriterObject(name);
+		C3.Plugins.Spriter.Acts.UnpinAllFromSpriterObject.call(this, name);
 	}
 };

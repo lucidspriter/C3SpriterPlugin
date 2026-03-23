@@ -49,7 +49,7 @@ C3.Plugins.Spriter.Cnds =
 	// Legacy ACE alias used by older projects.
 	readyForSetup()
 	{
-		return true;
+		return C3.Plugins.Spriter.Cnds.OnReady.call(this);
 	},
 
 	OnLoadFailed()
