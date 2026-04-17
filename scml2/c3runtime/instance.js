@@ -1878,48 +1878,66 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
-		if (!finished)
-		{
-			if (isLooping)
+			if (!finished)
 			{
-				if (speed >= 0)
+				const keepPlayingDuringBlendToStart = this._autoBlendActive
+					&& this._autoBlendStartFrom === 3
+					&& !!this.secondAnimation;
+
+				if (isLooping)
 				{
-					if (previousTime < lengthMs && nextTime >= lengthMs)
+					if (speed >= 0)
+					{
+						if (previousTime < lengthMs && nextTime >= lengthMs)
+						{
+							finished = true;
+						}
+					}
+					else if (previousTime > 0 && nextTime <= 0)
 					{
 						finished = true;
 					}
 				}
-				else if (previousTime > 0 && nextTime <= 0)
+				else
 				{
-					finished = true;
+					if (speed >= 0 && nextTime >= lengthMs)
+					{
+						if (keepPlayingDuringBlendToStart)
+						{
+							nextTime = lengthMs;
+						}
+						else
+						{
+							if (previousTime < lengthMs)
+							{
+								finished = true;
+							}
+
+							nextTime = lengthMs;
+							this.playing = false;
+							this._playToTimeMs = -1;
+						}
+					}
+					else if (speed < 0 && nextTime <= 0)
+					{
+						if (keepPlayingDuringBlendToStart)
+						{
+							nextTime = 0;
+						}
+						else
+						{
+							if (previousTime > 0)
+							{
+								finished = true;
+							}
+
+							nextTime = 0;
+							this.playing = false;
+							this._playToTimeMs = -1;
+						}
+					}
 				}
 			}
-			else
-			{
-				if (speed >= 0 && nextTime >= lengthMs)
-				{
-					if (previousTime < lengthMs)
-					{
-						finished = true;
-					}
-
-					nextTime = lengthMs;
-					this.playing = false;
-					this._playToTimeMs = -1;
-				}
-				else if (speed < 0 && nextTime <= 0)
-				{
-					if (previousTime > 0)
-					{
-						finished = true;
-					}
-
-					nextTime = 0;
-					this.playing = false;
-					this._playToTimeMs = -1;
-				}
-			}
-		}
 
 		this.localTimeMs = this._normaliseSampleTime(nextTime, lengthMs, isLooping);
 		return finished;
@@ -4105,6 +4123,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			const entry = {
 				frames: frameList,
 				frameBySource,
+				associationNames: [],
 				spriterType,
 				width: toFiniteNumber(objInfo.w, 0),
 				height: toFiniteNumber(objInfo.h, 0)
@@ -4117,6 +4136,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			];
 			for (const candidateName of candidateNames)
 			{
+				const rawName = normaliseSpriterObjectName(candidateName);
+				const strippedName = stripEntityPrefix(rawName, this.entity && this.entity.name);
+				if (rawName && !entry.associationNames.includes(rawName))
+				{
+					entry.associationNames.push(rawName);
+				}
+				if (strippedName && !entry.associationNames.includes(strippedName))
+				{
+					entry.associationNames.push(strippedName);
+				}
+
 				const key = normaliseTimelineLookupName(candidateName, this.entity && this.entity.name);
 				if (key)
 				{
@@ -6607,74 +6637,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_buildFrameLookupForSpriterName(spriterName)
 	{
-		const rawName = normaliseSpriterObjectName(spriterName);
-		const name = stripEntityPrefix(
-			rawName,
-			this.entity && typeof this.entity.name === "string" ? this.entity.name : ""
-		);
-		if (!name)
+		const objectInfo = this._getObjectInfoForTimelineName(spriterName);
+		if (!objectInfo || !(objectInfo.frameBySource instanceof Map) || !objectInfo.frameBySource.size)
 		{
 			return null;
 		}
 
-		const entity = this.entity;
-		const objInfos = entity && Array.isArray(entity.obj_info) ? entity.obj_info : [];
-		if (!objInfos.length)
-		{
-			return null;
-		}
-
-		for (const objInfo of objInfos)
-		{
-			if (!objInfo || typeof objInfo !== "object")
-			{
-				continue;
-			}
-
-			const objType = typeof objInfo.type === "string"
-				? objInfo.type.trim().toLowerCase()
-				: "sprite";
-
-			if (objType && objType !== "sprite")
-			{
-				continue;
-			}
-
-			const rawName = typeof objInfo.name === "string" ? objInfo.name : "";
-			const strippedName = stripEntityPrefix(rawName, entity && entity.name ? entity.name : "");
-			if (strippedName !== name)
-			{
-				continue;
-			}
-
-			const frames = Array.isArray(objInfo.frames) ? objInfo.frames : [];
-			const frameLookup = new Map();
-			for (let i = 0; i < frames.length; i++)
-			{
-				const frame = frames[i];
-				if (!frame || typeof frame !== "object")
-				{
-					continue;
-				}
-
-				const folder = toFiniteNumber(frame.folder, NaN);
-				const file = toFiniteNumber(frame.file, NaN);
-				if (!Number.isFinite(folder) || !Number.isFinite(file))
-				{
-					continue;
-				}
-
-				const key = makeFolderFileKey(folder, file);
-				if (!frameLookup.has(key))
-				{
-					frameLookup.set(key, i);
-				}
-			}
-
-			return frameLookup;
-		}
-
-		return null;
+		return new Map(objectInfo.frameBySource);
 	}
 
 	_refreshAssociatedFrameLookups()
@@ -6718,6 +6687,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		pushUnique(rawName);
 		pushUnique(stripEntityPrefix(rawName, entityName));
+
+		const objectInfo = this._getObjectInfoForTimelineName(rawName);
+		const associationNames = objectInfo && Array.isArray(objectInfo.associationNames)
+			? objectInfo.associationNames
+			: [];
+		for (const associationName of associationNames)
+		{
+			pushUnique(associationName);
+			if (entityName)
+			{
+				pushUnique(`${entityName}_${associationName}`);
+			}
+		}
 
 		return keys;
 	}
@@ -7006,12 +6988,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		}
 
 		const myIID = this._getIID();
-		const instances = this._getInstancesOf(objectType);
 		const pairedInst = this._getPairedInstanceForIID(objectType, myIID);
-		const frameLookup = this._buildFrameLookupForSpriterName(resolvedName);
+		const objectInfo = this._getObjectInfoForTimelineName(requestedName) || this._getObjectInfoForTimelineName(resolvedName);
+		const frameLookup = this._buildFrameLookupForSpriterName(requestedName);
 		const storeKey = requestedName || resolvedName;
-		const existingEntry = this._c2ObjectMap.get(storeKey) || this._c2ObjectMap.get(resolvedName) || null;
-		let spriterType = "sprite";
+		let spriterType = objectInfo && typeof objectInfo.spriterType === "string"
+			? objectInfo.spriterType
+			: "sprite";
 		if (Array.isArray(this._objectArray))
 		{
 			for (const item of this._objectArray)
