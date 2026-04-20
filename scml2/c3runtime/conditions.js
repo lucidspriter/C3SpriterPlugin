@@ -124,7 +124,7 @@ C3.Plugins.Spriter.Cnds =
 	{
 		const checkedAnimationName = String(name ?? "");
 		const blendTarget = this.secondAnimation;
-		if (blendTarget && this.blendEndTime > 0 && typeof blendTarget.name === "string" && blendTarget.name === checkedAnimationName)
+		if (blendTarget && this._autoBlendActive && typeof blendTarget.name === "string" && blendTarget.name === checkedAnimationName)
 		{
 			return true;
 		}
