@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v10]");
+console.log("[scml runtime: v17]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -823,9 +823,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			return;
 		}
-		// Legacy parity: clear one-tick overrides before event sheets run.
-		this._objectOverridesByName.clear();
-		this._boneIkOverridesByName.clear();
 		this._loadProjectDataIfNeeded();
 	}
 
@@ -880,6 +877,10 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				this._requestRenderUpdate();
 			}
 		}
+
+		// Clear one-tick overrides after pose evaluation has consumed them.
+		this._objectOverridesByName.clear();
+		this._boneIkOverridesByName.clear();
 
 		if (pauseAll)
 		{
@@ -1985,10 +1986,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		this.animBlend = clamp01(this._autoBlendElapsedMs / durationMs);
 		if (this.animBlend >= 1)
 		{
-			const objectTypeName = this._getObjectTypeName(this.objectType);
-			const uid = this._getInstanceUidMaybe(this);
-			const targetAnimationName = this.secondAnimation && typeof this.secondAnimation.name === "string" ? this.secondAnimation.name : "?";
-			console.debug(`[Spriter] Blend debug: stage='complete-auto-blend', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, target='${targetAnimationName}', elapsedMs=${toFiniteNumber(this._autoBlendElapsedMs, 0)}, durationMs=${durationMs}`);
 			this._completeAutoBlend();
 		}
 	}
@@ -2296,6 +2293,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
+		// During auto-blend, return the blend target name immediately
+		// (legacy parity: changeAnimTo was set at blend start and stayed
+		// set for the entire blend duration).
+		if (this._autoBlendActive && this.secondAnimation && typeof this.secondAnimation.name === "string")
+		{
+			return this.secondAnimation.name;
+		}
+
 		const currentAnimation = this.animation;
 		if (currentAnimation && typeof currentAnimation.name === "string")
 		{
@@ -2336,19 +2341,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 	_setAnimation(animationIdentifier, startFrom = 0, blendDuration = 0)
 	{
-		const blendStartMode = Number(startFrom);
-		const blendMs = toFiniteNumber(blendDuration, 0);
-		const isBlendRequest = blendStartMode === 3 || blendStartMode === 4;
-
 		if (this._inAnimTrigger)
 		{
-			if (isBlendRequest)
-			{
-				const objectTypeName = this._getObjectTypeName(this.objectType);
-				const uid = this._getInstanceUidMaybe(this);
-				console.debug(`[Spriter] Blend debug: stage='queued-in-trigger', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, requested='${String(animationIdentifier ?? "")}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
-			}
-
 			this._pendingAnimationChange = {
 				animationIdentifier,
 				startFrom,
@@ -2359,13 +2353,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		if (!this.entity)
 		{
-			if (isBlendRequest)
-			{
-				const objectTypeName = this._getObjectTypeName(this.objectType);
-				const uid = this._getInstanceUidMaybe(this);
-				console.debug(`[Spriter] Blend debug: stage='queued-pre-ready', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, requested='${String(animationIdentifier ?? "")}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
-			}
-
 			this._pendingPreReadyAnimationChange = {
 				animationIdentifier,
 				startFrom,
@@ -2386,13 +2373,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const animationIndex = this._findAnimationByIdentifier(animationIdentifier);
 		if (animationIndex < 0)
 		{
-			if (isBlendRequest)
-			{
-				const objectTypeName = this._getObjectTypeName(this.objectType);
-				const uid = this._getInstanceUidMaybe(this);
-				console.debug(`[Spriter] Blend debug: stage='resolve-failed', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, requested='${String(animationIdentifier ?? "")}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
-			}
-
 			return false;
 		}
 
@@ -2403,23 +2383,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return false;
 		}
 
-		const objectTypeName = this._getObjectTypeName(this.objectType);
-		const uid = this._getInstanceUidMaybe(this);
-		const iid = this._getIID();
-		const entityName = this.entity && typeof this.entity.name === "string" ? this.entity.name : "?";
-		const fromAnimName = this.animation && typeof this.animation.name === "string" ? this.animation.name : "(none)";
-		const toAnimName = typeof nextAnimation.name === "string" ? nextAnimation.name : "?";
+		const blendStartMode = Number(startFrom);
+		const blendMs = toFiniteNumber(blendDuration, 0);
 		const shouldAutoBlend = (blendStartMode === 3 || blendStartMode === 4) && blendMs > 0 && !!this.animation;
-		if (isBlendRequest)
-		{
-			console.debug(`[Spriter] Blend debug: stage='resolved', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, iid=${Number.isFinite(iid) ? iid : "?"}, entity='${entityName}', from='${fromAnimName}', to='${toAnimName}', startFrom=${blendStartMode}, blendMs=${blendMs}, hasCurrent=${!!this.animation}, autoBlendEligible=${shouldAutoBlend}, active=${!!this._autoBlendActive}, blend=${toFiniteNumber(this.animBlend, 0)}, localMs=${toFiniteNumber(this.localTimeMs, 0)}`);
-		}
-
 		if (shouldAutoBlend)
 		{
 			if (nextAnimation === this.animation && !this.secondAnimation)
 			{
-				console.debug(`[Spriter] Blend debug: stage='same-animation-no-second', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${toAnimName}'`);
 				this._resetAutoBlendState();
 				this.animBlend = 0;
 				return true;
@@ -2427,27 +2397,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 			if (this._autoBlendActive && this.secondAnimation === nextAnimation && this._autoBlendStartFrom === blendStartMode)
 			{
-				console.debug(`[Spriter] Blend debug: stage='reuse-active', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, animation='${toAnimName}', elapsedMs=${toFiniteNumber(this._autoBlendElapsedMs, 0)}, durationMs=${toFiniteNumber(this._autoBlendDurationMs, 0)}`);
 				return true;
 			}
 
-			console.debug(`[Spriter] Blend debug: stage='start-auto-blend', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, from='${fromAnimName}', to='${toAnimName}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
 			this._startAutoBlend(nextAnimation, animationIndex, blendStartMode, blendMs);
 			this._playToTimeMs = -1;
 			this.playing = true;
 			this._evaluatePose();
 			this._evaluateSoundLines(this._currentAdjustedTimeMs, true);
 			return true;
-		}
-
-		if (isBlendRequest)
-		{
-			const reason = blendMs <= 0
-				? "blend-duration<=0"
-				: !this.animation
-					? "no-current-animation"
-					: "auto-blend-not-entered";
-			console.debug(`[Spriter] Blend debug: stage='fallback-direct-set', object='${objectTypeName}', uid=${Number.isFinite(uid) ? uid : "?"}, from='${fromAnimName}', to='${toAnimName}', reason='${reason}', startFrom=${blendStartMode}, blendMs=${blendMs}`);
 		}
 
 		const previousLength = toFiniteNumber(this.animationLengthMs, 0);
@@ -4435,6 +4393,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return;
 		}
 
+		// First pass: collect X/Y overrides (world coordinates that need
+		// conversion to pose-local via _worldToPoseLocal).
 		let hasXOverride = false;
 		let hasYOverride = false;
 		let overrideX = 0;
@@ -4442,18 +4402,15 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		for (const [component, value] of overrides)
 		{
-			switch (component)
+			if (component === OVERRIDE_COMPONENT.X)
 			{
-				case OVERRIDE_COMPONENT.X:
-					hasXOverride = true;
-					overrideX = toFiniteNumber(value, 0);
-					break;
-				case OVERRIDE_COMPONENT.Y:
-					hasYOverride = true;
-					overrideY = toFiniteNumber(value, 0);
-					break;
-				default:
-					break;
+				hasXOverride = true;
+				overrideX = toFiniteNumber(value, 0);
+			}
+			else if (component === OVERRIDE_COMPONENT.Y)
+			{
+				hasYOverride = true;
+				overrideY = toFiniteNumber(value, 0);
 			}
 		}
 
@@ -4462,20 +4419,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			this._applyObjectPositionWorldOverride(state, hasXOverride ? overrideX : null, hasYOverride ? overrideY : null);
 		}
 
+		// Second pass: apply all other overrides directly.
 		for (const [component, value] of overrides)
 		{
 			switch (component)
 			{
 				case OVERRIDE_COMPONENT.ANGLE:
-				{
-					const objectAngle = degreesToRadians(toFiniteNumber(value, 0));
-					const myAngle = this._getSelfAngle();
-					const flipSign = (this._xFlip ? -1 : 1) * (this._yFlip ? -1 : 1);
-					state.angle = flipSign < 0
-						? (Math.PI * 2) - (objectAngle - myAngle)
-						: objectAngle - myAngle;
+					state.angle = degreesToRadians(toFiniteNumber(value, 0));
 					break;
-				}
 				case OVERRIDE_COMPONENT.SCALE_X:
 					state.scaleX = toFiniteNumber(value, state.scaleX);
 					break;
@@ -5454,10 +5405,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			{
 				newAngle -= rad180;
 			}
-			if (this._xFlip)
-			{
-				newAngle -= rad180;
-			}
 			parent.angle = newAngle;
 		}
 		else
@@ -5510,10 +5457,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			toFiniteNumber(child.y, 0) - toFiniteNumber(targetY, 0)
 		);
 		if (toFiniteNumber(child.scaleX, 1) < 0)
-		{
-			childAngle -= rad180;
-		}
-		if (this._xFlip)
 		{
 			childAngle -= rad180;
 		}
