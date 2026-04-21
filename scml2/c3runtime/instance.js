@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v17]");
+console.log("[scml runtime: v23]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -823,6 +823,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			return;
 		}
+		this._objectOverridesByName.clear();
+		this._boneIkOverridesByName.clear();
 		this._loadProjectDataIfNeeded();
 	}
 
@@ -877,10 +879,6 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				this._requestRenderUpdate();
 			}
 		}
-
-		// Clear one-tick overrides after pose evaluation has consumed them.
-		this._objectOverridesByName.clear();
-		this._boneIkOverridesByName.clear();
 
 		if (pauseAll)
 		{
@@ -3244,6 +3242,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			this._resolveBoneTransform(boneRef, poseTimeMs, boneRefsById, boneWorldById);
 		}
+		this._applyBoneComponentOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs);
 		this._applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs);
 
 		const bones = [];
@@ -5470,6 +5469,112 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			parentBone: parent,
 			childBone: child
 		};
+	}
+
+	_applyBoneComponentOverrides(boneRefs, boneRefsById, boneWorldById, timeMs)
+	{
+		if (!this._objectOverridesByName || this._objectOverridesByName.size === 0)
+		{
+			return;
+		}
+
+		const overrideWorldById = new Map();
+
+		for (const boneRef of boneRefs)
+		{
+			if (!boneRef)
+			{
+				continue;
+			}
+
+			const id = toFiniteNumber(boneRef.id, NaN);
+			if (!Number.isFinite(id))
+			{
+				continue;
+			}
+
+			const timelineId = toFiniteNumber(boneRef.timeline, NaN);
+			const timelineName = this._timelineNameById.get(timelineId) || "";
+			const overrides = this._lookupObjectOverrideEntries(timelineName);
+			if (!overrides)
+			{
+				continue;
+			}
+
+			const world = boneWorldById.get(id);
+			if (!world)
+			{
+				continue;
+			}
+
+			// Clone the world transform so we don't mutate the original before rebuild.
+			const modified = {
+				x: world.x,
+				y: world.y,
+				angle: world.angle,
+				scaleX: world.scaleX,
+				scaleY: world.scaleY,
+				alpha: world.alpha
+			};
+
+			// Collect X/Y overrides (layout-world coordinates) for conversion.
+			let hasXOverride = false;
+			let hasYOverride = false;
+			let overrideX = 0;
+			let overrideY = 0;
+
+			for (const [component, value] of overrides)
+			{
+				switch (component)
+				{
+					case OVERRIDE_COMPONENT.X:
+						hasXOverride = true;
+						overrideX = toFiniteNumber(value, 0);
+						break;
+					case OVERRIDE_COMPONENT.Y:
+						hasYOverride = true;
+						overrideY = toFiniteNumber(value, 0);
+						break;
+					case OVERRIDE_COMPONENT.ANGLE:
+						modified.angle = degreesToRadians(toFiniteNumber(value, 0));
+						break;
+					case OVERRIDE_COMPONENT.SCALE_X:
+						modified.scaleX = toFiniteNumber(value, modified.scaleX);
+						break;
+					case OVERRIDE_COMPONENT.SCALE_Y:
+						modified.scaleY = toFiniteNumber(value, modified.scaleY);
+						break;
+					default:
+						break;
+				}
+			}
+
+			// Convert layout-world X/Y to pose-local (legacy parity:
+			// overrides were applied after mapObjToObj, i.e. in world space).
+			if (hasXOverride || hasYOverride)
+			{
+				const worldState = this._getPoseStateWorldTransform(modified);
+				const targetX = hasXOverride ? overrideX : (worldState ? worldState.x : 0);
+				const targetY = hasYOverride ? overrideY : (worldState ? worldState.y : 0);
+				const local = this._worldToPoseLocal(targetX, targetY);
+				modified.x = local.x;
+				modified.y = local.y;
+			}
+
+			overrideWorldById.set(id, modified);
+		}
+
+		if (!overrideWorldById.size)
+		{
+			return;
+		}
+
+		// Rebuild entire bone hierarchy so children inherit modified parent transforms.
+		boneWorldById.clear();
+		for (const boneRef of boneRefs)
+		{
+			this._resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById, overrideWorldById);
+		}
 	}
 
 	_applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, timeMs)
