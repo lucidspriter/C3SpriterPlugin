@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v30]");
+console.log("[scml runtime: v31]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -3242,8 +3242,8 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			this._resolveBoneTransform(boneRef, poseTimeMs, boneRefsById, boneWorldById);
 		}
-		this._applyBoneComponentOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs);
-		this._applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs);
+		const componentOverrides = this._applyBoneComponentOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs);
+		this._applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs, componentOverrides);
 
 		const bones = [];
 		for (const boneRef of boneRefs)
@@ -5495,7 +5495,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	{
 		if (!this._objectOverridesByName || this._objectOverridesByName.size === 0)
 		{
-			return;
+			return null;
 		}
 
 		const overrideWorldById = new Map();
@@ -5586,7 +5586,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 		if (!overrideWorldById.size)
 		{
-			return;
+			return null;
 		}
 
 		// Rebuild entire bone hierarchy so children inherit modified parent transforms.
@@ -5595,9 +5595,11 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			this._resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById, overrideWorldById);
 		}
+
+		return overrideWorldById;
 	}
 
-	_applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, timeMs)
+	_applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, timeMs, componentOverrideWorldById = null)
 	{
 		if (!this._boneIkOverridesByName || this._boneIkOverridesByName.size === 0)
 		{
@@ -5688,6 +5690,19 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 
 			overrideWorldById.set(parentId, solved.parentBone);
 			overrideWorldById.set(childId, solved.childBone);
+		}
+
+		// Merge component overrides so they aren't lost during the IK rebuild.
+		// IK overrides take precedence over component overrides for the same bone.
+		if (componentOverrideWorldById)
+		{
+			for (const [id, transform] of componentOverrideWorldById)
+			{
+				if (!overrideWorldById.has(id))
+				{
+					overrideWorldById.set(id, transform);
+				}
+			}
 		}
 
 		if (!overrideWorldById.size)
