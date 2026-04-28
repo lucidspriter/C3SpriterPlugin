@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v23]");
+console.log("[scml runtime: v30]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -4374,6 +4374,26 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		};
 	}
 
+	_worldToPoseLocalAngle(worldAngleDeg)
+	{
+		const myAngle = this._getSelfAngle();
+		const mirrorFactor = this._xFlip ? -1 : 1;
+		const flipFactor = this._yFlip ? -1 : 1;
+		const rootFlipSign = mirrorFactor * flipFactor;
+		// Convert C3 degrees to radians WITHOUT the Spriter sign flip.
+		// degreesToRadians() negates for Spriter convention, but user input
+		// is already in C3 convention (CW positive).
+		const worldAngleRad = toFiniteNumber(worldAngleDeg, 0) * (Math.PI / 180);
+		if (rootFlipSign < 0)
+		{
+			// Add PI to compensate: the bone hierarchy doesn't propagate
+			// mirroring through scaleX, so child objects don't get the
+			// 180° reflection that the legacy's negative scaleX produced.
+			return (Math.PI * 2) - (worldAngleRad - myAngle) + Math.PI;
+		}
+		return worldAngleRad - myAngle;
+	}
+
 	_applyObjectPositionWorldOverride(state, overrideX, overrideY)
 	{
 		const worldState = this._getPoseStateWorldTransform(state);
@@ -4424,7 +4444,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			switch (component)
 			{
 				case OVERRIDE_COMPONENT.ANGLE:
-					state.angle = degreesToRadians(toFiniteNumber(value, 0));
+					state.angle = this._worldToPoseLocalAngle(value);
 					break;
 				case OVERRIDE_COMPONENT.SCALE_X:
 					state.scaleX = toFiniteNumber(value, state.scaleX);
@@ -5536,7 +5556,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 						overrideY = toFiniteNumber(value, 0);
 						break;
 					case OVERRIDE_COMPONENT.ANGLE:
-						modified.angle = degreesToRadians(toFiniteNumber(value, 0));
+						modified.angle = this._worldToPoseLocalAngle(value);
 						break;
 					case OVERRIDE_COMPONENT.SCALE_X:
 						modified.scaleX = toFiniteNumber(value, modified.scaleX);
@@ -7612,7 +7632,20 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 	{
 		const state = this._findPoseStateByTimelineName(name);
 		const worldState = this._getPoseStateWorldTransform(state);
-		return worldState ? radiansToDegrees(worldState.angle) : 0;
+		if (!worldState)
+		{
+			return 0;
+		}
+		let angle = worldState.angle;
+		// Compensate for mirroring: bone hierarchy doesn't propagate
+		// mirror through scaleX, so add PI to match legacy behaviour.
+		const mirrorFactor = this._xFlip ? -1 : 1;
+		const flipFactor = this._yFlip ? -1 : 1;
+		if (mirrorFactor * flipFactor < 0)
+		{
+			angle += Math.PI;
+		}
+		return radiansToDegrees(angle);
 	}
 
 	_getSecondAnimationName()
