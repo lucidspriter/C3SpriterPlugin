@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v31]");
+console.log("[scml runtime: v32]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -3237,13 +3237,13 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			}
 		}
 
+		const boneComponentOverrides = this._buildBoneComponentOverrideMap(boneRefs);
 		const boneWorldById = new Map();
 		for (const boneRef of boneRefs)
 		{
-			this._resolveBoneTransform(boneRef, poseTimeMs, boneRefsById, boneWorldById);
+			this._resolveBoneTransform(boneRef, poseTimeMs, boneRefsById, boneWorldById, null, boneComponentOverrides);
 		}
-		const componentOverrides = this._applyBoneComponentOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs);
-		this._applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs, componentOverrides);
+		this._applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, poseTimeMs, boneComponentOverrides);
 
 		const bones = [];
 		for (const boneRef of boneRefs)
@@ -4374,7 +4374,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		};
 	}
 
-	_worldToPoseLocalAngle(worldAngleDeg)
+	_worldToPoseLocalAngle(worldAngleDeg, forBone = false)
 	{
 		const myAngle = this._getSelfAngle();
 		const mirrorFactor = this._xFlip ? -1 : 1;
@@ -4386,10 +4386,12 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const worldAngleRad = toFiniteNumber(worldAngleDeg, 0) * (Math.PI / 180);
 		if (rootFlipSign < 0)
 		{
-			// Add PI to compensate: the bone hierarchy doesn't propagate
+			// For bones: add PI to compensate — the bone hierarchy doesn't propagate
 			// mirroring through scaleX, so child objects don't get the
 			// 180° reflection that the legacy's negative scaleX produced.
-			return (Math.PI * 2) - (worldAngleRad - myAngle) + Math.PI;
+			// For objects: no PI needed — _getPoseStateWorldTransform handles mirroring.
+			const boneCompensation = forBone ? Math.PI : 0;
+			return (Math.PI * 2) - (worldAngleRad - myAngle) + boneCompensation;
 		}
 		return worldAngleRad - myAngle;
 	}
@@ -5321,7 +5323,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		return result;
 	}
 
-	_resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById, overrideWorldById = null)
+	_resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById, overrideWorldById = null, boneComponentOverrides = null)
 	{
 		if (!boneRef)
 		{
@@ -5339,6 +5341,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			return boneWorldById.get(boneId);
 		}
 
+		// IK overrides replace the entire bone transform (computed by the IK solver).
 		if (overrideWorldById && overrideWorldById.has(boneId))
 		{
 			const overridden = overrideWorldById.get(boneId);
@@ -5360,10 +5363,36 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		if (Number.isFinite(parentId))
 		{
 			const parentRef = boneRefsById.get(parentId);
-			const parentWorld = this._resolveBoneTransform(parentRef, timeMs, boneRefsById, boneWorldById, overrideWorldById);
+			const parentWorld = this._resolveBoneTransform(parentRef, timeMs, boneRefsById, boneWorldById, overrideWorldById, boneComponentOverrides);
 			if (parentWorld)
 			{
 				world = combineTransforms(parentWorld, local);
+			}
+		}
+
+		// Apply component overrides AFTER computing from the (potentially-overridden) parent.
+		// This ensures child bones see parent overrides (legacy parity: tweenBone applied
+		// overrides in hierarchical order, so children always saw the parent's modified state).
+		if (boneComponentOverrides && boneComponentOverrides.has(boneId))
+		{
+			const co = boneComponentOverrides.get(boneId);
+			world = {
+				x: world.x,
+				y: world.y,
+				angle: co.hasAngle ? co.angle : world.angle,
+				scaleX: co.hasScaleX ? co.scaleX : world.scaleX,
+				scaleY: co.hasScaleY ? co.scaleY : world.scaleY,
+				alpha: world.alpha
+			};
+
+			if (co.hasX || co.hasY)
+			{
+				const worldState = this._getPoseStateWorldTransform(world);
+				const targetX = co.hasX ? co.overrideX : (worldState ? worldState.x : 0);
+				const targetY = co.hasY ? co.overrideY : (worldState ? worldState.y : 0);
+				const poseLocal = this._worldToPoseLocal(targetX, targetY);
+				world.x = poseLocal.x;
+				world.y = poseLocal.y;
 			}
 		}
 
@@ -5491,14 +5520,14 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		};
 	}
 
-	_applyBoneComponentOverrides(boneRefs, boneRefsById, boneWorldById, timeMs)
+	_buildBoneComponentOverrideMap(boneRefs)
 	{
 		if (!this._objectOverridesByName || this._objectOverridesByName.size === 0)
 		{
 			return null;
 		}
 
-		const overrideWorldById = new Map();
+		const map = new Map();
 
 		for (const boneRef of boneRefs)
 		{
@@ -5521,85 +5550,49 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 				continue;
 			}
 
-			const world = boneWorldById.get(id);
-			if (!world)
-			{
-				continue;
-			}
-
-			// Clone the world transform so we don't mutate the original before rebuild.
-			const modified = {
-				x: world.x,
-				y: world.y,
-				angle: world.angle,
-				scaleX: world.scaleX,
-				scaleY: world.scaleY,
-				alpha: world.alpha
+			const entry = {
+				hasAngle: false, angle: 0,
+				hasX: false, hasY: false, overrideX: 0, overrideY: 0,
+				hasScaleX: false, scaleX: 1,
+				hasScaleY: false, scaleY: 1
 			};
-
-			// Collect X/Y overrides (layout-world coordinates) for conversion.
-			let hasXOverride = false;
-			let hasYOverride = false;
-			let overrideX = 0;
-			let overrideY = 0;
 
 			for (const [component, value] of overrides)
 			{
 				switch (component)
 				{
 					case OVERRIDE_COMPONENT.X:
-						hasXOverride = true;
-						overrideX = toFiniteNumber(value, 0);
+						entry.hasX = true;
+						entry.overrideX = toFiniteNumber(value, 0);
 						break;
 					case OVERRIDE_COMPONENT.Y:
-						hasYOverride = true;
-						overrideY = toFiniteNumber(value, 0);
+						entry.hasY = true;
+						entry.overrideY = toFiniteNumber(value, 0);
 						break;
 					case OVERRIDE_COMPONENT.ANGLE:
-						modified.angle = this._worldToPoseLocalAngle(value);
+						entry.hasAngle = true;
+						entry.angle = this._worldToPoseLocalAngle(value, true);
 						break;
 					case OVERRIDE_COMPONENT.SCALE_X:
-						modified.scaleX = toFiniteNumber(value, modified.scaleX);
+						entry.hasScaleX = true;
+						entry.scaleX = toFiniteNumber(value, 1);
 						break;
 					case OVERRIDE_COMPONENT.SCALE_Y:
-						modified.scaleY = toFiniteNumber(value, modified.scaleY);
+						entry.hasScaleY = true;
+						entry.scaleY = toFiniteNumber(value, 1);
 						break;
 					default:
 						break;
 				}
 			}
 
-			// Convert layout-world X/Y to pose-local (legacy parity:
-			// overrides were applied after mapObjToObj, i.e. in world space).
-			if (hasXOverride || hasYOverride)
-			{
-				const worldState = this._getPoseStateWorldTransform(modified);
-				const targetX = hasXOverride ? overrideX : (worldState ? worldState.x : 0);
-				const targetY = hasYOverride ? overrideY : (worldState ? worldState.y : 0);
-				const local = this._worldToPoseLocal(targetX, targetY);
-				modified.x = local.x;
-				modified.y = local.y;
-			}
-
-			overrideWorldById.set(id, modified);
+			map.set(id, entry);
 		}
 
-		if (!overrideWorldById.size)
-		{
-			return null;
-		}
-
-		// Rebuild entire bone hierarchy so children inherit modified parent transforms.
-		boneWorldById.clear();
-		for (const boneRef of boneRefs)
-		{
-			this._resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById, overrideWorldById);
-		}
-
-		return overrideWorldById;
+		return map.size ? map : null;
 	}
 
-	_applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, timeMs, componentOverrideWorldById = null)
+	_applyBoneIkOverrides(boneRefs, boneRefsById, boneWorldById, timeMs, boneComponentOverrides = null)
 	{
 		if (!this._boneIkOverridesByName || this._boneIkOverridesByName.size === 0)
 		{
@@ -5692,28 +5685,17 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 			overrideWorldById.set(childId, solved.childBone);
 		}
 
-		// Merge component overrides so they aren't lost during the IK rebuild.
-		// IK overrides take precedence over component overrides for the same bone.
-		if (componentOverrideWorldById)
-		{
-			for (const [id, transform] of componentOverrideWorldById)
-			{
-				if (!overrideWorldById.has(id))
-				{
-					overrideWorldById.set(id, transform);
-				}
-			}
-		}
-
 		if (!overrideWorldById.size)
 		{
 			return;
 		}
 
+		// Rebuild hierarchy with IK overrides. Component overrides are also passed through
+		// so non-IK bones retain their component overrides during the rebuild.
 		boneWorldById.clear();
 		for (const boneRef of boneRefs)
 		{
-			this._resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById, overrideWorldById);
+			this._resolveBoneTransform(boneRef, timeMs, boneRefsById, boneWorldById, overrideWorldById, boneComponentOverrides);
 		}
 	}
 
