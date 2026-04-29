@@ -1,5 +1,5 @@
 const C3 = globalThis.C3;
-console.log("[scml runtime: v32]");
+console.log("[scml runtime: v34]");
 
 function normaliseProjectFileName(fileName)
 {
@@ -4374,7 +4374,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		};
 	}
 
-	_worldToPoseLocalAngle(worldAngleDeg, forBone = false)
+	_worldToPoseLocalAngle(worldAngleDeg)
 	{
 		const myAngle = this._getSelfAngle();
 		const mirrorFactor = this._xFlip ? -1 : 1;
@@ -4386,12 +4386,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		const worldAngleRad = toFiniteNumber(worldAngleDeg, 0) * (Math.PI / 180);
 		if (rootFlipSign < 0)
 		{
-			// For bones: add PI to compensate — the bone hierarchy doesn't propagate
-			// mirroring through scaleX, so child objects don't get the
-			// 180° reflection that the legacy's negative scaleX produced.
-			// For objects: no PI needed — _getPoseStateWorldTransform handles mirroring.
-			const boneCompensation = forBone ? Math.PI : 0;
-			return (Math.PI * 2) - (worldAngleRad - myAngle) + boneCompensation;
+			return (Math.PI * 2) - (worldAngleRad - myAngle);
 		}
 		return worldAngleRad - myAngle;
 	}
@@ -5571,7 +5566,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 						break;
 					case OVERRIDE_COMPONENT.ANGLE:
 						entry.hasAngle = true;
-						entry.angle = this._worldToPoseLocalAngle(value, true);
+						entry.angle = this._worldToPoseLocalAngle(value);
 						break;
 					case OVERRIDE_COMPONENT.SCALE_X:
 						entry.hasScaleX = true;
@@ -7633,16 +7628,7 @@ C3.Plugins.Spriter.Instance = class SpriterInstance extends globalThis.ISDKWorld
 		{
 			return 0;
 		}
-		let angle = worldState.angle;
-		// Compensate for mirroring: bone hierarchy doesn't propagate
-		// mirror through scaleX, so add PI to match legacy behaviour.
-		const mirrorFactor = this._xFlip ? -1 : 1;
-		const flipFactor = this._yFlip ? -1 : 1;
-		if (mirrorFactor * flipFactor < 0)
-		{
-			angle += Math.PI;
-		}
-		return radiansToDegrees(angle);
+		return radiansToDegrees(worldState.angle);
 	}
 
 	_getSecondAnimationName()
