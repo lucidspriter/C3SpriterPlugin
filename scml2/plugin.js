@@ -1744,8 +1744,10 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			throw new Error("Spriter: drag-drop import requires layoutView (toLayoutView: true).");
 		}
 
+		console.log("[Spriter import] step 1: GetProject");
 		const project = layoutView.GetProject();
 
+		console.log("[Spriter import] step 2: ReadBlob/ReadJson");
 		const sconBlob = await zipFile.ReadBlob(sconEntry);
 		const projectJson = await zipFile.ReadJson(sconEntry);
 
@@ -1757,14 +1759,21 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 		const entityCount = Array.isArray(projectJson.entity) ? projectJson.entity.length : 0;
 		const atlasCount = Array.isArray(projectJson.atlas) ? projectJson.atlas.length : 0;
 		const folders = Array.isArray(projectJson.folder) ? projectJson.folder : [];
-		const eventSheet = layoutView.GetLayout().GetEventSheet();
 
+		console.log("[Spriter import] step 3: GetLayout/GetEventSheet");
+		const layout = layoutView.GetLayout();
+		console.log("[Spriter import] step 3a: layout =", layout, "typeof GetEventSheet =", typeof (layout && layout.GetEventSheet));
+		const eventSheet = layout.GetEventSheet();
+
+		console.log("[Spriter import] step 4: GetObjectTypeByName");
 		let objectType = project.GetObjectTypeByName(detectedSconName);
 		const isReimport = !!objectType;
 
 		if (!objectType)
 		{
+			console.log("[Spriter import] step 5: CreateObjectType");
 			objectType = await project.CreateObjectType("Spriter", detectedSconName);
+			console.log("[Spriter import] step 5 done: objectType =", objectType);
 		}
 
 		const atlases = Array.isArray(projectJson.atlas) ? projectJson.atlas : null;
@@ -1846,10 +1855,12 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			}
 
 			// Always save the normalized JSON for atlased exports so runtime has consistent metadata.
+			console.log("[Spriter import] step 6: AddOrReplaceProjectFile (atlased)");
 			await awaitMaybePromise(project.AddOrReplaceProjectFile(saveJsonToBlob(projectJson), sconFileName, "general"));
 
 			// Legacy parity: atlased/self-draw imports still create helper Sprite types for Spriter
 			// "box" objects so collision/association workflows continue to work.
+			console.log("[Spriter import] step 7: importChildHelpersFromScon (atlased)");
 			await importChildHelpersFromScon(
 				zipFile, opts, projectJson, folders, objectType, detectedSconName,
 				isReimport, eventSheet, false, oldObjectNames ? [...oldObjectNames] : null
@@ -1859,8 +1870,10 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 		{
 			// Non-atlased import: create individual Sprite object types for Spriter sprite parts
 			// and helper box objects.
+			console.log("[Spriter import] step 6: AddOrReplaceProjectFile (non-atlased)");
 			await awaitMaybePromise(project.AddOrReplaceProjectFile(sconBlob, sconFileName, "general"));
 
+			console.log("[Spriter import] step 7: importChildHelpersFromScon (non-atlased)");
 			await importChildHelpersFromScon(
 				zipFile, opts, projectJson, folders, objectType, detectedSconName,
 				isReimport, eventSheet, true, oldObjectNames ? [...oldObjectNames] : null
@@ -1887,12 +1900,15 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 		const drawSelfValue = isAtlased ? "true" : "false";
 		const drawDebugValue = "false";
 
+		console.log("[Spriter import] step 8: apply instance properties, isReimport =", isReimport);
 		if (isReimport)
 		{
 			const instances = objectType.GetAllInstances();
+			console.log("[Spriter import] step 8a: reimport instances count =", instances.length);
 
 			for (const inst of instances)
 			{
+				console.log("[Spriter import] step 8b: SetPropertyValue on instance", inst);
 				inst.SetPropertyValue("scml-file", scmlFileValue);
 				inst.SetPropertyValue("draw-self", drawSelfValue);
 				inst.SetPropertyValue("draw-debug", drawDebugValue);
@@ -1901,7 +1917,11 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 			// Match legacy behaviour: if the type exists but has no instances, still create one on drop.
 			if (!instances.length)
 			{
-				const wi = objectType.CreateWorldInstance(layoutView.GetActiveLayer());
+				console.log("[Spriter import] step 8c: GetActiveLayer");
+				const layer = layoutView.GetActiveLayer();
+				console.log("[Spriter import] step 8c: layer =", layer);
+				const wi = objectType.CreateWorldInstance(layer);
+				console.log("[Spriter import] step 8d: wi =", wi);
 				wi.SetXY(opts.layoutX, opts.layoutY);
 				wi.SetPropertyValue("scml-file", scmlFileValue);
 				wi.SetPropertyValue("draw-self", drawSelfValue);
@@ -1910,8 +1930,42 @@ async function importSpriterZip(droppedFileName, zipFile, opts)
 		}
 		else
 		{
-			const wi = objectType.CreateWorldInstance(layoutView.GetActiveLayer());
+			console.log("[Spriter import] step 9: GetActiveLayer (new)");
+			const layer = layoutView.GetActiveLayer();
+			console.log("[Spriter import] step 9a: layer =", layer);
+			console.log("[Spriter import] step 9a: CreateWorldInstance.length =", typeof objectType.CreateWorldInstance === "function" ? objectType.CreateWorldInstance.length : "N/A");
+			let wi;
+			try
+			{
+				wi = objectType.CreateWorldInstance(layer);
+				console.log("[Spriter import] CreateWorldInstance(layer) OK");
+			}
+			catch (e1)
+			{
+				console.warn("[Spriter import] CreateWorldInstance(layer) failed:", e1.message);
+				try
+				{
+					wi = objectType.CreateWorldInstance(layoutView.GetLayout(), layer);
+					console.log("[Spriter import] CreateWorldInstance(layout, layer) OK");
+				}
+				catch (e2)
+				{
+					console.warn("[Spriter import] CreateWorldInstance(layout, layer) failed:", e2.message);
+					try
+					{
+						wi = await objectType.CreateWorldInstance(layer);
+						console.log("[Spriter import] await CreateWorldInstance(layer) OK");
+					}
+					catch (e3)
+					{
+						console.error("[Spriter import] All CreateWorldInstance variants failed:", e3.message);
+						throw e3;
+					}
+				}
+			}
+			console.log("[Spriter import] step 9b: wi =", wi);
 			wi.SetXY(opts.layoutX, opts.layoutY);
+			console.log("[Spriter import] step 9c: SetPropertyValue");
 			wi.SetPropertyValue("scml-file", scmlFileValue);
 			wi.SetPropertyValue("draw-self", drawSelfValue);
 			wi.SetPropertyValue("draw-debug", drawDebugValue);
